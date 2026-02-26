@@ -1,0 +1,22 @@
+{
+  "name": "bands",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "bun test --cwd packages/format && bun test --cwd packages/editor && bun run --cwd packages/runtime test",
+    "test:format": "bun test --cwd packages/format",
+    "test:editor": "bun test --cwd packages/editor",
+    "test:runtime": "bun run --cwd packages/runtime test",
+    "test:unit": "bun run --cwd packages/runtime test:unit",
+    "test:integration": "bun run --cwd packages/runtime test:integration",
+    "test:integration:docker": "bun run --cwd packages/runtime test:integration:docker",
+    "test:integration:cloudflare": "bun run --cwd packages/runtime test:integration:cloudflare",
+    "dev": "bun run --cwd packages/editor dev",
+    "build": "bun run build:format && bun run build:editor",
+    "build:format": "bun run --cwd packages/format build",
+    "build:editor": "bun run --cwd packages/editor build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "runtime:dev": "bun run --cwd packages/runtime dev",
+    "runtime:deploy": "bun run packages/runtime/src/cli.ts deploy"
+  }
+}

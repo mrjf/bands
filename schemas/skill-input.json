@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "skill-input.json",
+  "title": "Skill Input",
+  "description": "Input schema for skill execution requests",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": "string",
+      "description": "The user's request or task description"
+    },
+    "context": {
+      "type": "object",
+      "description": "Additional context for the skill",
+      "properties": {
+        "workdir": {
+          "type": "string",
+          "description": "Working directory path"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of relevant file paths"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment variables"
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "description": "Skill-specific options",
+      "additionalProperties": true
+    }
+  },
+  "required": ["request"]
+}

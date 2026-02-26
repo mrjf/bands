@@ -1,0 +1,71 @@
+:root {
+  /* Brand - Dark Mode */
+  --ink: #E8E8E8;
+  --ocean: #5B9BD5;
+  --lobster: #E74C3C;
+
+  /* Accents */
+  --seaglass: #3DD9C4;
+  --blueberry: #6B6EAF;
+  --gold: #F4C542;
+  --pine: #2ECC71;
+
+  /* Neutrals */
+  --bg: #1A1A1A;
+  --surface: #252525;
+  --surface-warm: #2D2A24;
+  --muted: #888888;
+
+  /* Derived roles */
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --border: color-mix(in srgb, var(--muted) 30%, transparent);
+  --link: var(--ocean);
+  --link-hover: var(--seaglass);
+
+  --btn-primary: var(--lobster);
+  --btn-primary-hover: #C0392B;
+  --btn-secondary: var(--ocean);
+  --btn-secondary-hover: #4A89C0;
+
+  /* Map to component token names */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-muted);
+  --color-accent: var(--ocean);
+  --color-danger: var(--lobster);
+  --color-warning: var(--gold);
+  --color-success: var(--pine);
+
+  --color-allow-border: var(--pine);
+  --color-deny-border: var(--lobster);
+  --color-insist-border: var(--gold);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Typography - Monaspace fonts */
+  --font-sans: "Monaspace Argon Variable", "Monaspace Argon", monospace;
+  --font-mono: "Monaspace Neon Variable", "Monaspace Neon", monospace;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+
+  --sidebar-width: 260px;
+  --radius: 3px;
+  --radius-lg: 5px;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-md);
+}

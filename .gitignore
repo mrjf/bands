@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+bun.lock
+packages/editor/src/public/app.js
+.env
