@@ -5,3 +5,4 @@ dist/
 bun.lock
 packages/editor/src/public/app.js
 .env
+bun.lockb
