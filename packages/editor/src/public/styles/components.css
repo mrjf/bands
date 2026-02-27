@@ -210,6 +210,83 @@
   overflow: auto;
 }
 
+/* Scrollable containers get a visible gutter to indicate scrollability */
+.raw-textarea,
+.band-list {
+  overflow: auto;
+}
+
+/* Fake scroll track - subtle gutter on right side */
+.raw-editor {
+  position: relative;
+}
+
+.raw-editor::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  background: rgba(160, 100, 255, 0.08);
+  pointer-events: none;
+  border-left: 1px solid rgba(160, 100, 255, 0.15);
+}
+
+/* Custom scrollbar - fun coral/salmon color */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: #fce4e4;
+}
+
+::-webkit-scrollbar-track {
+  background: #fce4e4;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e88b8b;
+  border-radius: 6px;
+  border: 2px solid #fce4e4;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d66a6a;
+}
+
+/* Dark background scrollbars (for code editor) - electric purple */
+.raw-textarea::-webkit-scrollbar {
+  background: transparent;
+}
+
+.raw-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.raw-textarea::-webkit-scrollbar-thumb {
+  background: #a855f7;
+  border-radius: 6px;
+}
+
+.raw-textarea::-webkit-scrollbar-thumb:hover {
+  background: #c084fc;
+}
+
+.raw-textarea {
+  position: relative;
+  z-index: 5;
+}
+
+/* Firefox - force scrollbar visibility */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: #e88b8b #fce4e4;
+}
+
+.raw-textarea {
+  scrollbar-color: #a855f7 #2a2040;
+}
+
 /* Seti theme syntax colors */
 .hl-delimiter { color: #a074c4; font-weight: bold; }
 .hl-comment { color: #41535b; font-style: italic; }
