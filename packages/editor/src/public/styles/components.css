@@ -233,24 +233,111 @@
   border-left: 1px solid rgba(160, 100, 255, 0.15);
 }
 
-/* Custom scrollbar - thin, coral/salmon color */
+/* Cap panel gutters - visible when panel has content */
+.cap-panel {
+  position: relative;
+}
+
+.cap-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.cap-panel:focus-within::after,
+.cap-panel:hover::after {
+  opacity: 1;
+}
+
+.cap-panel--allow::after {
+  background: rgba(46, 204, 113, 0.1);
+  border-left: 1px solid rgba(46, 204, 113, 0.2);
+}
+
+.cap-panel--deny::after {
+  background: rgba(231, 76, 60, 0.1);
+  border-left: 1px solid rgba(231, 76, 60, 0.2);
+}
+
+.cap-panel--insist::after {
+  background: rgba(244, 197, 66, 0.1);
+  border-left: 1px solid rgba(244, 197, 66, 0.2);
+}
+
+.cap-panel--limits::after {
+  background: rgba(249, 115, 22, 0.1);
+  border-left: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.cap-panel--env::after {
+  background: rgba(91, 155, 213, 0.1);
+  border-left: 1px solid rgba(91, 155, 213, 0.2);
+}
+
+/* Custom scrollbar - thin, default neutral */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
-  background: #fce4e4;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-track {
-  background: #fce4e4;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e88b8b;
+  background: rgba(136, 136, 136, 0.5);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #d66a6a;
+  background: rgba(136, 136, 136, 0.8);
+}
+
+/* Allow panel - green scrollbar */
+.cap-panel--allow::-webkit-scrollbar-thumb {
+  background: var(--pine);
+}
+.cap-panel--allow::-webkit-scrollbar-thumb:hover {
+  background: #27ae60;
+}
+
+/* Deny panel - red scrollbar */
+.cap-panel--deny::-webkit-scrollbar-thumb {
+  background: var(--lobster);
+}
+.cap-panel--deny::-webkit-scrollbar-thumb:hover {
+  background: #c0392b;
+}
+
+/* Insist panel - gold scrollbar */
+.cap-panel--insist::-webkit-scrollbar-thumb {
+  background: var(--gold);
+}
+.cap-panel--insist::-webkit-scrollbar-thumb:hover {
+  background: #d4a832;
+}
+
+/* Limits panel - orange scrollbar */
+.cap-panel--limits::-webkit-scrollbar-thumb {
+  background: #f97316;
+}
+.cap-panel--limits::-webkit-scrollbar-thumb:hover {
+  background: #ea6c0a;
+}
+
+/* Env panel - blue scrollbar */
+.cap-panel--env::-webkit-scrollbar-thumb {
+  background: var(--ocean);
+}
+.cap-panel--env::-webkit-scrollbar-thumb:hover {
+  background: #4a89c0;
 }
 
 /* Dark background scrollbars (for code editor) - electric purple */
@@ -280,11 +367,31 @@
 /* Firefox - thin scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #e88b8b #fce4e4;
+  scrollbar-color: rgba(136, 136, 136, 0.5) transparent;
 }
 
 .raw-textarea {
   scrollbar-color: #a855f7 transparent;
+}
+
+.cap-panel--allow {
+  scrollbar-color: var(--pine) transparent;
+}
+
+.cap-panel--deny {
+  scrollbar-color: var(--lobster) transparent;
+}
+
+.cap-panel--insist {
+  scrollbar-color: var(--gold) transparent;
+}
+
+.cap-panel--limits {
+  scrollbar-color: #f97316 transparent;
+}
+
+.cap-panel--env {
+  scrollbar-color: var(--ocean) transparent;
 }
 
 /* Seti theme syntax colors */
