@@ -228,21 +228,68 @@ Blocks:
 - Destructive file operations
 ```
 
+## Insist (Required Operations)
+
+The `insist` section defines operations that **must** be performed during execution. If these requirements aren't met, the execution fails.
+
+```yaml
+insist:
+  cli:
+    - "echo *"              # Must run at least one echo command
+  read:
+    - "/tmp/config.json"    # Must read this file
+  write:
+    - "/tmp/output.txt"     # Must write to this file
+  net:
+    - "api.example.com"     # Must make a request to this host
+```
+
+Use cases:
+- Ensure audit logging (`insist.cli: ["echo AUDIT:*"]`)
+- Require reading a config file before proceeding
+- Enforce that results are written to a specific location
+
+If insist requirements aren't satisfied, sandboxed executors return:
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INSIST_NOT_SATISFIED",
+    "message": "Required operations not performed: cli:echo *"
+  }
+}
+```
+
 ## Execution Targets
 
 Bands can specify where they should run:
 
 ```yaml
 execution:
-  target: cloudflare       # or: local-docker, lima, local-dangerously
+  target: cloudflare       # or: lima, local-dangerously
 ```
 
-| Target | Description |
-|--------|-------------|
-| `local-dangerously` | No isolation, runs in current process (dev only) |
-| `local-docker` | Docker container with restrictions enforced |
-| `cloudflare` | Cloudflare Workers V8 isolate |
-| `lima` | Lima VM on macOS |
+| Target | Description | Isolation |
+|--------|-------------|-----------|
+| `local-dangerously` | Runs in current process | None (dev only) |
+| `lima` | Lima VM on macOS | Full (Linux VM) |
+| `cloudflare` | Cloudflare Workers | Full (V8 isolate) |
+
+Target-specific configuration:
+
+```yaml
+execution:
+  target: lima
+  lima:
+    vmName: bands-executor    # VM name (default: bands-executor)
+    port: 9000                # Server port (default: 9000)
+
+execution:
+  target: cloudflare
+  cloudflare:
+    workerName: my-band       # Worker name
+    accountId: abc123         # Cloudflare account ID
+```
 
 ## Permission Checking
 
