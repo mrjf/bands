@@ -6,7 +6,7 @@
  *
  * Key difference between executors:
  * - local-dangerously: Reports what WOULD be allowed, but doesn't enforce
- * - local-docker, cloudflare, lima: Actually ENFORCE permissions (return errors on deny)
+ * - cloudflare, lima: Actually ENFORCE permissions (return errors on deny)
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -427,9 +427,6 @@ export function printFirewallSkippedSummary() {
     for (const target of skippedTargets) {
       let reason = "";
       switch (target) {
-        case "local-docker":
-          reason = "Docker not installed or daemon not running";
-          break;
         case "lima":
           reason = "Lima VM not running (limactl start bands-executor)";
           break;
@@ -455,20 +452,14 @@ export function runAllFirewallSuites() {
     skipIfUnavailable: false,
   });
 
-  // Docker - requires Docker daemon, enforces permissions
-  runFirewallSuite("local-docker", {
-    timeout: 120000,
+  // Lima - requires Lima VM, enforces permissions
+  runFirewallSuite("lima", {
+    timeout: 180000,
     skipIfUnavailable: true,
   });
 
   // Cloudflare - requires wrangler + API token, enforces permissions
   runFirewallSuite("cloudflare", {
-    timeout: 180000,
-    skipIfUnavailable: true,
-  });
-
-  // Lima - requires Lima VM, enforces permissions
-  runFirewallSuite("lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });

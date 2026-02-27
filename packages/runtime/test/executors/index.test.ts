@@ -10,28 +10,23 @@ import {
   listAvailableTargets,
   isTargetAvailable,
   LocalDangerousExecutor,
-  DockerExecutor,
   CloudflareExecutor,
+  LimaExecutor,
 } from "../../src/executors";
 import type { BandDocument, ExecutionTarget } from "@bands/format";
 
 // Test band for execution tests
 const createTestBand = (target?: ExecutionTarget): BandDocument => ({
   band: "test-band",
-  version: 1,
   icon: "🧪",
   description: "Test band for executor tests",
   execution: target ? { target } : undefined,
-  returns: {
-    supports: ["sync"],
-    default: "sync",
-  },
 });
 
 describe("Executor Registry", () => {
-  test("should have all three executors registered", () => {
+  test("should have all executors registered", () => {
     expect(executorRegistry.get("local-dangerously")).toBeDefined();
-    expect(executorRegistry.get("local-docker")).toBeDefined();
+    expect(executorRegistry.get("lima")).toBeDefined();
     expect(executorRegistry.get("cloudflare")).toBeDefined();
   });
 
@@ -39,8 +34,8 @@ describe("Executor Registry", () => {
     const localDangerous = executorRegistry.create("local-dangerously");
     expect(localDangerous).toBeInstanceOf(LocalDangerousExecutor);
 
-    const docker = executorRegistry.create("local-docker");
-    expect(docker).toBeInstanceOf(DockerExecutor);
+    const lima = executorRegistry.create("lima");
+    expect(lima).toBeInstanceOf(LimaExecutor);
 
     const cloudflare = executorRegistry.create("cloudflare");
     expect(cloudflare).toBeInstanceOf(CloudflareExecutor);
@@ -125,17 +120,17 @@ describe("LocalDangerousExecutor", () => {
 
 });
 
-describe("DockerExecutor", () => {
+describe("LimaExecutor", () => {
   test("should have correct name and target", () => {
-    const executor = new DockerExecutor();
-    expect(executor.name).toBe("docker");
-    expect(executor.target).toBe("local-docker");
+    const executor = new LimaExecutor();
+    expect(executor.name).toBe("lima");
+    expect(executor.target).toBe("lima");
   });
 
-  test("isAvailable should check for Docker", async () => {
-    const executor = new DockerExecutor();
+  test("isAvailable should check for Lima VM", async () => {
+    const executor = new LimaExecutor();
     const available = await executor.isAvailable();
-    // Result depends on whether Docker is installed
+    // Result depends on whether Lima VM is running
     expect(typeof available).toBe("boolean");
   });
 });
@@ -187,7 +182,7 @@ describe("isTargetAvailable", () => {
   });
 
   test("should return boolean for all targets", async () => {
-    const targets: ExecutionTarget[] = ["local-dangerously", "local-docker", "cloudflare"];
+    const targets: ExecutionTarget[] = ["local-dangerously", "lima", "cloudflare"];
     for (const target of targets) {
       const available = await isTargetAvailable(target);
       expect(typeof available).toBe("boolean");
@@ -216,8 +211,8 @@ describe("executeBand", () => {
   test("should default to local-dangerously when no target specified", async () => {
     const band: BandDocument = {
       band: "no-target-band",
-      version: 1,
       icon: "🎯",
+      description: "Test band",
     };
 
     const result = await executeBand(band, {});
@@ -268,8 +263,8 @@ describe("Execution Target Selection", () => {
     // Test 3: default when nothing specified
     const bandNoTarget: BandDocument = {
       band: "no-target",
-      version: 1,
       icon: "🎯",
+      description: "Test band",
     };
     const result3 = await executeBand(bandNoTarget, {});
     expect(result3.target).toBe("local-dangerously");

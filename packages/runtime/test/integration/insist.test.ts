@@ -8,7 +8,7 @@
  *
  * Key behavior:
  * - local-dangerously: Reports insist satisfaction but doesn't fail (enforced: false)
- * - cloudflare, lima, docker: FAIL if insist items not satisfied (enforced: true)
+ * - cloudflare, lima: FAIL if insist items not satisfied (enforced: true)
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -259,20 +259,14 @@ export function runAllInsistSuites() {
     skipIfUnavailable: false,
   });
 
-  // Docker - requires Docker daemon, enforces insist
-  runInsistSuite("local-docker", {
-    timeout: 120000,
+  // Lima - requires Lima VM, enforces insist
+  runInsistSuite("lima", {
+    timeout: 180000,
     skipIfUnavailable: true,
   });
 
   // Cloudflare - requires wrangler + API token, enforces insist
   runInsistSuite("cloudflare", {
-    timeout: 180000,
-    skipIfUnavailable: true,
-  });
-
-  // Lima - requires Lima VM, enforces insist
-  runInsistSuite("lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });

@@ -34,9 +34,6 @@ export function printSkippedSummary() {
     for (const target of skippedTargets) {
       let reason = "";
       switch (target) {
-        case "local-docker":
-          reason = "Docker not installed or daemon not running";
-          break;
         case "lima":
           reason = "Lima VM not running (limactl start bands-executor)";
           break;
@@ -468,20 +465,14 @@ export function runAllExecutorSuites() {
     skipIfUnavailable: false,
   });
 
-  // Docker - requires Docker daemon
-  runExecutorSuite("local-docker", {
-    timeout: 120000,
+  // Lima - requires Lima VM (macOS)
+  runExecutorSuite("lima", {
+    timeout: 180000,
     skipIfUnavailable: true,
   });
 
   // Cloudflare - requires wrangler + API token
   runExecutorSuite("cloudflare", {
-    timeout: 180000,
-    skipIfUnavailable: true,
-  });
-
-  // Lima - requires Lima VM (macOS)
-  runExecutorSuite("lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });
@@ -498,20 +489,14 @@ export function runAllPermissionSuites() {
   // TODO: Enable when permission enforcement is implemented
   // Currently executors just echo input - they don't actually enforce permissions
 
-  // // Docker - has container isolation + band-shell
-  // runPermissionSuite("local-docker", {
-  //   timeout: 120000,
+  // // Lima - has VM isolation + band-shell
+  // runPermissionSuite("lima", {
+  //   timeout: 180000,
   //   skipIfUnavailable: true,
   // });
 
   // // Cloudflare - has V8 isolate + restricted fetch
   // runPermissionSuite("cloudflare", {
-  //   timeout: 180000,
-  //   skipIfUnavailable: true,
-  // });
-
-  // // Lima - has VM isolation + band-shell
-  // runPermissionSuite("lima", {
   //   timeout: 180000,
   //   skipIfUnavailable: true,
   // });

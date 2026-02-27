@@ -5,7 +5,7 @@
  *
  * Tests SKIP if the required target is not available:
  * - local-dangerously: Always available (no isolation)
- * - local-docker: Requires Docker daemon running
+ * - lima: Requires Lima VM running
  * - cloudflare: Requires wrangler + CLOUDFLARE_API_TOKEN
  * - lima: Requires Lima VM (macOS)
  *
@@ -26,9 +26,8 @@ Testing all execution targets with the same test cases.
 
 Targets:
   • local-dangerously  - No isolation (always available)
-  • local-docker       - Docker container isolation
-  • cloudflare         - Cloudflare Workers V8 isolates
   • lima               - Lima VM isolation (macOS)
+  • cloudflare         - Cloudflare Workers V8 isolates
 
 Test Categories:
   • Basic Execution    - Simple request/response

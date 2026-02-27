@@ -454,6 +454,7 @@ async function targets(_args: string[]) {
     name: ExecutionTarget;
     description: string;
     isolation: string;
+    requires?: string;
   }> = [
     {
       name: "local-dangerously",
@@ -461,14 +462,16 @@ async function targets(_args: string[]) {
       isolation: "None - full system access",
     },
     {
-      name: "local-docker",
-      description: "Run in Docker container",
-      isolation: "Full - network, filesystem, resources",
+      name: "lima",
+      description: "Run in Lima VM (macOS)",
+      isolation: "Full - Linux VM via Virtualization.framework",
+      requires: "limactl + bands-executor VM running",
     },
     {
       name: "cloudflare",
       description: "Run on Cloudflare Workers",
       isolation: "Full - V8 isolates, edge deployment",
+      requires: "wrangler + CLOUDFLARE_API_TOKEN",
     },
   ];
 
@@ -481,12 +484,8 @@ async function targets(_args: string[]) {
     console.log(`${color}${status}${reset} ${target.name}`);
     console.log(`    ${target.description}`);
     console.log(`    Isolation: ${target.isolation}`);
-    if (!isAvailable) {
-      if (target.name === "local-docker") {
-        console.log(`    ${color}Requires: Docker installed and running${reset}`);
-      } else if (target.name === "cloudflare") {
-        console.log(`    ${color}Requires: wrangler + CLOUDFLARE_API_TOKEN${reset}`);
-      }
+    if (!isAvailable && target.requires) {
+      console.log(`    ${color}Requires: ${target.requires}${reset}`);
     }
     console.log();
   }

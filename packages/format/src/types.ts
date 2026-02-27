@@ -1,26 +1,10 @@
 /** Execution target where the band runs */
-export type ExecutionTarget = "local-dangerously" | "local-docker" | "cloudflare" | "lima";
+export type ExecutionTarget = "local-dangerously" | "cloudflare" | "lima";
 
 /** Execution configuration */
 export interface ExecutionConfig {
   /** Where the band should run */
   target: ExecutionTarget;
-
-  /** Docker-specific configuration */
-  docker?: {
-    /** Docker image to use (default: node:20-slim or python:3.11-slim based on skill) */
-    image?: string;
-    /** Memory limit (e.g., "256m", "1g") */
-    memory?: string;
-    /** CPU limit (e.g., "0.5", "2") */
-    cpus?: string;
-    /** Network mode (default: none for isolation) */
-    network?: "none" | "bridge" | "host";
-    /** Additional volume mounts */
-    volumes?: string[];
-    /** Environment variables */
-    env?: Record<string, string>;
-  };
 
   /** Cloudflare-specific configuration */
   cloudflare?: {
@@ -30,6 +14,14 @@ export interface ExecutionConfig {
     accountId?: string;
     /** Custom domain */
     customDomain?: string;
+  };
+
+  /** Lima-specific configuration */
+  lima?: {
+    /** VM name (default: bands-executor) */
+    vmName?: string;
+    /** Port for the band server (default: 9000) */
+    port?: number;
   };
 }
 

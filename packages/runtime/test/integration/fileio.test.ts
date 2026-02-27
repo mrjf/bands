@@ -315,20 +315,14 @@ export function runAllFileIOSuites() {
     skipIfUnavailable: false,
   });
 
-  // Docker - requires Docker daemon
-  runFileIOSuite("local-docker", {
-    timeout: 120000,
+  // Lima - has full filesystem
+  runFileIOSuite("lima", {
+    timeout: 180000,
     skipIfUnavailable: true,
   });
 
   // Cloudflare - has no filesystem, but tests permission checks
   runFileIOSuite("cloudflare", {
-    timeout: 180000,
-    skipIfUnavailable: true,
-  });
-
-  // Lima - has full filesystem
-  runFileIOSuite("lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });
