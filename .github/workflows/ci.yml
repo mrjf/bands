@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Format package tests
+        run: bun test --cwd packages/format
+
+      - name: Editor package tests
+        run: bun test --cwd packages/editor
+
+      - name: Runtime unit tests
+        run: bun test test/unit/ test/executors/
+        working-directory: packages/runtime
+
+      - name: Runtime integration tests (local-dangerously)
+        run: bun test test/integration/
+        working-directory: packages/runtime
+
+  skill-tests:
+    name: Skill Tests (Lima + GitHub API)
+    runs-on: macos-14
+    needs: unit-tests
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Install Lima
+        run: brew install lima
+
+      - name: Create Lima VM
+        run: limactl start --name=bands-executor --plain --vm-type=vz --cpus=2 --memory=2
+
+      - name: Install gh CLI in VM
+        run: |
+          limactl copy skills/github/setup.sh bands-executor:/tmp/setup.sh
+          limactl shell bands-executor -- bash /tmp/setup.sh
+
+      - name: Run banded-skills integration tests
+        run: bun test test/integration/banded-skills.test.ts
+        working-directory: packages/runtime
+
+      - name: Run GitHub skill tests
+        if: env.GITHUB_TEST_TOKEN != ''
+        run: bun scripts/test-skills.ts github
+        env:
+          GITHUB_TEST_TOKEN: ${{ secrets.GITHUB_TEST_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.GITHUB_TEST_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.GITHUB_GIST_TEST_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        timeout-minutes: 10
+
+      - name: Cleanup Lima VM
+        if: always()
+        run: limactl stop bands-executor --force && limactl delete bands-executor --force
