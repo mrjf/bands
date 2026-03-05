@@ -66,8 +66,24 @@ jobs:
         env:
           BAND_EXEC_TARGET: local-dangerously
 
+      - name: Verify required secrets
+        run: |
+          missing=""
+          [ -z "$GITHUB_TEST_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
+          [ -z "$GITHUB_TEST_REPO" ] && missing="$missing TEST_GITHUB_REPO"
+          [ -z "$GITHUB_GIST_TEST_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
+          [ -z "$ANTHROPIC_API_KEY" ] && missing="$missing ANTHROPIC_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
+        env:
+          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
       - name: Run GitHub skill tests
-        if: env.GITHUB_TEST_TOKEN != ''
         run: bun scripts/test-skills.ts github
         env:
           BAND_EXEC_TARGET: local-dangerously
