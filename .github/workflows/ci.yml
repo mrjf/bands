@@ -33,11 +33,10 @@ jobs:
         run: bun test test/integration/
         working-directory: packages/runtime
 
-  skill-tests:
-    name: Skill Tests
+  skill-tests-direct:
+    name: Skill Tests (Direct)
     runs-on: ubuntu-latest
     needs: unit-tests
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
 
@@ -58,13 +57,61 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq gh
-          gh --version
+
+      - name: Verify required secrets
+        run: |
+          missing=""
+          [ -z "$GITHUB_TEST_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
+          [ -z "$GITHUB_TEST_REPO" ] && missing="$missing TEST_GITHUB_REPO"
+          [ -z "$GITHUB_GIST_TEST_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
+        env:
+          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
 
       - name: Run banded-skills integration tests
         run: bun test test/integration/banded-skills.test.ts
         working-directory: packages/runtime
         env:
           BAND_EXEC_TARGET: local-dangerously
+
+      - name: Run direct skill tests
+        run: bun scripts/test-skills.ts github --direct
+        env:
+          BAND_EXEC_TARGET: local-dangerously
+          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+        timeout-minutes: 10
+
+  skill-tests-agent:
+    name: Skill Tests (Agent)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Install gh CLI
+        run: |
+          (type -p wget >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq wget))
+          sudo mkdir -p -m 755 /etc/apt/keyrings
+          wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+          sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gh
 
       - name: Verify required secrets
         run: |
@@ -83,8 +130,8 @@ jobs:
           GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Run GitHub skill tests
-        run: bun scripts/test-skills.ts github
+      - name: Run agent skill tests
+        run: bun scripts/test-skills.ts github --agent
         env:
           BAND_EXEC_TARGET: local-dangerously
           GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}

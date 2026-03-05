@@ -3,23 +3,31 @@
  * Run skill tests with concurrency control.
  *
  * Usage:
- *   bun scripts/test-skills.ts              # all skills
- *   bun scripts/test-skills.ts github       # one skill
- *   bun scripts/test-skills.ts github slack  # multiple skills
+ *   bun scripts/test-skills.ts                        # all skills, all tests
+ *   bun scripts/test-skills.ts github                 # one skill, all tests
+ *   bun scripts/test-skills.ts github --direct        # only github-skill-*.test.ts (no agent)
+ *   bun scripts/test-skills.ts github --agent         # only agent-*.test.ts
+ *   bun scripts/test-skills.ts github slack           # multiple skills
  */
 
 import { readdirSync, existsSync } from "fs";
-import { join, resolve } from "path";
+import { join, resolve, basename } from "path";
 
 const MAX_CONCURRENT = 3;
 
 const root = resolve(import.meta.dir, "..");
 const skillsDir = join(root, "skills");
 
-// Determine which skills to test
-const args = process.argv.slice(2);
-const skillNames = args.length
-  ? args
+// Parse args: skill names and flags
+const rawArgs = process.argv.slice(2);
+const flags = rawArgs.filter((a) => a.startsWith("--"));
+const skillArgs = rawArgs.filter((a) => !a.startsWith("--"));
+
+const filterDirect = flags.includes("--direct");
+const filterAgent = flags.includes("--agent");
+
+const skillNames = skillArgs.length
+  ? skillArgs
   : readdirSync(skillsDir).filter((d) => existsSync(join(skillsDir, d, "test")));
 
 // Collect all test files across requested skills
@@ -30,7 +38,14 @@ for (const skill of skillNames) {
     console.error(`No test directory: skills/${skill}/test/`);
     process.exit(1);
   }
-  const files = readdirSync(testDir).filter((f) => f.endsWith(".test.ts"));
+  let files = readdirSync(testDir).filter((f) => f.endsWith(".test.ts"));
+
+  if (filterDirect) {
+    files = files.filter((f) => !f.startsWith("agent-"));
+  } else if (filterAgent) {
+    files = files.filter((f) => f.startsWith("agent-"));
+  }
+
   for (const f of files) testFiles.push(join(testDir, f));
 }
 
@@ -39,7 +54,8 @@ if (testFiles.length === 0) {
   process.exit(0);
 }
 
-console.log(`Running ${testFiles.length} test files (max ${MAX_CONCURRENT} concurrent)...\n`);
+const label = filterDirect ? "direct" : filterAgent ? "agent" : "all";
+console.log(`Running ${testFiles.length} ${label} test files (max ${MAX_CONCURRENT} concurrent)...\n`);
 const start = performance.now();
 
 // ── Result tracking ──

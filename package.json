@@ -13,6 +13,8 @@
     "test:integration": "bun run --cwd packages/runtime test:integration",
     "test:all": "bun test --cwd packages/format && bun run --cwd packages/runtime test:all",
     "test:skills": "bun scripts/test-skills.ts",
+    "test:skills:direct": "bun scripts/test-skills.ts --direct",
+    "test:skills:agent": "bun scripts/test-skills.ts --agent",
     "dev": "bun run --cwd packages/editor dev",
     "build": "bun run build:format && bun run build:editor",
     "build:format": "bun run --cwd packages/format build",
