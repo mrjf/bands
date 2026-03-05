@@ -51,7 +51,9 @@ jobs:
         run: brew install lima
 
       - name: Create Lima VM
-        run: limactl start --name=bands-executor --plain --vm-type=vz --cpus=2 --memory=2
+        run: |
+          limactl start --name=bands-executor --vm-type=qemu --cpus=2 --memory=4 --mount-writable
+          limactl shell bands-executor -- uname -a
 
       - name: Install gh CLI in VM
         run: |
