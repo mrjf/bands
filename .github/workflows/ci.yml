@@ -47,8 +47,8 @@ jobs:
 
       - run: bun install
 
-      - name: Install Lima
-        run: brew install lima
+      - name: Install Lima and QEMU
+        run: brew install lima qemu
 
       - name: Create Lima VM
         run: |
