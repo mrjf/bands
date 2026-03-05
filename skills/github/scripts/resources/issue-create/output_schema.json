@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "number": { "type": "integer" },
+    "url": { "type": "string" },
+    "title": { "type": "string" }
+  }
+}

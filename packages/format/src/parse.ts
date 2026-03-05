@@ -82,6 +82,12 @@ function buildDocument(
     icon: String(raw.icon ?? ""),
     description: String(raw.description ?? ""),
   };
+  if (typeof raw.url === "string") {
+    doc.url = raw.url;
+  }
+  if (typeof raw.path === "string") {
+    doc.path = raw.path;
+  }
   if (Array.isArray(raw.extends)) {
     doc.extends = raw.extends.map(String);
   }
@@ -111,6 +117,9 @@ function buildDocument(
   }
   if (raw.requires && typeof raw.requires === "object") {
     doc.requires = raw.requires as BandDocument["requires"];
+  }
+  if (raw.contract && typeof raw.contract === "object") {
+    doc.contract = raw.contract as BandDocument["contract"];
   }
   if (body) {
     doc.body = body;

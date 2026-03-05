@@ -70,4 +70,86 @@ describe("validate", () => {
     });
     expect(warnings.some((w) => w.path === "limit.unknownLimit")).toBe(true);
   });
+
+  test("errors on non-object contract", () => {
+    const { errors } = validate({
+      band: "test",
+      icon: "🎵",
+      contract: "not-an-object",
+    });
+    expect(errors.some((e) => e.path === "contract")).toBe(true);
+  });
+
+  test("errors on invalid type for contract.input", () => {
+    const { errors } = validate({
+      band: "test",
+      icon: "🎵",
+      contract: { input: 42 },
+    });
+    expect(errors.some((e) => e.path === "contract.input")).toBe(true);
+  });
+
+  test("errors on invalid type for contract.output", () => {
+    const { errors } = validate({
+      band: "test",
+      icon: "🎵",
+      contract: { output: 42 },
+    });
+    expect(errors.some((e) => e.path === "contract.output")).toBe(true);
+  });
+
+  test("accepts string path ref for contract.input", () => {
+    const { errors, warnings } = validate({
+      band: "test",
+      icon: "🎵",
+      description: "test",
+      contract: { input: "./schemas/input.json" },
+    });
+    expect(errors).toHaveLength(0);
+    expect(warnings.filter((w) => w.path.startsWith("contract"))).toHaveLength(0);
+  });
+
+  test("accepts string URL ref for contract.output", () => {
+    const { errors, warnings } = validate({
+      band: "test",
+      icon: "🎵",
+      description: "test",
+      contract: { output: "https://example.com/schema.json" },
+    });
+    expect(errors).toHaveLength(0);
+    expect(warnings.filter((w) => w.path.startsWith("contract"))).toHaveLength(0);
+  });
+
+  test("warns on string that is not a path or URL", () => {
+    const { errors, warnings } = validate({
+      band: "test",
+      icon: "🎵",
+      contract: { input: "just-a-string" },
+    });
+    expect(errors).toHaveLength(0);
+    expect(warnings.some((w) => w.path === "contract.input")).toBe(true);
+  });
+
+  test("warns on unknown keys inside contract", () => {
+    const { warnings } = validate({
+      band: "test",
+      icon: "🎵",
+      contract: { input: { type: "object" }, extra: true },
+    });
+    expect(warnings.some((w) => w.path === "contract.extra")).toBe(true);
+  });
+
+  test("valid contract produces no errors or warnings", () => {
+    const { errors, warnings } = validate({
+      band: "test",
+      icon: "🎵",
+      description: "test",
+      contract: {
+        input: { type: "object", properties: { msg: { type: "string" } } },
+        output: { type: "object" },
+      },
+    });
+    expect(errors).toHaveLength(0);
+    expect(warnings.filter((w) => w.path.startsWith("contract"))).toHaveLength(0);
+  });
 });

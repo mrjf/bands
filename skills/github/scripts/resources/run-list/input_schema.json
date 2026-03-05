@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Repository in owner/name format"
+    },
+    "workflow": {
+      "type": "string",
+      "description": "Filter by workflow name or filename"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "in_progress", "completed", "requested", "waiting"],
+      "description": "Filter by run status"
+    },
+    "branch": {
+      "type": "string",
+      "description": "Filter by branch name"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum number of runs to return",
+      "default": 20
+    }
+  },
+  "required": ["repo"]
+}

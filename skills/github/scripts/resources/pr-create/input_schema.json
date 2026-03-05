@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Repository in owner/name format"
+    },
+    "title": {
+      "type": "string",
+      "description": "Pull request title"
+    },
+    "body": {
+      "type": "string",
+      "description": "Pull request body in markdown"
+    },
+    "base": {
+      "type": "string",
+      "description": "Base branch (defaults to repo default branch)"
+    },
+    "head": {
+      "type": "string",
+      "description": "Head branch containing the changes"
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "Create as draft PR",
+      "default": false
+    },
+    "labels": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Labels to apply"
+    },
+    "reviewers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Reviewers to request"
+    }
+  },
+  "required": ["repo", "title", "head", "body"]
+}

@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": { "type": "string", "description": "Repository in owner/name format" },
+    "tag": { "type": "string", "description": "Tag name for the release" },
+    "title": { "type": "string", "description": "Release title" },
+    "notes": { "type": "string", "description": "Release notes body" },
+    "draft": { "type": "boolean", "description": "Create as draft release", "default": false },
+    "prerelease": { "type": "boolean", "description": "Mark as prerelease", "default": false },
+    "target": { "type": "string", "description": "Target branch or commit SHA" },
+    "generate_notes": { "type": "boolean", "description": "Auto-generate release notes", "default": false }
+  },
+  "required": ["repo", "tag"]
+}

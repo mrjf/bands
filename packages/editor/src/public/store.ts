@@ -1,8 +1,18 @@
 import type { BandDocument } from "@bands/format";
 
+export interface SkillEntry {
+  name: string;
+  description: string;
+  skillSource: string;
+  bandSource: string;
+  band: BandDocument;
+}
+
 export interface AppState {
   bands: BandDocument[];
+  skills: SkillEntry[];
   selectedIndex: number | null;
+  selectedSkillIndex: number | null;
   searchQuery: string;
   dirty: boolean;
   loaded: boolean;
@@ -12,7 +22,9 @@ type Listener = (state: AppState, key: string) => void;
 
 const initial: AppState = {
   bands: [],
+  skills: [],
   selectedIndex: null,
+  selectedSkillIndex: null,
   searchQuery: "",
   dirty: false,
   loaded: false,
@@ -32,8 +44,9 @@ class Store {
 
   constructor() {
     this.state = { ...initial };
-    // Load bands from server
+    // Load bands and skills from server
     this.loadBands();
+    this.loadSkills();
   }
 
   private async loadBands() {
@@ -60,13 +73,48 @@ class Store {
     this.notify("selectedIndex");
   }
 
+  private async loadSkills() {
+    try {
+      const res = await fetch("/api/skills");
+      const data = await res.json();
+      if (Array.isArray(data.skills)) {
+        this.state.skills = data.skills;
+        this.notify("skills");
+      }
+    } catch (e) {
+      console.error("Failed to load skills:", e);
+    }
+  }
+
   get(): AppState {
     return this.state;
   }
 
   set<K extends keyof AppState>(key: K, value: AppState[K]) {
     this.state[key] = value;
+    // Selecting a band deselects any skill
+    if (key === "selectedIndex" && value !== null && this.state.selectedSkillIndex !== null) {
+      this.state.selectedSkillIndex = null;
+      this.notify("selectedSkillIndex");
+    }
     this.notify(key);
+  }
+
+  /** Select a skill (deselects any band) */
+  selectSkill(index: number | null) {
+    this.state.selectedSkillIndex = index;
+    if (index !== null) {
+      this.state.selectedIndex = null;
+      this.notify("selectedIndex");
+    }
+    this.notify("selectedSkillIndex");
+  }
+
+  /** Get the currently selected skill, or null */
+  currentSkill(): SkillEntry | null {
+    const { skills, selectedSkillIndex } = this.state;
+    if (selectedSkillIndex === null || selectedSkillIndex < 0 || selectedSkillIndex >= skills.length) return null;
+    return skills[selectedSkillIndex];
   }
 
   /** Get the currently selected band, or null */

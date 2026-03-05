@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Repository in owner/name format"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["open", "closed", "merged", "all"],
+      "description": "Filter by PR state",
+      "default": "open"
+    },
+    "base": {
+      "type": "string",
+      "description": "Filter by base branch"
+    },
+    "head": {
+      "type": "string",
+      "description": "Filter by head branch"
+    },
+    "label": {
+      "type": "string",
+      "description": "Filter by label"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum number of PRs to return",
+      "default": 30
+    }
+  },
+  "required": ["repo"]
+}

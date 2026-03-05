@@ -1,0 +1,7 @@
+{
+  "description": "Raw GitHub API response (shape varies by endpoint)",
+  "oneOf": [
+    { "type": "object", "additionalProperties": true },
+    { "type": "array" }
+  ]
+}

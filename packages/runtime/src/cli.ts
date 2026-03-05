@@ -41,6 +41,21 @@ async function main() {
     case "run-skill":
       await runSkill(args);
       break;
+    case "validate-skill":
+      await validateSkill(args);
+      break;
+    case "exec":
+      await exec(args);
+      break;
+    case "convert-skill":
+      await convertSkill(args);
+      break;
+    case "setup":
+      await setup(args);
+      break;
+    case "teardown":
+      await teardown();
+      break;
     default:
       printUsage();
       process.exit(1);
@@ -59,6 +74,11 @@ Commands:
   targets                            List available execution targets
   wrap-skill <source> [--output]     Generate a band.md that wraps an AgentSkills.io skill
   run-skill <source> [--request]     Execute a skill locally with optional request
+  validate-skill <dir>               Validate a banded skill directory
+  exec <resource-dir> [--key=val]    Execute a banded script resource
+  convert-skill <source> --output    Convert a skill to banded format
+  setup [--force]                    Create and provision Lima VM
+  teardown                           Stop and delete Lima VM
 
 Execution Targets:
   local-dangerously   Run in current process (no isolation, no restrictions)
@@ -349,6 +369,115 @@ async function runSkill(args: string[]) {
   }
 }
 
+async function convertSkill(args: string[]) {
+  const source = args.find((a) => !a.startsWith("--"));
+  const outputIdx = args.indexOf("--output");
+  const outputDir = outputIdx !== -1 ? args[outputIdx + 1] : null;
+  const dryRun = args.includes("--dry-run");
+  const verbose = args.includes("--verbose");
+
+  if (!source) {
+    console.error("Error: Skill source required (GitHub URL or local path)");
+    process.exit(1);
+  }
+
+  if (!outputDir && !dryRun) {
+    console.error("Error: --output <dir> required (or use --dry-run)");
+    process.exit(1);
+  }
+
+  const { convertToBandedSkill } = await import("./banded-skills/converter");
+
+  const result = await convertToBandedSkill(source, outputDir || "/dev/null", {
+    dryRun,
+    verbose,
+  });
+
+  if (result.success) {
+    console.log(`\nGenerated ${result.files.length} files:`);
+    for (const file of result.files) {
+      console.log(`  ${file}`);
+    }
+
+    if (result.validation) {
+      if (result.validation.valid) {
+        console.log("\n✓ Generated skill passes validation");
+      } else {
+        console.error(`\n✗ Generated skill has ${result.validation.errors.length} error(s)`);
+      }
+    }
+  } else {
+    console.error(`\nConversion failed: ${result.error}`);
+    process.exit(1);
+  }
+}
+
+async function exec(args: string[]) {
+  const { parseExecArgs, bandExec } = await import("./banded-skills/exec");
+  const options = parseExecArgs(args);
+
+  if (!options.resourceDir) {
+    console.error("Error: Script resource directory required");
+    console.error("Usage: band exec <resource-dir> [--key=value...] [--input_path=...] [--output_path=...] [--help]");
+    process.exit(1);
+  }
+
+  const result = await bandExec(options);
+
+  if (result.success) {
+    if (options.help) {
+      console.log(result.data);
+    } else if (!options.outputPath && result.data !== undefined) {
+      // Print to stdout if no output path specified
+      if (typeof result.data === "string") {
+        console.log(result.data);
+      } else {
+        console.log(JSON.stringify(result.data, null, 2));
+      }
+    }
+
+    if (result.metrics) {
+      console.error(`Duration: ${result.metrics.durationMs}ms`);
+    }
+  } else {
+    console.error(`Error: ${result.error}`);
+    process.exit(1);
+  }
+}
+
+async function validateSkill(args: string[]) {
+  const skillDir = args.find((a) => !a.startsWith("--"));
+
+  if (!skillDir) {
+    console.error("Error: Skill directory path required");
+    process.exit(1);
+  }
+
+  const { validateBandedSkill } = await import("./banded-skills");
+  const result = validateBandedSkill(skillDir);
+
+  if (result.errors.length > 0) {
+    console.error("Validation errors:");
+    for (const err of result.errors) {
+      console.error(`  ✗ ${err.path}: ${err.message}`);
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    console.warn("Warnings:");
+    for (const warn of result.warnings) {
+      console.warn(`  ⚠ ${warn.path}: ${warn.message}`);
+    }
+  }
+
+  if (result.valid) {
+    console.log("\n✓ Banded skill is valid");
+  } else {
+    console.error(`\n✗ Banded skill has ${result.errors.length} error(s)`);
+    process.exit(1);
+  }
+}
+
 async function run(args: string[]) {
   const bandPath = args.find((a) => !a.startsWith("--"));
   const targetIdx = args.indexOf("--target");
@@ -491,6 +620,17 @@ async function targets(_args: string[]) {
   }
 
   console.log(`\nAvailable targets: ${availableTargets.join(", ") || "none"}`);
+}
+
+async function setup(args: string[]) {
+  const force = args.includes("--force");
+  const { setupLima } = await import("./setup");
+  await setupLima({ force });
+}
+
+async function teardown() {
+  const { teardownLima } = await import("./setup");
+  await teardownLima();
 }
 
 main().catch((err) => {

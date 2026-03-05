@@ -4,14 +4,18 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "bin": {
+    "band": "./src/cli.ts"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "bun test test/unit/band-shell.test.ts test/executors/",
-    "test:unit": "bun test test/unit/band-shell.test.ts",
+    "build:bin": "bun build --compile src/cli.ts --outfile band",
+    "test": "bun test test/unit/ test/executors/",
+    "test:unit": "bun test test/unit/",
     "test:executors": "bun test test/executors/",
-    "test:integration": "bun test test/integration/index.test.ts",
-    "test:all": "bun test test/unit/band-shell.test.ts test/executors/ test/integration/index.test.ts"
+    "test:integration": "bun test test/integration/",
+    "test:all": "bun test test/unit/ test/executors/ test/integration/"
   },
   "dependencies": {
     "@bands/format": "workspace:*",

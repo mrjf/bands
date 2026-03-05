@@ -3,6 +3,7 @@ import "./components/band-mini-card";
 import "./components/band-search";
 import "./components/emoji-picker";
 import "./components/band-raw";
+import "./components/code-viewer";
 import "./components/toast-notification";
 
 // Editor components

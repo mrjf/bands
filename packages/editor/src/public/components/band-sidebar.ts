@@ -1,5 +1,9 @@
 import { store } from "../store";
 
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
 class BandSidebar extends HTMLElement {
   private unsub?: () => void;
 
@@ -14,6 +18,10 @@ class BandSidebar extends HTMLElement {
           <band-search></band-search>
         </div>
         <div class="band-list" id="band-list"></div>
+        <div class="sidebar-header sidebar-header--skills">
+          <h2>Skills</h2>
+        </div>
+        <div class="skill-list" id="skill-list"></div>
       </div>
     `;
 
@@ -22,9 +30,11 @@ class BandSidebar extends HTMLElement {
     });
 
     this.unsub = store.subscribe((_, key) => {
-      if (key === "bands" || key === "searchQuery" || key === "selectedIndex") this.updateList();
+      if (key === "bands" || key === "searchQuery" || key === "selectedIndex" || key === "selectedSkillIndex") this.updateList();
+      if (key === "skills" || key === "selectedSkillIndex") this.updateSkillList();
     });
     this.updateList();
+    this.updateSkillList();
   }
 
   disconnectedCallback() {
@@ -55,6 +65,30 @@ class BandSidebar extends HTMLElement {
       el.addEventListener("click", () => {
         const idx = Number((el as HTMLElement).dataset.index);
         store.set("selectedIndex", idx);
+      });
+    });
+  }
+
+  private updateSkillList() {
+    const state = store.get();
+    const listEl = this.querySelector("#skill-list")!;
+
+    listEl.innerHTML = state.skills.map((skill, index) => `
+      <div class="band-item skill-item${index === state.selectedSkillIndex ? " band-item--selected" : ""}" data-skill-index="${index}">
+        <div class="mini-card">
+          <span class="mini-card-icon">${skill.band?.icon || "📦"}</span>
+          <div class="mini-card-info">
+            <span class="mini-card-name">${esc(skill.name)}</span>
+            <span class="mini-card-meta">${esc(skill.description).slice(0, 60)}${skill.description.length > 60 ? "..." : ""}</span>
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+    listEl.querySelectorAll(".skill-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const idx = Number((el as HTMLElement).dataset.skillIndex);
+        store.selectSkill(idx);
       });
     });
   }

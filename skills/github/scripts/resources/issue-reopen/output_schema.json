@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "reopened": { "type": "boolean" },
+    "number": { "type": "integer" }
+  }
+}

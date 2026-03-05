@@ -24,13 +24,16 @@ export function validate(raw: Record<string, unknown>): {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
 
-  // Pass 1: Required fields
-  for (const field of REQUIRED_FIELDS) {
-    if (raw[field] === undefined || raw[field] === null || raw[field] === "") {
-      warnings.push({
-        path: field,
-        message: `Required field "${field}" is missing`,
-      });
+  // Pass 1: Required fields (skip when url or path is present — reference-only BAND.md)
+  const isReference = typeof raw.url === "string" || typeof raw.path === "string";
+  if (!isReference) {
+    for (const field of REQUIRED_FIELDS) {
+      if (raw[field] === undefined || raw[field] === null || raw[field] === "") {
+        warnings.push({
+          path: field,
+          message: `Required field "${field}" is missing`,
+        });
+      }
     }
   }
 
@@ -111,6 +114,31 @@ export function validate(raw: Record<string, unknown>): {
         }
         if (typeof limit[key] !== "number") {
           errors.push({ path: `limit.${key}`, message: `Limit "${key}" must be a number`, value: limit[key] });
+        }
+      }
+    }
+  }
+
+  // Pass 7: Contract validation
+  if (raw.contract !== undefined) {
+    if (typeof raw.contract !== "object" || raw.contract === null) {
+      errors.push({ path: "contract", message: "contract must be an object" });
+    } else {
+      const contract = raw.contract as Record<string, unknown>;
+      for (const key of Object.keys(contract)) {
+        if (key !== "input" && key !== "output") {
+          warnings.push({ path: `contract.${key}`, message: `Unknown contract field "${key}"` });
+        }
+      }
+      for (const field of ["input", "output"] as const) {
+        const val = contract[field];
+        if (val === undefined) continue;
+        if (typeof val === "string") {
+          if (!val.startsWith("./") && !val.startsWith("../") && !val.startsWith("/") && !val.startsWith("https://") && !val.startsWith("http://")) {
+            warnings.push({ path: `contract.${field}`, message: `contract.${field} string should be a path (./…) or URL (https://…)`, value: val });
+          }
+        } else if (typeof val !== "object" || val === null) {
+          errors.push({ path: `contract.${field}`, message: `contract.${field} must be an object (JSON Schema) or a string (path/URL)`, value: val });
         }
       }
     }

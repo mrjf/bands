@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": { "type": "string", "description": "Repository in owner/name format" },
+    "number": { "type": "integer", "description": "Pull request number" },
+    "comment": { "type": "string", "description": "Leave a closing comment" },
+    "delete_branch": { "type": "boolean", "description": "Delete the branch after closing", "default": false }
+  },
+  "required": ["repo", "number"]
+}

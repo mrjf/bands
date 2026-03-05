@@ -30,6 +30,29 @@ export {
   createSkillContext,
 } from "./skills";
 
+// Banded skills
+export {
+  discoverBandForScript,
+  validateBandedSkill,
+  bandExec,
+  parseExecArgs,
+  printHelp,
+  generateWrapper,
+  generateSparseSKILLMd,
+  generatePerScriptBand,
+  convertToBandedSkill,
+} from "./banded-skills";
+export type {
+  BandedScript,
+  BandedSkill,
+  BandedSkillValidationResult,
+  BandExecOptions,
+  BandExecResult,
+  DiscoveryResult,
+  ConvertOptions,
+  ConvertResult,
+} from "./banded-skills";
+
 // Types
 export type {
   CompiledBand,

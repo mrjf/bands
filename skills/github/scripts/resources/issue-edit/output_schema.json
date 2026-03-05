@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "edited": { "type": "boolean" },
+    "number": { "type": "integer" },
+    "url": { "type": "string" }
+  }
+}

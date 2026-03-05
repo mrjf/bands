@@ -8,6 +8,8 @@ export const ALLOWED_TOP_LEVEL_KEYS = [
   "band",
   "icon",
   "description",
+  "url",
+  "path",
   "extends",
   "includes",
   "allow",
@@ -18,6 +20,7 @@ export const ALLOWED_TOP_LEVEL_KEYS = [
   "execution",
   "provides",
   "requires",
+  "contract",
 ] as const;
 
 export const EXECUTION_TARGETS = [
@@ -44,16 +47,19 @@ export const CANONICAL_KEY_ORDER: Record<string, number> = {
   icon: 0,
   band: 1,
   description: 2,
-  extends: 3,
-  includes: 4,
-  allow: 5,
-  deny: 6,
-  insist: 7,
-  limit: 8,
-  env: 9,
-  execution: 10,
-  provides: 11,
-  requires: 12,
+  url: 3,
+  path: 4,
+  extends: 5,
+  includes: 6,
+  allow: 7,
+  deny: 8,
+  insist: 9,
+  limit: 10,
+  env: 11,
+  execution: 12,
+  provides: 13,
+  requires: 14,
+  contract: 15,
 };
 
 export const ENV_FIELDS = ["secrets", "variables"] as const;

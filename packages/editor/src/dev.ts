@@ -7,6 +7,7 @@ const PUBLIC = join(ROOT, "public");
 const API_SRC = join(ROOT, "api");
 const FORMAT_SRC = join(ROOT, "../../format/src");
 const BANDS_SRC = join(ROOT, "../../bands");
+const SKILLS_SRC = join(ROOT, "../../../skills");
 
 let server: Subprocess | null = null;
 let building = false;
@@ -77,6 +78,7 @@ watchDir(PUBLIC, "", "client");
 watchDir(FORMAT_SRC, "@bands/format", "client");
 watchDir(API_SRC, "api", "server");
 watchDir(BANDS_SRC, "bands", "server");
+watchDir(SKILLS_SRC, "skills", "server");
 
 // Keep process alive
 process.on("SIGINT", () => {
