@@ -241,10 +241,6 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     if (discovery?.band?.execution?.target) {
       executionTarget = discovery.band.execution.target;
     }
-    // Allow env override (e.g. BAND_EXEC_TARGET=local-dangerously for CI)
-    if (process.env.BAND_EXEC_TARGET) {
-      executionTarget = process.env.BAND_EXEC_TARGET;
-    }
     // Check required secrets are present
     const requiredSecrets = discovery?.band?.requires?.secrets || [];
     const missingSecrets = requiredSecrets.filter((key: string) => !process.env[key]);
