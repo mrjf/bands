@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "closed": { "type": "boolean" },
+    "number": { "type": "integer" }
+  }
+}

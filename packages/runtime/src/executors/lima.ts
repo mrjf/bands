@@ -13,7 +13,8 @@
 
 import type { BandDocument } from "@bands/format";
 import type { Executor, ExecutorInput, ExecutorResult, ExecutorOptions } from "./types";
-import { spawn, execSync } from "child_process";
+import { execSync } from "child_process";
+import { setupLima } from "../setup";
 
 const DEFAULT_VM_NAME = "bands-executor";
 const DEFAULT_PORT = 9000;
@@ -99,88 +100,8 @@ export class LimaExecutor implements Executor {
     return this.vmUrl;
   }
 
-  private async createVm(vmName: string, port: number): Promise<void> {
-    // Create Lima config
-    const config = `
-# Lima VM for band execution
-images:
-  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
-    arch: "x86_64"
-  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
-    arch: "aarch64"
-
-cpus: 2
-memory: "2GiB"
-disk: "10GiB"
-
-portForwards:
-  - guestPort: 9000
-    hostPort: ${port}
-
-provision:
-  - mode: system
-    script: |
-      #!/bin/bash
-      set -eux
-      # Install Bun
-      curl -fsSL https://bun.sh/install | bash
-      # Add bun to path for all users
-      echo 'export BUN_INSTALL="/root/.bun"' >> /etc/profile.d/bun.sh
-      echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> /etc/profile.d/bun.sh
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux
-      # Install @bands/server (will be served from host via mount)
-      mkdir -p ~/bands-server
-      cd ~/bands-server
-
-      # Create minimal server that proxies to the mounted code
-      cat > server.ts << 'EOF'
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-
-const app = new Hono();
-let currentBand: any = null;
-
-app.use("*", cors());
-
-app.get("/health", (c) => c.json({ ready: !!currentBand, band: currentBand?.band }));
-
-app.post("/init", async (c) => {
-  currentBand = await c.req.json();
-  return c.json({ ok: true, band: currentBand.band });
-});
-
-app.post("/", async (c) => {
-  if (!currentBand) return c.json({ error: { code: "NOT_INITIALIZED" } }, 400);
-  const input = await c.req.json();
-  return c.json({ success: true, input, band: currentBand.band, executor: "lima" });
-});
-
-export default { port: 9000, fetch: app.fetch };
-EOF
-
-      # Install deps and run
-      ~/.bun/bin/bun add hono
-      ~/.bun/bin/bun run server.ts &
-`;
-
-    const { writeFileSync, mkdtempSync, rmSync } = await import("fs");
-    const { join } = await import("path");
-    const { tmpdir } = await import("os");
-
-    const tempDir = mkdtempSync(join(tmpdir(), "lima-bands-"));
-    const configPath = join(tempDir, `${vmName}.yaml`);
-
-    try {
-      writeFileSync(configPath, config);
-      execSync(`limactl create --name=${vmName} ${configPath}`, { stdio: "inherit" });
-      execSync(`limactl start ${vmName}`, { stdio: "inherit" });
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
+  private async createVm(_vmName: string, _port: number): Promise<void> {
+    await setupLima();
   }
 
   private async waitForServer(url: string, maxWaitMs = 60000): Promise<void> {

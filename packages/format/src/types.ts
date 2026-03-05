@@ -116,6 +116,12 @@ export interface Permissions {
   limit?: Limits;
 }
 
+/** I/O contract: inline JSON Schema object, or a string path/URL reference */
+export interface Contract {
+  input?: string | Record<string, unknown>;
+  output?: string | Record<string, unknown>;
+}
+
 /** Adapter metadata */
 export interface AdapterMetadata {
   provides?: {
@@ -139,6 +145,10 @@ export interface BandDocument {
   icon: string;
   description: string;
 
+  // Band reference (reference-only BAND.md delegates to another band)
+  url?: string;
+  path?: string;
+
   // Composition (§4.4)
   extends?: string[];
   includes?: string[];
@@ -158,6 +168,9 @@ export interface BandDocument {
   // Adapter metadata (§4.9)
   provides?: AdapterMetadata["provides"];
   requires?: AdapterMetadata["requires"];
+
+  // I/O contract (JSON Schema)
+  contract?: Contract;
 
   // Raw markdown body (not in frontmatter)
   body?: string;

@@ -1,0 +1,15 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "tagName": { "type": "string" },
+      "name": { "type": "string" },
+      "isDraft": { "type": "boolean" },
+      "isPrerelease": { "type": "boolean" },
+      "isLatest": { "type": "boolean" },
+      "publishedAt": { "type": "string" },
+      "createdAt": { "type": "string" }
+    }
+  }
+}

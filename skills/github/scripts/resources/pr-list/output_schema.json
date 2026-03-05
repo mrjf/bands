@@ -1,0 +1,20 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "number": { "type": "integer" },
+      "title": { "type": "string" },
+      "state": { "type": "string" },
+      "author": {
+        "type": "object",
+        "properties": { "login": { "type": "string" } }
+      },
+      "headRefName": { "type": "string" },
+      "baseRefName": { "type": "string" },
+      "url": { "type": "string" },
+      "createdAt": { "type": "string" },
+      "isDraft": { "type": "boolean" }
+    }
+  }
+}

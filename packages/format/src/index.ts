@@ -2,6 +2,12 @@ export { parseBandMd } from "./parse";
 export { validate } from "./validate";
 export { parseGitHubUrl, isValidGitHubUrl } from "./github-url";
 export { parseSkillRef, normalizeSkillRef } from "./skill-ref";
+export {
+  detectBandReference,
+  resolveBandReference,
+  isBandReference,
+} from "./band-ref";
+export type { BandReference } from "./band-ref";
 export { normalize } from "./normalize";
 export { exportBandMd } from "./export";
 export { union, intersect, removeItems } from "./merge";

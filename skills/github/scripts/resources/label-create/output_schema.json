@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "created": { "type": "boolean" },
+    "name": { "type": "string" },
+    "color": { "type": "string" }
+  }
+}

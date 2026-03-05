@@ -1,6 +1,6 @@
 import { store } from "../store";
 import { EXECUTION_TARGETS, formatBytes, formatDuration, formatCost } from "@bands/format";
-import type { ExecutionTarget, BandDocument, Limits, PermissionCategories, EnvConfig } from "@bands/format";
+import type { ExecutionTarget, BandDocument, Limits, PermissionCategories, EnvConfig, Contract } from "@bands/format";
 
 type PermCategory = keyof PermissionCategories;
 type PermColumn = "allow" | "deny" | "insist";
@@ -54,7 +54,8 @@ const OPTIONAL_FIELDS = ["execution", "extends", "includes"] as const;
 type OptionalField = typeof OPTIONAL_FIELDS[number];
 
 class BandCompact extends HTMLElement {
-  private openColumn: "allow" | "deny" | "insist" | "limits" | "env" | null = null;
+  private openColumn: "allow" | "deny" | "insist" | "limits" | "env" | "contract" | null = null;
+  private contractModes: { input?: "ref" | "inline"; output?: "ref" | "inline" } = {};
   private unsub?: () => void;
 
   connectedCallback() {
@@ -90,6 +91,10 @@ class BandCompact extends HTMLElement {
       selector = `.cap-input[data-env="${el.dataset.env}"][data-idx="${el.dataset.idx}"]`;
     } else if (el.dataset.limit) {
       selector = `.cap-input[data-limit="${el.dataset.limit}"]`;
+    } else if (el.dataset.contract) {
+      selector = `.contract-schema[data-contract="${el.dataset.contract}"]`;
+    } else if (el.dataset.contractRef) {
+      selector = `.contract-ref[data-contract-ref="${el.dataset.contractRef}"]`;
     }
 
     return selector ? { selector, cursorPos: el.selectionStart ?? el.value.length } : null;
@@ -154,6 +159,7 @@ class BandCompact extends HTMLElement {
     const insistItems = this.getCapsByColumn(band, "insist");
     const limitItems = this.getLimits(band);
     const envCount = (band.env?.secrets?.length ?? 0) + (band.env?.variables?.length ?? 0);
+    const contractCount = (band.contract?.input ? 1 : 0) + (band.contract?.output ? 1 : 0);
 
     this.innerHTML = `
       <div class="compact">
@@ -191,12 +197,17 @@ class BandCompact extends HTMLElement {
             <span class="cap-icon">🤫</span>
             <span class="cap-count">${envCount || ""}</span>
           </button>
+          <button class="cap-tab cap-tab--contract ${this.openColumn === "contract" ? "cap-tab--active" : ""}" data-col="contract">
+            <span class="cap-icon">📋</span>
+            <span class="cap-count">${contractCount || ""}</span>
+          </button>
         </div>
         ${this.openColumn === "allow" ? this.renderColumnPanel("allow", band) : ""}
         ${this.openColumn === "deny" ? this.renderColumnPanel("deny", band) : ""}
         ${this.openColumn === "insist" ? this.renderColumnPanel("insist", band) : ""}
         ${this.openColumn === "limits" ? this.renderLimitsPanel(band) : ""}
         ${this.openColumn === "env" ? this.renderEnvPanel(band) : ""}
+        ${this.openColumn === "contract" ? this.renderContractPanel(band) : ""}
 
         <!-- Optional fields -->
         ${this.hasField(band, "execution") ? `
@@ -325,6 +336,44 @@ class BandCompact extends HTMLElement {
     `;
   }
 
+  private getContractMode(field: "input" | "output", val: string | Record<string, unknown> | undefined): "ref" | "inline" {
+    // Explicit override from toggle takes priority
+    if (this.contractModes[field]) return this.contractModes[field]!;
+    // Infer from value type
+    if (typeof val === "object" && val !== null) return "inline";
+    return "ref";
+  }
+
+  private renderContractField(field: "input" | "output", label: string, tooltip: string, val: string | Record<string, unknown> | undefined): string {
+    const mode = this.getContractMode(field, val);
+    const isInline = mode === "inline";
+    const inlineJson = (typeof val === "object" && val !== null) ? JSON.stringify(val, null, 2) : "";
+    const refStr = typeof val === "string" ? val : "";
+
+    return `
+      <div class="cap-category">
+        <div class="cap-category-header" title="${tooltip}">${label}</div>
+        <div class="contract-mode-toggle">
+          <button class="contract-mode-btn${!isInline ? " contract-mode-btn--active" : ""}" data-contract-mode="${field}" data-mode="ref">Reference</button>
+          <button class="contract-mode-btn${isInline ? " contract-mode-btn--active" : ""}" data-contract-mode="${field}" data-mode="inline">Inline</button>
+        </div>
+        ${isInline
+          ? `<textarea class="contract-schema" data-contract="${field}" placeholder='{ "type": "object", "properties": { ... } }' spellcheck="false">${esc(inlineJson)}</textarea>`
+          : `<input class="cap-input contract-ref" type="text" data-contract-ref="${field}" value="${esc(refStr)}" placeholder="./schema.json or https://...">`
+        }
+      </div>
+    `;
+  }
+
+  private renderContractPanel(band: BandDocument): string {
+    return `
+      <div class="cap-panel cap-panel--contract">
+        ${this.renderContractField("input", "Input Schema", "JSON Schema describing what this band accepts", band.contract?.input)}
+        ${this.renderContractField("output", "Output Schema", "JSON Schema describing what this band returns", band.contract?.output)}
+      </div>
+    `;
+  }
+
   private wire() {
     const band = store.currentBand();
     if (!band) return;
@@ -353,7 +402,7 @@ class BandCompact extends HTMLElement {
     // Tab switching
     this.querySelectorAll<HTMLButtonElement>(".cap-tab").forEach(btn => {
       btn.addEventListener("click", () => {
-        const col = btn.dataset.col as "allow" | "deny" | "insist" | "limits" | "env";
+        const col = btn.dataset.col as "allow" | "deny" | "insist" | "limits" | "env" | "contract";
         this.openColumn = this.openColumn === col ? null : col;
         this.render();
       });
@@ -493,6 +542,81 @@ class BandCompact extends HTMLElement {
           arr.splice(idx, 1);
           if (arr.length === 0) delete b.env[field];
           if (Object.keys(b.env).length === 0) delete b.env;
+        });
+      });
+    });
+
+    // Contract mode toggle buttons
+    this.querySelectorAll<HTMLButtonElement>(".contract-mode-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const field = btn.dataset.contractMode as "input" | "output";
+        const mode = btn.dataset.mode as "ref" | "inline";
+        this.contractModes[field] = mode;
+        store.updateCurrentBand(b => {
+          if (mode === "ref") {
+            // Switch to reference — clear inline value
+            if (b.contract) {
+              delete b.contract[field];
+              if (!b.contract.input && !b.contract.output) delete b.contract;
+            }
+          } else {
+            // Switch to inline — clear ref value
+            if (b.contract && typeof b.contract[field] === "string") {
+              delete b.contract[field];
+              if (!b.contract.input && !b.contract.output) delete b.contract;
+            }
+          }
+        });
+      });
+    });
+
+    // Contract inline schema textareas
+    // Only update the store when JSON is valid or field is cleared.
+    // Invalid JSON just shows the error indicator — no store update, no re-render.
+    this.querySelectorAll<HTMLTextAreaElement>(".contract-schema").forEach(textarea => {
+      textarea.addEventListener("input", () => {
+        const field = textarea.dataset.contract as "input" | "output";
+        const val = textarea.value.trim();
+        if (!val) {
+          store.updateCurrentBand(b => {
+            if (b.contract) {
+              delete b.contract[field];
+              if (!b.contract.input && !b.contract.output) delete b.contract;
+            }
+          });
+          textarea.classList.remove("contract-schema--error");
+          return;
+        }
+        try {
+          const parsed = JSON.parse(val);
+          if (typeof parsed === "object" && parsed !== null) {
+            store.updateCurrentBand(b => {
+              if (!b.contract) b.contract = {};
+              b.contract[field] = parsed;
+            });
+            textarea.classList.remove("contract-schema--error");
+          }
+        } catch {
+          textarea.classList.add("contract-schema--error");
+        }
+      });
+    });
+
+    // Contract reference inputs
+    this.querySelectorAll<HTMLInputElement>(".contract-ref").forEach(input => {
+      input.addEventListener("input", () => {
+        const field = input.dataset.contractRef as "input" | "output";
+        const val = input.value;
+        store.updateCurrentBand(b => {
+          if (val) {
+            if (!b.contract) b.contract = {};
+            b.contract[field] = val;
+          } else {
+            if (b.contract) {
+              delete b.contract[field];
+              if (!b.contract.input && !b.contract.output) delete b.contract;
+            }
+          }
         });
       });
     });

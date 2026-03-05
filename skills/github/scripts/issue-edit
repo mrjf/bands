@@ -1,0 +1,5 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$DIR/../../.." && pwd)"
+SKILL_ROOT="$(cd "$DIR/.." && pwd)"
+bun "$ROOT/packages/runtime/src/cli.ts" exec "$DIR/resources/issue-edit" --skill_root "$SKILL_ROOT" "$@"

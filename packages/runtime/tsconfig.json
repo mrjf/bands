@@ -6,6 +6,7 @@
     "types": ["@cloudflare/workers-types", "bun-types"]
   },
   "include": ["src/**/*"],
+  "exclude": ["src/executors/cloudflare-container/**"],
   "references": [
     { "path": "../format" }
   ]

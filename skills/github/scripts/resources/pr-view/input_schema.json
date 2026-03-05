@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Repository in owner/name format"
+    },
+    "number": {
+      "type": "integer",
+      "description": "Pull request number"
+    },
+    "comments": {
+      "type": "boolean",
+      "description": "Include comments in the response",
+      "default": false
+    }
+  },
+  "required": ["repo", "number"]
+}

@@ -34,6 +34,66 @@ limit:
     expect(doc2).toEqual(doc1);
   });
 
+  test("round-trips contract property", () => {
+    const source = `---
+icon: "📋"
+band: contract-test
+description: Contract round-trip test
+contract:
+  input:
+    type: object
+    properties:
+      message:
+        type: string
+    required:
+      - message
+  output:
+    type: object
+    properties:
+      result:
+        type: string
+---`;
+
+    const result1 = parseBandMd(source);
+    expect(result1.errors).toHaveLength(0);
+    expect(result1.document.contract).toBeDefined();
+    expect(result1.document.contract!.input).toBeDefined();
+    expect(result1.document.contract!.output).toBeDefined();
+
+    const exported = exportBandMd(result1.document);
+    const result2 = parseBandMd(exported);
+    expect(result2.errors).toHaveLength(0);
+
+    const doc1 = stripBody(result1.document);
+    const doc2 = stripBody(result2.document);
+    expect(doc2).toEqual(doc1);
+  });
+
+  test("round-trips contract with path and URL refs", () => {
+    const source = `---
+icon: "📋"
+band: contract-ref-test
+description: Contract ref round-trip test
+contract:
+  input: ./schemas/input.json
+  output: https://example.com/out.json
+---`;
+
+    const result1 = parseBandMd(source);
+    expect(result1.errors).toHaveLength(0);
+    expect(result1.document.contract).toBeDefined();
+    expect(result1.document.contract!.input).toBe("./schemas/input.json");
+    expect(result1.document.contract!.output).toBe("https://example.com/out.json");
+
+    const exported = exportBandMd(result1.document);
+    const result2 = parseBandMd(exported);
+    expect(result2.errors).toHaveLength(0);
+
+    const doc1 = stripBody(result1.document);
+    const doc2 = stripBody(result2.document);
+    expect(doc2).toEqual(doc1);
+  });
+
   test("export is idempotent", () => {
     const doc: BandDocument = {
       band: "idempotent",

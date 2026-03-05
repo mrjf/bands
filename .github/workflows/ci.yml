@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Format package tests
+        run: bun test --cwd packages/format
+
+      - name: Editor package tests
+        run: bun test --cwd packages/editor
+
+      - name: Runtime unit tests
+        run: bun test test/unit/ test/executors/
+        working-directory: packages/runtime
+
+      - name: Runtime integration tests (local-dangerously)
+        run: bun test test/integration/
+        working-directory: packages/runtime
+
+  skill-tests-direct:
+    name: Skill Tests (Direct)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install Lima and QEMU
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 qemu-utils
+          curl -fsSL https://github.com/lima-vm/lima/releases/download/v1.0.5/lima-1.0.5-Linux-x86_64.tar.gz | sudo tar xz -C /usr/local
+
+      - name: Create Lima VM
+        run: |
+          limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
+          limactl shell bands-executor -- uname -a
+
+      - name: Install gh CLI in VM
+        run: |
+          limactl copy skills/github/setup.sh bands-executor:/tmp/setup.sh
+          limactl shell bands-executor -- bash /tmp/setup.sh
+
+      - name: Verify required secrets
+        run: |
+          missing=""
+          [ -z "$GITHUB_TEST_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
+          [ -z "$GITHUB_TEST_REPO" ] && missing="$missing TEST_GITHUB_REPO"
+          [ -z "$GITHUB_GIST_TEST_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
+        env:
+          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+
+      - name: Run banded-skills integration tests
+        run: bun test test/integration/banded-skills.test.ts
+        working-directory: packages/runtime
+
+      - name: Run direct skill tests
+        run: bun scripts/test-skills.ts github --direct
+        env:
+          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+        timeout-minutes: 10
+
+      - name: Cleanup Lima VM
+        if: always()
+        run: limactl stop bands-executor --force && limactl delete bands-executor --force || true
+
+  skill-tests-agent:
+    name: Skill Tests (Agent)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install Lima and QEMU
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 qemu-utils
+          curl -fsSL https://github.com/lima-vm/lima/releases/download/v1.0.5/lima-1.0.5-Linux-x86_64.tar.gz | sudo tar xz -C /usr/local
+
+      - name: Create Lima VM
+        run: |
+          limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
+          limactl shell bands-executor -- uname -a
+
+      - name: Install gh CLI in VM
+        run: |
+          limactl copy skills/github/setup.sh bands-executor:/tmp/setup.sh
+          limactl shell bands-executor -- bash /tmp/setup.sh
+
+      - name: Verify required secrets
+        run: |
+          missing=""
+          [ -z "$GITHUB_TEST_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
+          [ -z "$GITHUB_TEST_REPO" ] && missing="$missing TEST_GITHUB_REPO"
+          [ -z "$GITHUB_GIST_TEST_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
+          [ -z "$ANTHROPIC_API_KEY" ] && missing="$missing ANTHROPIC_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
+        env:
+          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Run agent skill tests
+        run: bun scripts/test-skills.ts github --agent
+        env:
+          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        timeout-minutes: 10
+
+      - name: Cleanup Lima VM
+        if: always()
+        run: limactl stop bands-executor --force && limactl delete bands-executor --force || true

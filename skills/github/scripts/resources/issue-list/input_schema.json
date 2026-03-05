@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Repository in owner/name format"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["open", "closed", "all"],
+      "description": "Filter by issue state",
+      "default": "open"
+    },
+    "labels": {
+      "type": "string",
+      "description": "Filter by label name"
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Filter by assignee username"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum number of issues to return",
+      "default": 30
+    }
+  },
+  "required": ["repo"]
+}

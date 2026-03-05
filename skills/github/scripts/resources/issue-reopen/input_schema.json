@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": { "type": "string", "description": "Repository in owner/name format" },
+    "number": { "type": "integer", "description": "Issue number" },
+    "comment": { "type": "string", "description": "Leave a comment when reopening" }
+  },
+  "required": ["repo", "number"]
+}

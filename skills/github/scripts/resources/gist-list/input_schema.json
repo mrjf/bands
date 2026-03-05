@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "limit": { "type": "integer", "description": "Maximum gists to return", "default": 10 },
+    "public": { "type": "boolean", "description": "Only show public gists" },
+    "secret": { "type": "boolean", "description": "Only show secret gists" }
+  }
+}

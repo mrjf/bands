@@ -10,12 +10,12 @@ describe("API routes", () => {
     const res = await app.request("/api/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: "---\nband: test\nversion: 1\nicon: x\n---" }),
+      body: JSON.stringify({ source: "---\nband: test\nicon: x\ndescription: test band\n---" }),
     });
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.document.band).toBe("test");
-    expect(json.document.version).toBe(1);
+    expect(json.document.icon).toBe("x");
     expect(json.errors).toHaveLength(0);
   });
 
