@@ -60,7 +60,7 @@ jobs:
 
       - name: Create Lima VM
         run: |
-          limactl start --name=bands-executor --vm-type=qemu --cpus=2 --memory=4 --plain
+          limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
 
       - name: Install gh CLI in VM
@@ -126,7 +126,7 @@ jobs:
 
       - name: Create Lima VM
         run: |
-          limactl start --name=bands-executor --vm-type=qemu --cpus=2 --memory=4 --plain
+          limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
 
       - name: Install gh CLI in VM
