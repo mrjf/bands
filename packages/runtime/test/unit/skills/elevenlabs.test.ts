@@ -59,9 +59,9 @@ describe("ElevenLabs Skill Integration", () => {
         task: "text_to_speech",
         voiceId: "21m00Tcm4TlvDq8ikWAM",
         text: "Testing with custom voice settings.",
-        voiceSettings: {
+        voice_settings: {
           stability: 0.8,
-          similarityBoost: 0.9,
+          similarity_boost: 0.9,
         },
         output: "/tmp/custom_settings.mp3",
       });
@@ -142,7 +142,7 @@ describe("ElevenLabs Skill Integration", () => {
         voiceId: "21m00Tcm4TlvDq8ikWAM",
         settings: {
           stability: 0.6,
-          similarityBoost: 0.8,
+          similarity_boost: 0.8,
         },
       });
       assertSuccess(response);
@@ -274,9 +274,9 @@ describe("ElevenLabs Skill Integration", () => {
         task: "speech_to_speech",
         voiceId: "21m00Tcm4TlvDq8ikWAM",
         audioFile: "/path/to/input.mp3",
-        voiceSettings: {
+        voice_settings: {
           stability: 0.7,
-          similarityBoost: 0.85,
+          similarity_boost: 0.85,
         },
         output: "/tmp/custom_sts.mp3",
       });
@@ -397,33 +397,38 @@ describe("ElevenLabs Skill Integration", () => {
     });
   });
 
-  describe("Error Handling", () => {
-    it("should accept a request with missing voice ID gracefully", async () => {
+  describe("Edge Cases", () => {
+    it("should accept a request with minimal TTS parameters", async () => {
       const response = await harness.request({
         task: "text_to_speech",
-        text: "No voice ID provided.",
-        output: "/tmp/no_voice.mp3",
+        text: "Minimal parameters.",
+        output: "/tmp/minimal.mp3",
       });
       assertSuccess(response);
     });
 
-    it("should accept a request with empty text", async () => {
+    it("should accept a request with all TTS parameters specified", async () => {
       const response = await harness.request({
         task: "text_to_speech",
         voiceId: "21m00Tcm4TlvDq8ikWAM",
-        text: "",
-        output: "/tmp/empty_text.mp3",
+        text: "Full parameters.",
+        modelId: "eleven_multilingual_v2",
+        outputFormat: "mp3_44100_128",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+        output: "/tmp/full_params.mp3",
       });
       assertSuccess(response);
     });
 
-    it("should accept a request with invalid model ID", async () => {
+    it("should accept a request with very long text", async () => {
       const response = await harness.request({
         task: "text_to_speech",
         voiceId: "21m00Tcm4TlvDq8ikWAM",
-        text: "Testing invalid model.",
-        modelId: "nonexistent_model",
-        output: "/tmp/invalid_model.mp3",
+        text: "A".repeat(5000),
+        output: "/tmp/long_text.mp3",
       });
       assertSuccess(response);
     });

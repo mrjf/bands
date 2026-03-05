@@ -219,6 +219,66 @@ curl -X POST "https://api.elevenlabs.io/v1/audio-isolation" \
   --output clean_audio.mp3
 ```
 
+### 7. Models
+
+**List available models:**
+
+```bash
+curl -s -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  "https://api.elevenlabs.io/v1/models"
+```
+
+Returns an array of model objects with `model_id`, `name`, `description`, and `languages`.
+
+### 8. User and Subscription
+
+**Get user info:**
+
+```bash
+curl -s -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  "https://api.elevenlabs.io/v1/user"
+```
+
+**Get subscription details and character usage:**
+
+```bash
+curl -s -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  "https://api.elevenlabs.io/v1/user/subscription"
+```
+
+Returns `character_count`, `character_limit`, `tier`, and other quota information.
+
+### 9. Generation History
+
+**List generation history:**
+
+```bash
+curl -s -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  "https://api.elevenlabs.io/v1/history?page_size=20"
+```
+
+**Get a specific history item:**
+
+```bash
+curl -s -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  "https://api.elevenlabs.io/v1/history/{history_item_id}"
+```
+
+**Download audio from a history item:**
+
+```bash
+curl -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  "https://api.elevenlabs.io/v1/history/{history_item_id}/audio" \
+  --output history_audio.mp3
+```
+
+**Delete a history item:**
+
+```bash
+curl -X DELETE "https://api.elevenlabs.io/v1/history/{history_item_id}" \
+  -H "xi-api-key: $ELEVENLABS_API_KEY"
+```
+
 ---
 
 ## Workflow
