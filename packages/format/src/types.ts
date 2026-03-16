@@ -172,6 +172,9 @@ export interface BandDocument {
   // I/O contract (JSON Schema)
   contract?: Contract;
 
+  /** Skill-specific config, keyed by band name in YAML (e.g. band: slack → slack: {...}) */
+  bandConfig?: Record<string, unknown>;
+
   // Raw markdown body (not in frontmatter)
   body?: string;
 }

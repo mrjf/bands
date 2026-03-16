@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Gist ID or URL"
+    }
+  },
+  "required": [
+    "id"
+  ]
+}

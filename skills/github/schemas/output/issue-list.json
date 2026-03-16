@@ -1,0 +1,29 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer"
+      },
+      "title": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "author": {
+        "$ref": "author.json"
+      },
+      "labels": {
+        "$ref": "labels-output.json"
+      },
+      "url": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    }
+  }
+}

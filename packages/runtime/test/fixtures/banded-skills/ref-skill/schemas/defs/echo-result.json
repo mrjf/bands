@@ -1,0 +1,13 @@
+{
+  "$id": "echo-result.json",
+  "type": "object",
+  "properties": {
+    "greeting": {
+      "$ref": "greeting.json"
+    },
+    "name": {
+      "$ref": "name.json"
+    }
+  },
+  "required": ["greeting", "name"]
+}

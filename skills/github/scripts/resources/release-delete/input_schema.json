@@ -1,9 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "repo": { "type": "string", "description": "Repository in owner/name format" },
-    "tag": { "type": "string", "description": "Tag name of the release to delete" },
-    "cleanup_tag": { "type": "boolean", "description": "Also delete the git tag", "default": false }
-  },
-  "required": ["repo", "tag"]
-}

@@ -10,8 +10,8 @@
  *   import { createAgentHarness } from "../../../scripts/agent-test-helpers";
  *   const { agentCall, execScript } = await createAgentHarness({
  *     skillDir: resolve(__dirname, ".."),
- *     requiredEnv: ["GITHUB_TEST_TOKEN"],
- *     envToSet: { GITHUB_TOKEN: process.env.GITHUB_TEST_TOKEN! },
+ *     requiredEnv: ["TEST_GITHUB_TOKEN"],
+ *     envToSet: { GITHUB_TOKEN: process.env.TEST_GITHUB_TOKEN! },
  *   });
  */
 
@@ -82,26 +82,25 @@ function parseSkillDescriptions(skillMdPath: string): Record<string, string> {
 }
 
 /**
- * Load tool definitions from a skill's script resources and SKILL.md.
+ * Load tool definitions from a skill's centralized schemas and SKILL.md.
  */
 function loadToolDefinitions(skillDir: string): ToolDefinition[] {
   const skillMdPath = join(skillDir, "SKILL.md");
-  const resourcesDir = join(skillDir, "scripts", "resources");
   const descriptions = parseSkillDescriptions(skillMdPath);
   const tools: ToolDefinition[] = [];
 
-  if (!existsSync(resourcesDir)) return tools;
+  const schemasInputDir = join(skillDir, "schemas", "input");
+  if (!existsSync(schemasInputDir)) return tools;
 
-  const scriptDirs = readdirSync(resourcesDir).filter((d) =>
-    existsSync(join(resourcesDir, d, "input_schema.json"))
-  );
+  const schemaFiles = readdirSync(schemasInputDir).filter((f) => f.endsWith(".json"));
 
-  for (const dir of scriptDirs) {
-    const schemaPath = join(resourcesDir, dir, "input_schema.json");
+  for (const file of schemaFiles) {
+    const name = file.replace(/\.json$/, "");
+    const schemaPath = join(schemasInputDir, file);
     const schema = JSON.parse(readFileSync(schemaPath, "utf-8"));
     tools.push({
-      name: dir,
-      description: descriptions[dir] || dir,
+      name,
+      description: descriptions[name] || name,
       input_schema: schema,
     });
   }
@@ -123,7 +122,7 @@ export interface AgentHarnessOptions {
   skillDir: string;
   /** Env vars that must be set (throws at init if missing) */
   requiredEnv?: string[];
-  /** Env vars to inject into process.env (e.g. { GITHUB_TOKEN: process.env.GITHUB_TEST_TOKEN }) */
+  /** Env vars to inject into process.env (e.g. { GITHUB_TOKEN: process.env.TEST_GITHUB_TOKEN }) */
   envToSet?: Record<string, string>;
   /** Extra system prompt lines appended after the SKILL.md content */
   systemPromptSuffix?: string;
@@ -180,7 +179,7 @@ export async function createAgentHarness(opts: AgentHarnessOptions): Promise<Age
   // Load tools
   const tools = loadToolDefinitions(skillDir);
   if (tools.length === 0) {
-    throw new Error(`No scripts with input_schema.json found in ${resourcesDir}`);
+    throw new Error(`No schemas found in ${join(skillDir, "schemas", "input")}`);
   }
 
   // Build system prompt

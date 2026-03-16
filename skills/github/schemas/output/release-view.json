@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "tagName": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "isDraft": {
+      "type": "boolean"
+    },
+    "isPrerelease": {
+      "type": "boolean"
+    },
+    "publishedAt": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "url": {
+      "type": "string"
+    },
+    "author": {
+      "type": "object"
+    },
+    "assets": {
+      "type": "array"
+    }
+  }
+}

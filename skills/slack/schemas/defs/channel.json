@@ -1,0 +1,5 @@
+{
+  "$id": "channel.json",
+  "type": "string",
+  "description": "Channel name (#general) or ID (C01234ABCDE)"
+}

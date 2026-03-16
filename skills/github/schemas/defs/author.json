@@ -1,0 +1,9 @@
+{
+  "$id": "author.json",
+  "type": "object",
+  "properties": {
+    "login": {
+      "type": "string"
+    }
+  }
+}

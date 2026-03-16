@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "open",
+        "closed",
+        "all"
+      ],
+      "description": "Filter by issue state",
+      "default": "open"
+    },
+    "labels": {
+      "type": "string",
+      "description": "Filter by label name"
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Filter by assignee username"
+    },
+    "limit": {
+      "$ref": "limit.json",
+      "default": 30
+    }
+  },
+  "required": [
+    "repo"
+  ]
+}

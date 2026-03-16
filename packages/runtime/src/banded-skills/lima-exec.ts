@@ -29,7 +29,8 @@ export async function limaExec(
   outputPath: string,
   vmName: string = DEFAULT_VM_NAME,
   envSecrets: Record<string, string> = {},
-  skillRoot?: string
+  skillRoot?: string,
+  configPath?: string
 ): Promise<BandExecResult> {
   const startTime = Date.now();
 
@@ -71,11 +72,21 @@ export async function limaExec(
     const runShContent = readFileSync(runShPath, "utf-8");
     writeFileSync(join(stagingDir, "run.sh"), runShContent);
 
+    // Stage config.json if present
+    if (configPath) {
+      const configContent = readFileSync(configPath, "utf-8");
+      writeFileSync(join(stagingDir, "config.json"), configContent);
+    }
+
     // Write env file with secrets and standard vars
+    const vmConfigPath = `${vmWorkdir}/config.json`;
     const envLines = [
       `export INPUT_PATH=${vmInputPath}`,
       `export OUTPUT_PATH=${vmOutputPath}`,
     ];
+    if (configPath) {
+      envLines.push(`export CONFIG_PATH=${vmConfigPath}`);
+    }
     for (const [key, value] of Object.entries(envSecrets)) {
       // Base64-encode to avoid any shell quoting issues
       const b64 = Buffer.from(value).toString("base64");
@@ -100,6 +111,12 @@ export async function limaExec(
         `limactl copy ${stagingInputPath} ${vmName}:${vmInputPath}`,
         { stdio: "pipe" }
       );
+      if (configPath) {
+        execSync(
+          `limactl copy ${join(stagingDir, "config.json")} ${vmName}:${vmConfigPath}`,
+          { stdio: "pipe" }
+        );
+      }
     } catch (e) {
       return {
         success: false,

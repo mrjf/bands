@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "pr-number.json"
+    },
+    "required": {
+      "type": "boolean",
+      "description": "Only show required checks",
+      "default": false
+    }
+  },
+  "required": [
+    "repo",
+    "number"
+  ]
+}

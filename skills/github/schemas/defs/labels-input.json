@@ -1,0 +1,8 @@
+{
+  "$id": "labels-input.json",
+  "type": "array",
+  "items": {
+    "type": "string"
+  },
+  "description": "Labels to apply"
+}

@@ -1,0 +1,76 @@
+{
+  "type": "object",
+  "properties": {
+    "number": {
+      "type": "integer"
+    },
+    "title": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "author": {
+      "$ref": "author.json"
+    },
+    "labels": {
+      "$ref": "labels-output.json"
+    },
+    "assignees": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "login": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "milestone": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        }
+      }
+    },
+    "url": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    },
+    "comments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "login": {
+                "type": "string"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

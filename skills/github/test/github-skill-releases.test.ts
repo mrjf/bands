@@ -3,14 +3,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { canRun, gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
+import { gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
 
-if (!canRun) {
-  console.warn("Skipping: GITHUB_TEST_TOKEN or GITHUB_TEST_REPO not set in .env");
-}
-
-describe.skipIf(!canRun)("github skill: releases & labels", () => {
-  // Note: gist tests are in github-skill-gists.test.ts (requires GITHUB_GIST_TEST_TOKEN)
+describe("github skill: releases & labels", () => {
+  // Note: gist tests are in github-skill-gists.test.ts (requires TEST_GIST_GITHUB_TOKEN)
   // ── Release lifecycle ──────────────────────────────────────────────
 
   describe("release lifecycle", () => {

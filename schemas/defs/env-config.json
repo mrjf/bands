@@ -1,0 +1,19 @@
+{
+  "$id": "env-config.json",
+  "type": "object",
+  "properties": {
+    "secrets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

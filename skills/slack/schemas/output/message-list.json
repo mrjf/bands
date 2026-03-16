@@ -1,0 +1,32 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string"
+      },
+      "user": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      },
+      "ts": {
+        "type": "string"
+      },
+      "thread_ts": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "reply_count": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      }
+    }
+  }
+}

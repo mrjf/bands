@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "pr-number.json"
+    },
+    "name_only": {
+      "type": "boolean",
+      "description": "Only show names of changed files",
+      "default": false
+    },
+    "patch": {
+      "type": "boolean",
+      "description": "Display diff in patch format",
+      "default": false
+    }
+  },
+  "required": [
+    "repo",
+    "number"
+  ]
+}

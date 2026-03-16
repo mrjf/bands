@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": [
+    "channel"
+  ],
+  "properties": {
+    "channel": {
+      "$ref": "channel.json"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum messages to return",
+      "default": 20
+    }
+  }
+}

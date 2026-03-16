@@ -1,0 +1,39 @@
+{
+  "type": "object",
+  "properties": {
+    "channels": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "dm": {
+      "type": "boolean"
+    },
+    "threads": {
+      "type": "boolean"
+    },
+    "reactions": {
+      "type": "boolean"
+    },
+    "files": {
+      "type": "boolean"
+    },
+    "search": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

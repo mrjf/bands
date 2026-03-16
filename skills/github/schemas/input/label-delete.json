@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "name": {
+      "type": "string",
+      "description": "Label name to delete"
+    }
+  },
+  "required": [
+    "repo",
+    "name"
+  ]
+}

@@ -90,4 +90,45 @@ icon: "❌"
     expect(result.warnings.some((w) => w.path === "band")).toBe(true);
     expect(result.warnings.some((w) => w.path === "description")).toBe(true);
   });
+
+  test("parses bandConfig from band-namespaced key", () => {
+    const source = `---
+band: slack
+icon: "💬"
+description: "Slack skill"
+slack:
+  channels:
+    allow: []
+    deny: []
+  dm: false
+  threads: true
+---`;
+    const result = parseBandMd(source);
+    expect(result.errors).toHaveLength(0);
+    expect(result.document.bandConfig).toBeDefined();
+    expect(result.document.bandConfig!.dm).toBe(false);
+    expect(result.document.bandConfig!.threads).toBe(true);
+    expect(result.document.bandConfig!.channels).toEqual({ allow: [], deny: [] });
+  });
+
+  test("does not set bandConfig when band-named key is absent", () => {
+    const source = `---
+band: test-band
+icon: "🎵"
+description: "No config"
+---`;
+    const result = parseBandMd(source);
+    expect(result.document.bandConfig).toBeUndefined();
+  });
+
+  test("does not set bandConfig for non-object band-named key", () => {
+    const source = `---
+band: test-band
+icon: "🎵"
+description: "Scalar config"
+test-band: just-a-string
+---`;
+    const result = parseBandMd(source);
+    expect(result.document.bandConfig).toBeUndefined();
+  });
 });

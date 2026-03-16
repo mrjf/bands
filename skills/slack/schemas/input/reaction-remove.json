@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "required": [
+    "channel",
+    "timestamp",
+    "emoji"
+  ],
+  "properties": {
+    "channel": {
+      "$ref": "channel.json"
+    },
+    "timestamp": {
+      "$ref": "ts.json"
+    },
+    "emoji": {
+      "type": "string",
+      "description": "Emoji name (e.g., thumbsup or :thumbsup:)"
+    }
+  }
+}

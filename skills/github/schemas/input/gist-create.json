@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "filename": {
+      "type": "string",
+      "description": "Filename for the gist",
+      "default": "file.txt"
+    },
+    "content": {
+      "type": "string",
+      "description": "Content of the gist"
+    },
+    "description": {
+      "type": "string",
+      "description": "Gist description"
+    },
+    "public": {
+      "type": "boolean",
+      "description": "Make gist public",
+      "default": false
+    }
+  },
+  "required": [
+    "content"
+  ]
+}

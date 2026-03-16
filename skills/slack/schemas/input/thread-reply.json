@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "required": [
+    "channel",
+    "thread_ts",
+    "text"
+  ],
+  "properties": {
+    "channel": {
+      "$ref": "channel.json"
+    },
+    "thread_ts": {
+      "$ref": "ts.json"
+    },
+    "text": {
+      "type": "string",
+      "description": "Reply text"
+    }
+  }
+}

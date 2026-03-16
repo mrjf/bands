@@ -1,0 +1,55 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "issue-number.json"
+    },
+    "title": {
+      "type": "string",
+      "description": "New issue title"
+    },
+    "body": {
+      "type": "string",
+      "description": "New issue body"
+    },
+    "milestone": {
+      "type": "string",
+      "description": "Set milestone by name"
+    },
+    "add_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Labels to add"
+    },
+    "remove_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Labels to remove"
+    },
+    "add_assignees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Assignees to add"
+    },
+    "remove_assignees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Assignees to remove"
+    }
+  },
+  "required": [
+    "repo",
+    "number"
+  ]
+}

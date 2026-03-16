@@ -1,5 +1,5 @@
 #!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$DIR/../../.." && pwd)"
-SKILL_ROOT="$(cd "$DIR/.." && pwd)"
+DIR="$(cd -P "$(dirname "$0")" && pwd)"
+ROOT="$(cd -P "$DIR/../../.." && pwd)"
+SKILL_ROOT="$(cd -P "$DIR/.." && pwd)"
 bun "$ROOT/packages/runtime/src/cli.ts" exec "$DIR/resources/pr-review" --skill_root "$SKILL_ROOT" "$@"

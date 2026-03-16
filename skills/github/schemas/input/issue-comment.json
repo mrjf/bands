@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "issue-number.json"
+    },
+    "body": {
+      "type": "string",
+      "description": "Comment body in markdown"
+    }
+  },
+  "required": [
+    "repo",
+    "number",
+    "body"
+  ]
+}

@@ -125,5 +125,10 @@ function buildDocument(
     doc.body = body;
   }
 
+  // Extract band-namespaced config (e.g. band: slack → slack: {...})
+  if (doc.band && raw[doc.band] && typeof raw[doc.band] === "object") {
+    doc.bandConfig = raw[doc.band] as Record<string, unknown>;
+  }
+
   return doc;
 }

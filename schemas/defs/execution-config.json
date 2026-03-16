@@ -1,0 +1,45 @@
+{
+  "$id": "execution-config.json",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "string",
+      "enum": [
+        "local-dangerously",
+        "cloudflare",
+        "lima"
+      ]
+    },
+    "cloudflare": {
+      "type": "object",
+      "properties": {
+        "workerName": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "customDomain": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "lima": {
+      "type": "object",
+      "properties": {
+        "vmName": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "target"
+  ],
+  "additionalProperties": false
+}

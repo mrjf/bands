@@ -1,8 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "merged": { "type": "boolean" },
-    "sha": { "type": "string" },
-    "message": { "type": "string" }
-  }
-}

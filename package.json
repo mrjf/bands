@@ -4,7 +4,8 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "band": "bun packages/runtime/src/cli.ts",
-    "install:cli": "bun build --compile packages/runtime/src/cli.ts --outfile /usr/local/bin/band",
+    "install:cli": "bun build --compile packages/runtime/src/cli.ts --outfile /usr/local/bin/band-cli",
+    "install:band": "bun build --compile packages/runtime/src/band-run.ts --outfile /usr/local/bin/band",
     "test": "bun test --cwd packages/format && bun test --cwd packages/editor && bun run --cwd packages/runtime test",
     "test:format": "bun test --cwd packages/format",
     "test:editor": "bun test --cwd packages/editor",

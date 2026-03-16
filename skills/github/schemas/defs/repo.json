@@ -1,0 +1,5 @@
+{
+  "$id": "repo.json",
+  "type": "string",
+  "description": "Repository in owner/name format"
+}

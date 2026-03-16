@@ -1,0 +1,35 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer"
+      },
+      "title": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "author": {
+        "$ref": "author.json"
+      },
+      "headRefName": {
+        "type": "string"
+      },
+      "baseRefName": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "isDraft": {
+        "type": "boolean"
+      }
+    }
+  }
+}

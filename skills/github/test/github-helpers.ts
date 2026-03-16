@@ -40,8 +40,8 @@ loadEnv();
 
 // ── Config ─────────────────────────────────────────────────────────────
 
-export const GITHUB_TOKEN = process.env.GITHUB_TEST_TOKEN;
-export const GITHUB_REPO = process.env.GITHUB_TEST_REPO;
+export const GITHUB_TOKEN = process.env.TEST_GITHUB_TOKEN;
+export const GITHUB_REPO = process.env.TEST_GITHUB_REPO;
 
 // Set GITHUB_TOKEN so gh CLI picks it up
 if (GITHUB_TOKEN) {
@@ -65,11 +65,25 @@ export const RESOURCES = join(SKILL_ROOT, "scripts", "resources");
 
 export const TIMEOUT = 30_000;
 
-export const canRun = !!(GITHUB_TOKEN && GITHUB_REPO);
+/**
+ * Require TEST_GITHUB_TOKEN and TEST_GITHUB_REPO. Call at the start of any
+ * function that talks to GitHub. Tests that only validate local structure
+ * (schema validation, --help) can run without these vars.
+ */
+export function requireGitHubEnv(): { token: string; repo: string } {
+  const missing: string[] = [];
+  if (!GITHUB_TOKEN) missing.push("TEST_GITHUB_TOKEN");
+  if (!GITHUB_REPO) missing.push("TEST_GITHUB_REPO");
+  if (missing.length > 0) {
+    throw new Error(`Missing required env vars: ${missing.join(", ")}`);
+  }
+  return { token: GITHUB_TOKEN!, repo: GITHUB_REPO! };
+}
 
 // ── Helper to exec a github skill script with proper JSON input ──────
 
 export async function gh(script: string, input: Record<string, unknown>) {
+  requireGitHubEnv();
   const tempDir = mkdtempSync(join(tmpdir(), "gh-test-"));
   const inputPath = join(tempDir, "input.json");
   writeFileSync(inputPath, JSON.stringify(input));
@@ -89,7 +103,8 @@ export async function gh(script: string, input: Record<string, unknown>) {
 // ── Ensure repo has at least one commit ──────────────────────────────
 
 export async function ensureRepoInitialized(): Promise<boolean> {
-  const [owner, repo] = GITHUB_REPO!.split("/");
+  const { repo: repoSlug } = requireGitHubEnv();
+  const [owner, repo] = repoSlug.split("/");
 
   const check = await gh("api", {
     endpoint: `repos/${owner}/${repo}/git/ref/heads/main`,
@@ -112,7 +127,8 @@ export async function ensureRepoInitialized(): Promise<boolean> {
 // ── Helper to create a branch with a file (needed for PR tests) ──────
 
 export async function createBranchWithFile(branchName: string): Promise<string> {
-  const [owner, repo] = GITHUB_REPO!.split("/");
+  const { repo: repoSlug } = requireGitHubEnv();
+  const [owner, repo] = repoSlug.split("/");
 
   const refResult = await gh("api", {
     endpoint: `repos/${owner}/${repo}/git/ref/heads/main`,

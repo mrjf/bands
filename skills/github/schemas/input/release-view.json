@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "tag": {
+      "type": "string",
+      "description": "Tag name (defaults to latest release)"
+    }
+  },
+  "required": [
+    "repo"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "title": {
+      "type": "string",
+      "description": "Issue title"
+    },
+    "body": {
+      "type": "string",
+      "description": "Issue body in markdown"
+    },
+    "labels": {
+      "$ref": "labels-input.json"
+    },
+    "assignees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Usernames to assign"
+    },
+    "milestone": {
+      "type": "string",
+      "description": "Milestone name"
+    }
+  },
+  "required": [
+    "repo",
+    "title",
+    "body"
+  ]
+}

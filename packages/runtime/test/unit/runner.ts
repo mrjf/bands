@@ -235,7 +235,7 @@ export async function runSecurityTests(
  * Load a band from the wrapped-skills directory.
  */
 export function getWrappedSkillPath(skillName: string): string {
-  const path = join(process.cwd(), "..", "..", "wrapped-skills", `${skillName}.band.md`);
+  const path = join(import.meta.dir, "../../../../wrapped-skills", `${skillName}.band.md`);
   if (!existsSync(path)) {
     throw new Error(`Wrapped skill not found: ${path}`);
   }

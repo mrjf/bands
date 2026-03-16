@@ -1,8 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "repo": { "type": "string", "description": "Repository in owner/name format" },
-    "limit": { "type": "integer", "description": "Maximum labels to return", "default": 100 }
-  },
-  "required": ["repo"]
-}

@@ -1,2 +1,0 @@
-#!/bin/bash
-band exec scripts/resources/echo-input "$@"

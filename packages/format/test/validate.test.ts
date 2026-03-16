@@ -152,4 +152,26 @@ describe("validate", () => {
     expect(errors).toHaveLength(0);
     expect(warnings.filter((w) => w.path.startsWith("contract"))).toHaveLength(0);
   });
+
+  test("does not warn on band-namespaced config key", () => {
+    const { warnings } = validate({
+      band: "slack",
+      icon: "💬",
+      description: "Slack skill",
+      slack: { channels: { allow: [], deny: [] }, dm: false },
+    });
+    expect(warnings.some((w) => w.path === "slack")).toBe(false);
+  });
+
+  test("still warns on unknown keys that are not the band name", () => {
+    const { warnings } = validate({
+      band: "slack",
+      icon: "💬",
+      description: "Slack skill",
+      slack: { dm: false },
+      other_unknown: true,
+    });
+    expect(warnings.some((w) => w.path === "slack")).toBe(false);
+    expect(warnings.some((w) => w.path === "other_unknown")).toBe(true);
+  });
 });

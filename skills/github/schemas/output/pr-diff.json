@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "diff": {
+      "type": "string",
+      "description": "Diff output"
+    }
+  }
+}

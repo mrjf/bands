@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "issue-number.json"
+    },
+    "comment": {
+      "type": "string",
+      "description": "Leave a comment when reopening"
+    }
+  },
+  "required": [
+    "repo",
+    "number"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "topic": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "purpose": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "num_members": {
+        "type": "integer"
+      },
+      "is_private": {
+        "type": "boolean"
+      },
+      "is_archived": {
+        "type": "boolean"
+      }
+    }
+  }
+}

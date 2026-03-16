@@ -67,21 +67,22 @@ jobs:
         run: |
           limactl copy skills/github/setup.sh bands-executor:/tmp/setup.sh
           limactl shell bands-executor -- bash /tmp/setup.sh
+          limactl shell bands-executor -- touch /tmp/.band-setup-done-github
 
       - name: Verify required secrets
         run: |
           missing=""
-          [ -z "$GITHUB_TEST_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
-          [ -z "$GITHUB_TEST_REPO" ] && missing="$missing TEST_GITHUB_REPO"
-          [ -z "$GITHUB_GIST_TEST_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
+          [ -z "$TEST_GITHUB_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
+          [ -z "$TEST_GITHUB_REPO" ] && missing="$missing TEST_GITHUB_REPO"
+          [ -z "$TEST_GIST_GITHUB_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
           if [ -n "$missing" ]; then
             echo "::error::Missing required secrets:$missing"
             exit 1
           fi
         env:
-          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
-          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
-          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          TEST_GITHUB_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          TEST_GIST_GITHUB_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
 
       - name: Run banded-skills integration tests
         run: bun test test/integration/banded-skills.test.ts
@@ -90,9 +91,9 @@ jobs:
       - name: Run direct skill tests
         run: bun scripts/test-skills.ts github --direct
         env:
-          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
-          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
-          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          TEST_GITHUB_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          TEST_GIST_GITHUB_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
         timeout-minutes: 10
 
       - name: Cleanup Lima VM
@@ -133,30 +134,31 @@ jobs:
         run: |
           limactl copy skills/github/setup.sh bands-executor:/tmp/setup.sh
           limactl shell bands-executor -- bash /tmp/setup.sh
+          limactl shell bands-executor -- touch /tmp/.band-setup-done-github
 
       - name: Verify required secrets
         run: |
           missing=""
-          [ -z "$GITHUB_TEST_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
-          [ -z "$GITHUB_TEST_REPO" ] && missing="$missing TEST_GITHUB_REPO"
-          [ -z "$GITHUB_GIST_TEST_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
+          [ -z "$TEST_GITHUB_TOKEN" ] && missing="$missing TEST_GITHUB_TOKEN"
+          [ -z "$TEST_GITHUB_REPO" ] && missing="$missing TEST_GITHUB_REPO"
+          [ -z "$TEST_GIST_GITHUB_TOKEN" ] && missing="$missing TEST_GIST_GITHUB_TOKEN"
           [ -z "$ANTHROPIC_API_KEY" ] && missing="$missing ANTHROPIC_API_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Missing required secrets:$missing"
             exit 1
           fi
         env:
-          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
-          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
-          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          TEST_GITHUB_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          TEST_GIST_GITHUB_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Run agent skill tests
         run: bun scripts/test-skills.ts github --agent
         env:
-          GITHUB_TEST_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
-          GITHUB_TEST_REPO: ${{ secrets.TEST_GITHUB_REPO }}
-          GITHUB_GIST_TEST_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          TEST_GITHUB_REPO: ${{ secrets.TEST_GITHUB_REPO }}
+          TEST_GIST_GITHUB_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         timeout-minutes: 10
 

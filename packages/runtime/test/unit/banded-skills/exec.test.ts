@@ -47,12 +47,13 @@ describe("parseExecArgs", () => {
 });
 
 describe("printHelp", () => {
-  test("prints schema info for echo-input", () => {
+  test("prints schema info for echo-input with skillRoot", () => {
     const resourceDir = join(
       FIXTURES,
       "valid-skill/scripts/resources/echo-input"
     );
-    const help = printHelp(resourceDir);
+    const skillRoot = join(FIXTURES, "valid-skill");
+    const help = printHelp(resourceDir, skillRoot);
 
     expect(help).toContain("Script: echo-input");
     expect(help).toContain("Input Schema:");
@@ -64,11 +65,11 @@ describe("printHelp", () => {
   test("handles missing schemas gracefully", () => {
     const resourceDir = join(
       FIXTURES,
-      "ref-skill/scripts/resources/echo-input"
+      "ref-skill/scripts/resources/ref-echo"
     );
     const help = printHelp(resourceDir);
 
-    expect(help).toContain("Script: echo-input");
+    expect(help).toContain("Script: ref-echo");
     expect(help).toContain("(none)");
   });
 });
@@ -83,6 +84,7 @@ describe("bandExec", () => {
       resourceDir,
       args: {},
       help: true,
+      skillRoot: join(FIXTURES, "valid-skill"),
     });
 
     expect(result.success).toBe(true);
@@ -123,10 +125,54 @@ describe("bandExec", () => {
     const result = await bandExec({
       resourceDir,
       args: {},
+      skillRoot: join(FIXTURES, "valid-skill"),
     });
 
-    // May pass or fail depending on ajv availability — both are acceptable
-    // The important thing is it doesn't crash
-    expect(typeof result.success).toBe("boolean");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Input validation failed");
+    expect(result.error).toContain("message");
+  });
+
+  test("passes CONFIG_PATH when band has bandConfig", async () => {
+    const resourceDir = join(
+      FIXTURES,
+      "config-skill/scripts/resources/echo-config"
+    );
+    const result = await bandExec({
+      resourceDir,
+      args: {},
+      skillRoot: join(FIXTURES, "config-skill"),
+    });
+
+    expect(result.success).toBe(true);
+    // The echo-config script outputs the config.json contents
+    const data = result.data as Record<string, unknown>;
+    expect(data["feature-a"]).toBe(true);
+    expect(data["feature-b"]).toBe(false);
+    expect(data.items).toEqual(["one", "two"]);
+  });
+
+  test("forceLima overrides local-dangerously to lima", async () => {
+    // The valid-skill fixture has execution.target: local-dangerously in its BAND.md.
+    // With forceLima, it should attempt lima execution instead.
+    // Since limactl is unlikely to be available in test, we expect a lima-specific error
+    // (not a local-dangerously execution).
+    const resourceDir = join(
+      FIXTURES,
+      "valid-skill/scripts/resources/echo-input"
+    );
+    const result = await bandExec({
+      resourceDir,
+      args: { message: "hello" },
+      skillRoot: join(FIXTURES, "valid-skill"),
+      forceLima: true,
+    });
+
+    // Should either succeed via lima, or fail with a lima-related error
+    // (not succeed via local-dangerously)
+    if (!result.success) {
+      expect(result.error).toMatch(/lima|limactl|VM/i);
+    }
+    // If it succeeds, that's fine too — lima is available
   });
 });

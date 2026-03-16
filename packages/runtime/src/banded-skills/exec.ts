@@ -5,15 +5,16 @@
  * 1. CLI arg parsing (--key=value, --input_path, --output_path, --help)
  * 2. --help: read schemas, print formatted help, exit
  * 3. Band discovery for the script
- * 4. Input validation against input_schema.json
+ * 4. Input validation against centralized schemas/input/<name>.json
  * 5. Delegation to the target-specific executor
- * 6. Output validation against output_schema.json
+ * 6. Output validation against centralized schemas/output/<name>.json
  * 7. Output routing to --output_path or stdout
  */
 
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve, basename, dirname } from "path";
 import { discoverBandForScript } from "./discovery";
+import { loadSchemas, loadBandConfigSchema, createValidator } from "./schema-loader";
 import type { BandExecOptions, BandExecResult } from "./types";
 
 /**
@@ -87,38 +88,52 @@ export function parseExecArgs(argv: string[]): BandExecOptions {
 
 /**
  * Print help for a script by reading its schemas.
+ * Uses centralized schemas/ dir when skillRoot is provided, falls back to co-located.
  */
-export function printHelp(resourceDir: string): string {
+export function printHelp(resourceDir: string, skillRoot?: string): string {
   const lines: string[] = [];
   const scriptName = basename(resourceDir);
 
   lines.push(`Script: ${scriptName}`);
   lines.push("");
 
-  // Read input schema
-  const inputSchemaPath = join(resourceDir, "input_schema.json");
-  if (existsSync(inputSchemaPath)) {
-    try {
-      const schema = JSON.parse(readFileSync(inputSchemaPath, "utf-8"));
-      lines.push("Input Schema:");
-      lines.push(JSON.stringify(schema, null, 2));
-      lines.push("");
+  // Load schemas from centralized or co-located location
+  let inputSchema: Record<string, unknown> | undefined;
+  let outputSchema: Record<string, unknown> | undefined;
 
-      // Print properties as flags
-      if (schema.properties) {
-        lines.push("Arguments:");
-        for (const [key, prop] of Object.entries(
-          schema.properties as Record<string, any>
-        )) {
-          const required = schema.required?.includes(key) ? " (required)" : "";
-          const desc = prop.description ? ` - ${prop.description}` : "";
-          const type = prop.type ? ` [${prop.type}]` : "";
-          lines.push(`  --${key}${type}${desc}${required}`);
-        }
-        lines.push("");
+  if (skillRoot) {
+    const schemas = loadSchemas(skillRoot, scriptName);
+    inputSchema = schemas.input;
+    outputSchema = schemas.output;
+  } else {
+    // Direct resourceDir mode (no skillRoot) — try co-located
+    const inputSchemaPath = join(resourceDir, "input_schema.json");
+    if (existsSync(inputSchemaPath)) {
+      inputSchema = JSON.parse(readFileSync(inputSchemaPath, "utf-8"));
+    }
+    const outputSchemaPath = join(resourceDir, "output_schema.json");
+    if (existsSync(outputSchemaPath)) {
+      outputSchema = JSON.parse(readFileSync(outputSchemaPath, "utf-8"));
+    }
+  }
+
+  // Print input schema
+  if (inputSchema) {
+    lines.push("Input Schema:");
+    lines.push(JSON.stringify(inputSchema, null, 2));
+    lines.push("");
+
+    // Print properties as flags
+    if ((inputSchema as any).properties) {
+      lines.push("Arguments:");
+      for (const [key, prop] of Object.entries(
+        (inputSchema as any).properties as Record<string, any>
+      )) {
+        const required = (inputSchema as any).required?.includes(key) ? " (required)" : "";
+        const desc = prop.description ? ` - ${prop.description}` : "";
+        const type = prop.type ? ` [${prop.type}]` : "";
+        lines.push(`  --${key}${type}${desc}${required}`);
       }
-    } catch {
-      lines.push("Input Schema: (invalid or unreadable)");
       lines.push("");
     }
   } else {
@@ -126,18 +141,11 @@ export function printHelp(resourceDir: string): string {
     lines.push("");
   }
 
-  // Read output schema
-  const outputSchemaPath = join(resourceDir, "output_schema.json");
-  if (existsSync(outputSchemaPath)) {
-    try {
-      const schema = JSON.parse(readFileSync(outputSchemaPath, "utf-8"));
-      lines.push("Output Schema:");
-      lines.push(JSON.stringify(schema, null, 2));
-      lines.push("");
-    } catch {
-      lines.push("Output Schema: (invalid or unreadable)");
-      lines.push("");
-    }
+  // Print output schema
+  if (outputSchema) {
+    lines.push("Output Schema:");
+    lines.push(JSON.stringify(outputSchema, null, 2));
+    lines.push("");
   } else {
     lines.push("Output Schema: (none)");
     lines.push("");
@@ -153,45 +161,49 @@ export function printHelp(resourceDir: string): string {
 }
 
 /**
- * Validate data against a JSON Schema.
- * Uses Ajv for validation if available, falls back to basic type checking.
+ * Validate data against a JSON Schema using a pre-loaded Ajv instance.
+ * The Ajv instance has all defs pre-loaded so $ref works.
  */
 async function validateAgainstSchema(
   data: unknown,
   schema: Record<string, unknown>,
-  label: string
+  label: string,
+  skillRoot?: string
 ): Promise<string | null> {
-  try {
-    const Ajv = (await import("ajv")).default;
-    const ajv = new Ajv({ allErrors: true });
-    const validate = ajv.compile(schema);
-    const valid = validate(data);
-    if (!valid && validate.errors) {
-      const messages = validate.errors.map(
-        (e) => `${e.instancePath || "/"}: ${e.message}`
-      );
-      return `${label} validation failed: ${messages.join("; ")}`;
-    }
-    return null;
-  } catch {
-    // Ajv not available, skip validation
-    return null;
+  const Ajv = (await import("ajv")).default;
+  let ajv: InstanceType<typeof Ajv>;
+
+  if (skillRoot) {
+    ajv = await createValidator(skillRoot);
+  } else {
+    ajv = new Ajv({ allErrors: true });
   }
+
+  const validate = ajv.compile(schema);
+  const valid = validate(data);
+  if (!valid && validate.errors) {
+    const messages = validate.errors.map(
+      (e) => `${e.instancePath || "/"}: ${e.message}`
+    );
+    return `${label} validation failed: ${messages.join("; ")}`;
+  }
+  return null;
 }
 
 /**
  * Execute a banded skill script.
  */
 export async function bandExec(options: BandExecOptions): Promise<BandExecResult> {
-  const { resourceDir, args, inputPath, outputPath, help, skillRoot } = options;
+  const { resourceDir, args, inputPath, outputPath, help, skillRoot, forceLima } = options;
   const startTime = Date.now();
 
   // Resolve resource directory
   const resolvedResourceDir = resolve(resourceDir);
+  const scriptName = basename(resolvedResourceDir);
 
   // Help mode: print schemas and exit
   if (help) {
-    const helpText = printHelp(resolvedResourceDir);
+    const helpText = printHelp(resolvedResourceDir, skillRoot);
     return { success: true, data: helpText };
   }
 
@@ -218,28 +230,54 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     }
   }
 
+  // Load input schema from centralized location (with co-located fallback)
+  let inputSchemaObj: Record<string, unknown> | undefined;
+  if (skillRoot) {
+    const schemas = loadSchemas(skillRoot, scriptName);
+    inputSchemaObj = schemas.input;
+  } else {
+    const legacyPath = join(resolvedResourceDir, "input_schema.json");
+    if (existsSync(legacyPath)) {
+      inputSchemaObj = JSON.parse(readFileSync(legacyPath, "utf-8"));
+    }
+  }
+
   // Validate input against schema if present
-  const inputSchemaPath = join(resolvedResourceDir, "input_schema.json");
-  if (existsSync(inputSchemaPath)) {
-    try {
-      const schema = JSON.parse(readFileSync(inputSchemaPath, "utf-8"));
-      const error = await validateAgainstSchema(inputData, schema, "Input");
-      if (error) {
-        return { success: false, error };
+  if (inputSchemaObj) {
+    const schema = inputSchemaObj;
+
+    // Coerce CLI string args to schema types (--limit=5 arrives as "5")
+    if ((schema as any).properties && !inputPath) {
+      for (const [key, prop] of Object.entries((schema as any).properties)) {
+        if (key in inputData && typeof inputData[key] === "string") {
+          const schemaProp = prop as { type?: string };
+          if (schemaProp.type === "integer" || schemaProp.type === "number") {
+            const num = Number(inputData[key]);
+            if (!isNaN(num)) inputData[key] = schemaProp.type === "integer" ? Math.floor(num) : num;
+          } else if (schemaProp.type === "boolean") {
+            inputData[key] = inputData[key] === "true";
+          }
+        }
       }
-    } catch {
-      // Schema unreadable, skip validation
+    }
+
+    const error = await validateAgainstSchema(inputData, schema, "Input", skillRoot);
+    if (error) {
+      return { success: false, error };
     }
   }
 
   // Discover band for this script
   let executionTarget = "local-dangerously";
   let envSecrets: Record<string, string> = {};
+  let bandConfig: Record<string, unknown> | undefined;
   if (skillRoot) {
-    const scriptName = basename(resolvedResourceDir);
     const discovery = discoverBandForScript(skillRoot, scriptName);
     if (discovery?.band?.execution?.target) {
       executionTarget = discovery.band.execution.target;
+    }
+    if (discovery?.band?.bandConfig) {
+      bandConfig = discovery.band.bandConfig;
     }
     // Check required secrets are present
     const requiredSecrets = discovery?.band?.requires?.secrets || [];
@@ -260,6 +298,22 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
         }
       }
     }
+
+    // Validate bandConfig against band-config.schema.json if present
+    if (bandConfig) {
+      const bandConfigSchema = loadBandConfigSchema(skillRoot);
+      if (bandConfigSchema) {
+        const error = await validateAgainstSchema(bandConfig, bandConfigSchema, "bandConfig", skillRoot);
+        if (error) {
+          return { success: false, error };
+        }
+      }
+    }
+  }
+
+  // Force Lima execution if requested — reject local-dangerously
+  if (forceLima && executionTarget === "local-dangerously") {
+    executionTarget = "lima";
   }
 
   // Create temp files for input/output
@@ -273,6 +327,13 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
 
     writeFileSync(tempInputPath, JSON.stringify(inputData));
 
+    // Write band config if present
+    let configPath: string | undefined;
+    if (bandConfig) {
+      configPath = join(tempDir, "config.json");
+      writeFileSync(configPath, JSON.stringify(bandConfig));
+    }
+
     // Execute based on target
     const result = await executeScript(
       runShPath,
@@ -281,7 +342,8 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       tempOutputPath,
       executionTarget,
       envSecrets,
-      skillRoot
+      skillRoot,
+      configPath
     );
 
     if (!result.success) {
@@ -298,17 +360,23 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       }
     }
 
+    // Load output schema from centralized location (with co-located fallback)
+    let outputSchemaObj: Record<string, unknown> | undefined;
+    if (skillRoot) {
+      const schemas = loadSchemas(skillRoot, scriptName);
+      outputSchemaObj = schemas.output;
+    } else {
+      const legacyPath = join(resolvedResourceDir, "output_schema.json");
+      if (existsSync(legacyPath)) {
+        outputSchemaObj = JSON.parse(readFileSync(legacyPath, "utf-8"));
+      }
+    }
+
     // Validate output against schema if present
-    const outputSchemaPath = join(resolvedResourceDir, "output_schema.json");
-    if (existsSync(outputSchemaPath) && outputData !== undefined) {
-      try {
-        const schema = JSON.parse(readFileSync(outputSchemaPath, "utf-8"));
-        const error = await validateAgainstSchema(outputData, schema, "Output");
-        if (error) {
-          return { success: false, error };
-        }
-      } catch {
-        // Schema unreadable, skip
+    if (outputSchemaObj && outputData !== undefined) {
+      const error = await validateAgainstSchema(outputData, outputSchemaObj, "Output", skillRoot);
+      if (error) {
+        return { success: false, error };
       }
     }
 
@@ -348,22 +416,27 @@ async function executeScript(
   outputPath: string,
   executionTarget: string,
   envSecrets: Record<string, string> = {},
-  skillRoot?: string
+  skillRoot?: string,
+  configPath?: string
 ): Promise<BandExecResult> {
   if (executionTarget === "lima") {
     // Delegate to lima-exec
     const { limaExec } = await import("./lima-exec");
-    return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot);
+    return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot, configPath);
   }
 
   // Default: local-dangerously — run directly
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    INPUT_PATH: inputPath,
+    OUTPUT_PATH: outputPath,
+  };
+  if (configPath) {
+    env.CONFIG_PATH = configPath;
+  }
   const proc = Bun.spawn(["bash", runShPath], {
     cwd: resourceDir,
-    env: {
-      ...process.env,
-      INPUT_PATH: inputPath,
-      OUTPUT_PATH: outputPath,
-    },
+    env,
     stdout: "pipe",
     stderr: "pipe",
   });
