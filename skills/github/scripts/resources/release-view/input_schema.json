@@ -1,8 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "repo": { "type": "string", "description": "Repository in owner/name format" },
-    "tag": { "type": "string", "description": "Tag name (defaults to latest release)" }
-  },
-  "required": ["repo"]
-}

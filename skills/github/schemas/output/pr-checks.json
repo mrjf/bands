@@ -1,0 +1,29 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "bucket": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "link": {
+        "type": "string"
+      },
+      "startedAt": {
+        "type": "string"
+      },
+      "completedAt": {
+        "type": "string"
+      }
+    }
+  }
+}

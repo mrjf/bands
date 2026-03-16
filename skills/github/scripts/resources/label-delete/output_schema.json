@@ -1,7 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "deleted": { "type": "boolean" },
-    "name": { "type": "string" }
-  }
-}

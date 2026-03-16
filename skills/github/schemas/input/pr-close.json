@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "pr-number.json"
+    },
+    "comment": {
+      "type": "string",
+      "description": "Leave a closing comment"
+    },
+    "delete_branch": {
+      "type": "boolean",
+      "description": "Delete the branch after closing",
+      "default": false
+    }
+  },
+  "required": [
+    "repo",
+    "number"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "required": [
+    "query"
+  ],
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Search query"
+    },
+    "channel": {
+      "$ref": "channel.json"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum results to return",
+      "default": 20
+    }
+  }
+}

@@ -58,6 +58,7 @@ describe("banded skills integration (local-dangerously)", () => {
       resourceDir,
       args: {},
       help: true,
+      skillRoot: join(FIXTURES, "valid-skill"),
     });
 
     expect(result.success).toBe(true);

@@ -1,7 +1,7 @@
 /**
  * GitHub Skill — Gist operations
  *
- * Uses GITHUB_GIST_TEST_TOKEN (classic PAT with gist scope).
+ * Uses TEST_GIST_GITHUB_TOKEN (classic PAT with gist scope).
  * Fine-grained tokens cannot access the gists API.
  */
 
@@ -43,10 +43,10 @@ loadEnv();
 
 // ── Config ────────────────────────────────────────────────────────────
 
-const GIST_TOKEN = process.env.GITHUB_GIST_TEST_TOKEN;
+const GIST_TOKEN = process.env.TEST_GIST_GITHUB_TOKEN;
 
 if (!GIST_TOKEN) {
-  throw new Error("Missing required env var: GITHUB_GIST_TEST_TOKEN");
+  throw new Error("Missing required env var: TEST_GIST_GITHUB_TOKEN");
 }
 
 process.env.GITHUB_TOKEN = GIST_TOKEN;
@@ -92,8 +92,28 @@ describe("github skill: gists", () => {
       }
       const data = result.data as any;
       gistId = data.id;
-      expect(gistId).toBeTruthy();
+      expect(typeof gistId).toBe("string");
+      expect(gistId.length).toBeGreaterThan(0);
       expect(data.url).toContain("gist.github.com");
+      expect(data.url).toContain(gistId);
+
+      // Verify file content via gist-view
+      const verify = await gh("gist-view", { id: gistId });
+      expect(verify.success).toBe(true);
+      const gist = verify.data as any;
+      expect(gist.public).toBe(false);
+      expect(gist.files).toBeInstanceOf(Array);
+      expect(gist.files.length).toBe(1);
+      expect(gist.files[0].filename).toBe("test.ts");
+      expect(gist.files[0].language).toBe("TypeScript");
+      expect(gist.files[0].size).toBeGreaterThan(0);
+
+      // Verify raw content via API
+      const raw = await gh("api", { endpoint: `gists/${gistId}`, method: "GET" });
+      expect(raw.success).toBe(true);
+      const rawFiles = (raw.data as any).files;
+      expect(rawFiles["test.ts"]).toBeDefined();
+      expect(rawFiles["test.ts"].content).toContain('console.log("hello")');
     },
     TIMEOUT
   );
@@ -110,6 +130,20 @@ describe("github skill: gists", () => {
 
       const found = data.find((g: any) => g.id === gistId);
       expect(found).toBeDefined();
+      expect(found.public).toBe(false);
+      expect(found.url).toContain("gist.github.com");
+      expect(found.files).toBeInstanceOf(Array);
+      expect(found.files.length).toBe(1);
+      expect(found.files[0]).toBe("test.ts");
+
+      // Every item has expected shape
+      for (const item of data) {
+        expect(typeof item.id).toBe("string");
+        expect(typeof item.public).toBe("boolean");
+        expect(item.url).toContain("gist.github.com");
+        expect(item.files).toBeInstanceOf(Array);
+        expect(item.files.length).toBeGreaterThan(0);
+      }
     },
     TIMEOUT
   );
@@ -125,8 +159,18 @@ describe("github skill: gists", () => {
       }
       const data = result.data as any;
       expect(data.id).toBe(gistId);
+      expect(data.public).toBe(false);
+      expect(data.description).toContain("Test gist");
+      expect(data.url).toContain("gist.github.com");
+      expect(data.owner).toBeDefined();
+      expect(typeof data.owner.login).toBe("string");
+      expect(data.createdAt).toBeTruthy();
+      expect(data.updatedAt).toBeTruthy();
       expect(data.files).toBeInstanceOf(Array);
-      expect(data.files.length).toBeGreaterThanOrEqual(1);
+      expect(data.files.length).toBe(1);
+      expect(data.files[0].filename).toBe("test.ts");
+      expect(data.files[0].language).toBe("TypeScript");
+      expect(data.files[0].size).toBeGreaterThan(0);
     },
     TIMEOUT
   );
@@ -140,7 +184,13 @@ describe("github skill: gists", () => {
       if (!result.success) {
         throw new Error(`gist-delete failed: ${result.error}`);
       }
-      expect((result.data as any).deleted).toBe(true);
+      const data = result.data as any;
+      expect(data.deleted).toBe(true);
+      expect(data.id).toBe(gistId);
+
+      // Verify the gist is actually gone
+      const verify = await gh("gist-view", { id: gistId });
+      expect(verify.success).toBe(false);
     },
     TIMEOUT
   );

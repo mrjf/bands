@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "workflow": {
+      "type": "string",
+      "description": "Filter by workflow name or filename"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "in_progress",
+        "completed",
+        "requested",
+        "waiting"
+      ],
+      "description": "Filter by run status"
+    },
+    "branch": {
+      "type": "string",
+      "description": "Filter by branch name"
+    },
+    "limit": {
+      "$ref": "limit.json",
+      "default": 20
+    }
+  },
+  "required": [
+    "repo"
+  ]
+}

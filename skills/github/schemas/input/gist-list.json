@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "limit": {
+      "$ref": "limit.json",
+      "default": 10
+    },
+    "public": {
+      "type": "boolean",
+      "description": "Only show public gists"
+    },
+    "secret": {
+      "type": "boolean",
+      "description": "Only show secret gists"
+    }
+  }
+}

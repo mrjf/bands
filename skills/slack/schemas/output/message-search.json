@@ -1,0 +1,39 @@
+{
+  "type": "object",
+  "properties": {
+    "total": {
+      "type": "integer"
+    },
+    "matches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "ts": {
+            "type": "string"
+          },
+          "permalink": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

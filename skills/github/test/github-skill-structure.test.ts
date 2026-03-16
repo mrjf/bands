@@ -6,13 +6,9 @@ import { describe, expect, test } from "bun:test";
 import { join } from "path";
 import { bandExec } from "../../../packages/runtime/src/banded-skills/exec";
 import { validateBandedSkill } from "../../../packages/runtime/src/banded-skills/validator";
-import { canRun, gh, GITHUB_REPO, RESOURCES, SKILL_ROOT, TIMEOUT } from "./github-helpers";
+import { gh, GITHUB_REPO, RESOURCES, SKILL_ROOT, TIMEOUT } from "./github-helpers";
 
-if (!canRun) {
-  console.warn("Skipping: GITHUB_TEST_TOKEN or GITHUB_TEST_REPO not set in .env");
-}
-
-describe.skipIf(!canRun)("github skill: structure & basics", () => {
+describe("github skill: structure & basics", () => {
   test("skill structure validates", () => {
     const result = validateBandedSkill(SKILL_ROOT);
     expect(result.valid).toBe(true);
@@ -36,6 +32,7 @@ describe.skipIf(!canRun)("github skill: structure & basics", () => {
         resourceDir: join(RESOURCES, script),
         args: {},
         help: true,
+        skillRoot: SKILL_ROOT,
       });
       if (!result.success) throw new Error(`${script} --help failed: ${result.error}`);
       expect(typeof result.data).toBe("string");

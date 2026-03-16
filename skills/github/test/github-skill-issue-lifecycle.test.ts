@@ -3,11 +3,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { canRun, gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
+import { gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
 
-if (!canRun) console.warn("Skipping: GITHUB_TEST_TOKEN or GITHUB_TEST_REPO not set");
-
-describe.skipIf(!canRun)("github: issue lifecycle", () => {
+describe("github: issue lifecycle", () => {
   let createdIssueNumber: number;
   const uniqueTag = `test-${Date.now()}`;
   const issueTitle = `Integration test issue [${uniqueTag}]`;

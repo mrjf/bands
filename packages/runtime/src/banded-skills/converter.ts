@@ -78,6 +78,9 @@ export async function convertToBandedSkill(
       outputDir,
       join(outputDir, "scripts"),
       join(outputDir, "scripts", "resources"),
+      join(outputDir, "schemas"),
+      join(outputDir, "schemas", "input"),
+      join(outputDir, "schemas", "output"),
     ];
     for (const name of scriptNames) {
       dirs.push(join(outputDir, "scripts", "resources", name));
@@ -149,8 +152,8 @@ export async function convertToBandedSkill(
         writeFileSync(perBandPath, exportBandMd(perBand));
       }
 
-      // Generate input schema stub
-      const inputSchemaPath = join(resourceDir, "input_schema.json");
+      // Generate input schema stub (centralized location)
+      const inputSchemaPath = join(outputDir, "schemas", "input", `${scriptName}.json`);
       files.push(inputSchemaPath);
       if (!dryRun) {
         const inputSchema = {
@@ -165,8 +168,8 @@ export async function convertToBandedSkill(
         writeFileSync(inputSchemaPath, JSON.stringify(inputSchema, null, 2) + "\n");
       }
 
-      // Generate output schema stub
-      const outputSchemaPath = join(resourceDir, "output_schema.json");
+      // Generate output schema stub (centralized location)
+      const outputSchemaPath = join(outputDir, "schemas", "output", `${scriptName}.json`);
       files.push(outputSchemaPath);
       if (!dryRun) {
         const outputSchema = {

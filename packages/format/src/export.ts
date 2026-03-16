@@ -9,11 +9,16 @@ import { normalize, canonicalKeyComparator } from "./normalize";
 export function exportBandMd(doc: BandDocument): string {
   const normalized = normalize(doc);
 
-  // Separate body from frontmatter data
-  const { body, ...frontmatter } = normalized;
+  // Separate body and bandConfig from frontmatter data
+  const { body, bandConfig, ...frontmatter } = normalized;
 
   // Remove undefined values and empty arrays
-  const clean = removeEmpty(frontmatter);
+  const clean = removeEmpty(frontmatter) as Record<string, unknown>;
+
+  // Re-emit bandConfig under the band name key
+  if (bandConfig && normalized.band) {
+    clean[normalized.band] = bandConfig;
+  }
 
   const yamlStr = stringify(clean, {
     lineWidth: 0,  // Disable line wrapping to avoid quote toggling

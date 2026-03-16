@@ -3,20 +3,16 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { canRun, gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
+import { gh, requireGitHubEnv, TIMEOUT } from "./github-helpers";
 
-if (!canRun) {
-  console.warn("Skipping: GITHUB_TEST_TOKEN or GITHUB_TEST_REPO not set in .env");
-}
-
-describe.skipIf(!canRun)("github skill: api & search", () => {
+describe("github skill: api & search", () => {
   // ── Raw API ────────────────────────────────────────────────────────
 
   describe("api", () => {
     test(
       "GET repo info via raw API",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
         const result = await gh("api", {
           endpoint: `repos/${owner}/${repo}`,
           method: "GET",
@@ -24,7 +20,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
 
         if (!result.success) throw new Error(`api GET repo failed: ${result.error}`);
         const data = result.data as any;
-        expect(data.full_name).toBe(GITHUB_REPO);
+        expect(data.full_name).toBe(requireGitHubEnv().repo);
         expect(data.html_url).toContain("github.com");
       },
       TIMEOUT
@@ -33,7 +29,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "create and delete a label via raw API",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
         const labelName = `test-label-${Date.now()}`;
 
         const createResult = await gh("api", {
@@ -67,7 +63,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "list repo branches",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
         const result = await gh("api", {
           endpoint: `repos/${owner}/${repo}/branches?per_page=100`,
           method: "GET",
@@ -87,7 +83,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "list commits on main",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
         const result = await gh("api", {
           endpoint: `repos/${owner}/${repo}/commits?per_page=5`,
           method: "GET",
@@ -122,7 +118,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "list repo contributors",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
         const result = await gh("api", {
           endpoint: `repos/${owner}/${repo}/contributors`,
           method: "GET",
@@ -141,7 +137,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "get repo topics via API",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
 
         await gh("api", {
           endpoint: `repos/${owner}/${repo}/topics`,
@@ -173,7 +169,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "create a file",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
         const content = Buffer.from(`# Created by integration test\n\nTimestamp: ${new Date().toISOString()}\n`).toString("base64");
 
         const result = await gh("api", {
@@ -194,7 +190,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "read the file back",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
 
         const result = await gh("api", {
           endpoint: `repos/${owner}/${repo}/contents/${fileName}`,
@@ -214,7 +210,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "update the file",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
         const newContent = Buffer.from(`# Updated\n\nUpdated at ${new Date().toISOString()}\n`).toString("base64");
 
         const result = await gh("api", {
@@ -238,7 +234,7 @@ describe.skipIf(!canRun)("github skill: api & search", () => {
     test(
       "delete the file",
       async () => {
-        const [owner, repo] = GITHUB_REPO!.split("/");
+        const [owner, repo] = requireGitHubEnv().repo.split("/");
 
         const result = await gh("api", {
           endpoint: `repos/${owner}/${repo}/contents/${fileName}`,

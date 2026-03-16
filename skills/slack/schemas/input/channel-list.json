@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "types": {
+      "type": "string",
+      "description": "Comma-separated channel types: public_channel, private_channel, im, mpim",
+      "default": "public_channel"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum channels to return",
+      "default": 100
+    }
+  }
+}

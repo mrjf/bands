@@ -1,0 +1,26 @@
+{
+  "$id": "message-result.json",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "$ref": "ok.json"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "ts": {
+      "$ref": "ts.json"
+    },
+    "message": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

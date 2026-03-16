@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "issue-number.json"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "not planned"
+      ],
+      "description": "Close reason"
+    },
+    "comment": {
+      "type": "string",
+      "description": "Leave a closing comment"
+    }
+  },
+  "required": [
+    "repo",
+    "number"
+  ]
+}

@@ -46,4 +46,21 @@ describe("validateBandedSkill", () => {
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
+
+  test("config-skill validates with bandConfig schema", () => {
+    const result = validateBandedSkill(join(FIXTURES, "config-skill"));
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test("centralized schema defs are checked for $id", () => {
+    const result = validateBandedSkill(join(FIXTURES, "valid-skill"));
+
+    // valid-skill has no defs/ dir, so no $id errors
+    const idErrors = result.errors.filter((e) =>
+      e.message.includes("missing $id")
+    );
+    expect(idErrors).toHaveLength(0);
+  });
 });

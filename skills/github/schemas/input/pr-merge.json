@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "pr-number.json"
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "merge",
+        "squash",
+        "rebase"
+      ],
+      "description": "Merge method",
+      "default": "merge"
+    },
+    "delete_branch": {
+      "type": "boolean",
+      "description": "Delete the head branch after merging",
+      "default": false
+    }
+  },
+  "required": [
+    "repo",
+    "number"
+  ]
+}

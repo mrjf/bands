@@ -69,4 +69,39 @@ describe("exportBandMd", () => {
     expect(bandIdx).toBeLessThan(descIdx);
     expect(descIdx).toBeLessThan(allowIdx);
   });
+
+  test("exports bandConfig under band name key", () => {
+    const doc: BandDocument = {
+      band: "slack",
+      icon: "💬",
+      description: "Slack skill",
+      bandConfig: { channels: { allow: [], deny: [] }, dm: false, threads: true },
+    };
+    const output = exportBandMd(doc);
+    expect(output).toContain("slack:");
+    expect(output).toContain("dm: false");
+    expect(output).toContain("threads: true");
+    expect(output).toContain("channels:");
+  });
+
+  test("bandConfig round-trips through parse and export", () => {
+    const doc: BandDocument = {
+      band: "my-skill",
+      icon: "🔧",
+      description: "Test skill",
+      bandConfig: { feature: true, items: ["a", "b"] },
+    };
+    const exported = exportBandMd(doc);
+    const { parseBandMd } = require("../src/parse");
+    const parsed = parseBandMd(exported);
+    expect(parsed.errors).toHaveLength(0);
+    expect(parsed.document.bandConfig).toEqual({ feature: true, items: ["a", "b"] });
+  });
+
+  test("omits bandConfig key when not present", () => {
+    const doc: BandDocument = { band: "test", icon: "🎵" };
+    const output = exportBandMd(doc);
+    // Should not have a "test:" key in the output
+    expect(output).not.toMatch(/^test:/m);
+  });
 });

@@ -17,15 +17,15 @@ export { ensureRepoInitialized, createBranchWithFile } from "./github-helpers";
 
 const SKILL_DIR = resolve(__dirname, "..");
 
-export const GITHUB_TOKEN = process.env.GITHUB_TEST_TOKEN;
-export const GITHUB_REPO = process.env.GITHUB_TEST_REPO;
+export const GITHUB_TOKEN = process.env.TEST_GITHUB_TOKEN;
+export const GITHUB_REPO = process.env.TEST_GITHUB_REPO;
 
 let _harness: AgentHarness;
 
 const harnessPromise = createAgentHarness({
   skillDir: SKILL_DIR,
-  requiredEnv: ["GITHUB_TEST_TOKEN", "GITHUB_TEST_REPO"],
-  envToSet: { GITHUB_TOKEN: process.env.GITHUB_TEST_TOKEN! },
+  requiredEnv: ["TEST_GITHUB_TOKEN", "TEST_GITHUB_REPO"],
+  envToSet: { GITHUB_TOKEN: process.env.TEST_GITHUB_TOKEN! },
   systemPromptSuffix: "If a repo is mentioned, pass it as the `repo` parameter.",
 });
 

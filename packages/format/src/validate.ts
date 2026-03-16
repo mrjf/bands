@@ -37,10 +37,11 @@ export function validate(raw: Record<string, unknown>): {
     }
   }
 
-  // Pass 2: Unknown top-level keys
+  // Pass 2: Unknown top-level keys (skip band-namespaced config key)
   const allowedSet = new Set<string>(ALLOWED_TOP_LEVEL_KEYS as unknown as string[]);
+  const bandName = typeof raw.band === "string" ? raw.band : null;
   for (const key of Object.keys(raw)) {
-    if (!allowedSet.has(key)) {
+    if (!allowedSet.has(key) && key !== bandName) {
       warnings.push({
         path: key,
         message: `Unknown top-level key "${key}"`,

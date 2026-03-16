@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "open",
+        "closed",
+        "merged",
+        "all"
+      ],
+      "description": "Filter by PR state",
+      "default": "open"
+    },
+    "base": {
+      "type": "string",
+      "description": "Filter by base branch"
+    },
+    "head": {
+      "type": "string",
+      "description": "Filter by head branch"
+    },
+    "label": {
+      "type": "string",
+      "description": "Filter by label"
+    },
+    "limit": {
+      "$ref": "limit.json",
+      "default": 30
+    }
+  },
+  "required": [
+    "repo"
+  ]
+}

@@ -1,8 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "repo": { "type": "string", "description": "Repository in owner/name format" },
-    "run_id": { "type": "string", "description": "Workflow run ID" }
-  },
-  "required": ["repo", "run_id"]
-}

@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "tag": {
+      "type": "string",
+      "description": "Tag name of the release to delete"
+    },
+    "cleanup_tag": {
+      "type": "boolean",
+      "description": "Also delete the git tag",
+      "default": false
+    }
+  },
+  "required": [
+    "repo",
+    "tag"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "feature-a": {
+      "type": "boolean"
+    },
+    "feature-b": {
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

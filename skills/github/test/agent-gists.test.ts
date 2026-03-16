@@ -34,14 +34,24 @@ describe("agent: gists", () => {
       expect(gistId).toBeTruthy();
       expect(data.url).toContain("gist.github.com");
 
-      // Verify the gist actually exists
+      // Verify the gist actually exists and has correct content
       const verify = await gh("gist-view", { id: gistId });
       expect(verify.success).toBe(true);
       const gist = verify.data as any;
       expect(gist.id).toBe(gistId);
       expect(gist.public).toBe(false);
-      expect(gist.files).toBeTruthy();
-      expect(gist.files.length).toBeGreaterThan(0);
+      expect(gist.files).toBeInstanceOf(Array);
+      expect(gist.files.length).toBe(1);
+      expect(gist.files[0].filename).toBe("test.ts");
+      expect(gist.files[0].language).toBe("TypeScript");
+      expect(gist.files[0].size).toBeGreaterThan(0);
+
+      // Fetch raw content via API to verify file contents
+      const raw = await gh("api", { endpoint: `gists/${gistId}`, method: "GET" });
+      expect(raw.success).toBe(true);
+      const rawData = raw.data as any;
+      const fileContent = rawData.files["test.ts"].content;
+      expect(fileContent.trim()).toBe(gistContent);
     },
     AGENT_TIMEOUT
   );
@@ -61,16 +71,24 @@ describe("agent: gists", () => {
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
 
-      // Our gist should be in the list
+      // Our gist should be in the list with correct metadata
       const found = data.find((g: any) => g.id === gistId);
       expect(found).toBeTruthy();
       expect(found.url).toContain("gist.github.com");
+      expect(found.public).toBe(false);
+      expect(found.files).toBeInstanceOf(Array);
+      expect(found.files.length).toBe(1);
+      expect(found.files[0]).toContain("test.ts");
 
       // Every item should have expected shape
       for (const item of data) {
         expect(typeof item.id).toBe("string");
+        expect(item.id.length).toBeGreaterThan(0);
         expect(typeof item.public).toBe("boolean");
         expect(item.url).toContain("gist.github.com");
+        expect(item.files).toBeInstanceOf(Array);
+        expect(item.files.length).toBeGreaterThan(0);
+        expect(typeof item.updatedAt).toBe("string");
       }
     },
     AGENT_TIMEOUT
@@ -91,11 +109,16 @@ describe("agent: gists", () => {
       const data = result.execResult.data as any;
       expect(data.id).toBe(gistId);
       expect(data.public).toBe(false);
-      expect(data.files).toBeTruthy();
-      expect(data.files.length).toBeGreaterThan(0);
+      expect(data.files).toBeInstanceOf(Array);
+      expect(data.files.length).toBe(1);
+      expect(data.files[0].filename).toBe("test.ts");
+      expect(data.files[0].language).toBe("TypeScript");
+      expect(data.files[0].size).toBeGreaterThan(0);
       expect(data.owner).toBeTruthy();
-      expect(data.owner.login).toBeTruthy();
+      expect(typeof data.owner.login).toBe("string");
+      expect(data.owner.login.length).toBeGreaterThan(0);
       expect(data.createdAt).toBeTruthy();
+      expect(data.updatedAt).toBeTruthy();
       expect(data.url).toContain("gist.github.com");
     },
     AGENT_TIMEOUT

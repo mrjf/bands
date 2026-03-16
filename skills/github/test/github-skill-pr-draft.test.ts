@@ -3,11 +3,9 @@
  */
 
 import { describe, expect, test, beforeAll } from "bun:test";
-import { canRun, createBranchWithFile, ensureRepoInitialized, gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
+import { createBranchWithFile, ensureRepoInitialized, gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
 
-if (!canRun) console.warn("Skipping: GITHUB_TEST_TOKEN or GITHUB_TEST_REPO not set");
-
-describe.skipIf(!canRun)("github: draft PR & close", () => {
+describe("github: draft PR & close", () => {
   let repoInitialized = false;
 
   beforeAll(async () => {

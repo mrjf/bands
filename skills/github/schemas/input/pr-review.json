@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "number": {
+      "$ref": "pr-number.json"
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "APPROVE",
+        "REQUEST_CHANGES",
+        "COMMENT"
+      ],
+      "description": "Review action",
+      "default": "COMMENT"
+    },
+    "body": {
+      "type": "string",
+      "description": "Review comment body"
+    }
+  },
+  "required": [
+    "repo",
+    "number",
+    "body"
+  ]
+}

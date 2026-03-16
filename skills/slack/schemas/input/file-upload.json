@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "required": [
+    "channel",
+    "filename",
+    "content"
+  ],
+  "properties": {
+    "channel": {
+      "$ref": "channel.json"
+    },
+    "filename": {
+      "type": "string",
+      "description": "Name for the uploaded file"
+    },
+    "content": {
+      "type": "string",
+      "description": "File content as text"
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional title/comment for the file"
+    }
+  }
+}

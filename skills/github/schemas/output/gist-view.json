@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "files": {
+      "type": "array"
+    },
+    "public": {
+      "type": "boolean"
+    },
+    "owner": {
+      "type": "object"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    }
+  }
+}

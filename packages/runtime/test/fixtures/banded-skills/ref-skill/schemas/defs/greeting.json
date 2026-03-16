@@ -1,0 +1,5 @@
+{
+  "$id": "greeting.json",
+  "type": "string",
+  "description": "A greeting message"
+}

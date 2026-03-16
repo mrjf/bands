@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Search query string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "issues",
+        "prs",
+        "repos",
+        "code"
+      ],
+      "description": "Type of search",
+      "default": "issues"
+    },
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "limit": {
+      "$ref": "limit.json",
+      "default": 30
+    }
+  },
+  "required": [
+    "query"
+  ]
+}

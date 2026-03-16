@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "repo": {
+      "$ref": "repo.json"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Workflow run ID"
+    }
+  },
+  "required": [
+    "repo",
+    "run_id"
+  ]
+}

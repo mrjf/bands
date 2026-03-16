@@ -1,0 +1,9 @@
+{
+  "$id": "reaction-result.json",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "$ref": "ok.json"
+    }
+  }
+}

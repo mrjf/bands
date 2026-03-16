@@ -1,0 +1,12 @@
+{
+  "$id": "labels-output.json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      }
+    }
+  }
+}
