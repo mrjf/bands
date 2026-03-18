@@ -1,0 +1,8 @@
+[test]
+
+# Limit test discovery to packages/ so bare `bun test` doesn't pick up
+# skill integration tests. Skill tests hit real APIs (GitHub, Anthropic)
+# and must run through scripts/test-skills.ts which has concurrency
+# control. Running them via bare `bun test` launches all 14 files in
+# parallel, overwhelming the GitHub API with rate-limit errors.
+root = "packages"
