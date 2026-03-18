@@ -1,5 +1,5 @@
 /** Execution target where the band runs */
-export type ExecutionTarget = "local-dangerously" | "cloudflare" | "lima";
+export type ExecutionTarget = "local-dangerously" | "cloudflare" | "local-lima";
 
 /** Execution configuration */
 export interface ExecutionConfig {
@@ -144,6 +144,7 @@ export interface BandDocument {
   band: string;
   icon: string;
   description: string;
+  version?: number;
 
   // Band reference (reference-only BAND.md delegates to another band)
   url?: string;

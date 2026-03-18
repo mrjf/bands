@@ -82,6 +82,9 @@ function buildDocument(
     icon: String(raw.icon ?? ""),
     description: String(raw.description ?? ""),
   };
+  if (typeof raw.version === "number") {
+    doc.version = raw.version;
+  }
   if (typeof raw.url === "string") {
     doc.url = raw.url;
   }

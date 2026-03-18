@@ -8,6 +8,7 @@ export const ALLOWED_TOP_LEVEL_KEYS = [
   "band",
   "icon",
   "description",
+  "version",
   "url",
   "path",
   "extends",
@@ -25,7 +26,7 @@ export const ALLOWED_TOP_LEVEL_KEYS = [
 
 export const EXECUTION_TARGETS = [
   "local-dangerously",
-  "local-docker",
+  "local-lima",
   "cloudflare",
 ] as const;
 
@@ -47,19 +48,20 @@ export const CANONICAL_KEY_ORDER: Record<string, number> = {
   icon: 0,
   band: 1,
   description: 2,
-  url: 3,
-  path: 4,
-  extends: 5,
-  includes: 6,
-  allow: 7,
-  deny: 8,
-  insist: 9,
-  limit: 10,
-  env: 11,
-  execution: 12,
-  provides: 13,
-  requires: 14,
-  contract: 15,
+  version: 3,
+  url: 4,
+  path: 5,
+  extends: 6,
+  includes: 7,
+  allow: 8,
+  deny: 9,
+  insist: 10,
+  limit: 11,
+  env: 12,
+  execution: 13,
+  provides: 14,
+  requires: 15,
+  contract: 16,
 };
 
 export const ENV_FIELDS = ["secrets", "variables"] as const;

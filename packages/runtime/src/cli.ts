@@ -82,7 +82,7 @@ Commands:
 
 Execution Targets:
   local-dangerously   Run in current process (no isolation, no restrictions)
-  local-docker        Run in Docker container (full isolation and enforcement)
+  local-lima          Run in Lima VM (full isolation and enforcement)
   cloudflare          Run on Cloudflare Workers (edge deployment)
 
 Options:
@@ -97,7 +97,7 @@ Options:
 
 Examples:
   bun run src/cli.ts run ./my-band.md --input '{"task": "process"}'
-  bun run src/cli.ts run ./my-band.md --target local-docker --input-file request.json
+  bun run src/cli.ts run ./my-band.md --target local-lima --input-file request.json
   bun run src/cli.ts run ./my-band.md --target cloudflare
   bun run src/cli.ts targets
   bun run src/cli.ts deploy ./my-band.md --name my-worker
@@ -533,8 +533,8 @@ async function run(args: string[]) {
   const available = await isTargetAvailable(target);
   if (!available) {
     console.error(`Error: Execution target "${target}" is not available on this system`);
-    if (target === "local-docker") {
-      console.error("  Make sure Docker is installed and running");
+    if (target === "local-lima") {
+      console.error("  Make sure Lima VM is running (limactl start bands-executor)");
     } else if (target === "cloudflare") {
       console.error("  Make sure wrangler is installed and CLOUDFLARE_API_TOKEN is set");
     }
@@ -591,7 +591,7 @@ async function targets(_args: string[]) {
       isolation: "None - full system access",
     },
     {
-      name: "lima",
+      name: "local-lima",
       description: "Run in Lima VM (macOS)",
       isolation: "Full - Linux VM via Virtualization.framework",
       requires: "limactl + bands-executor VM running",

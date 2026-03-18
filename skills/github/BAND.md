@@ -13,5 +13,5 @@ requires:
   secrets:
     - GITHUB_TOKEN
 execution:
-  target: lima
+  target: local-lima
 ---

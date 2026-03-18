@@ -6,36 +6,26 @@ description: Use this skill whenever the user wants to do anything with PDF file
   text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding
   watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned
   PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:bash
-      - claude:read
-      - claude:write
-  filesystem:
-    default: deny
-    allow:
-      - read:**/*
-      - write:**/*
-  network:
-    egress:
-      default: deny
-      allow_dns:
-        - "*.githubusercontent.com"
-        - api.github.com
-        - pypi.org
-        - registry.npmjs.org
-limits:
+    - claude:bash
+    - claude:read
+    - claude:write
+  read:
+    - "**/*"
+  write:
+    - "**/*"
+  net:
+    - "*.githubusercontent.com"
+    - api.github.com
+    - pypi.org
+    - registry.npmjs.org
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000
 execution:
-  target: local-docker
+  target: local-lima
 ---
 
 # Skill: pdf

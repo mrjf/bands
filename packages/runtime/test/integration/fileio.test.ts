@@ -62,7 +62,7 @@ export function runFileIOSuite(
 
           // Create test files for reading
           // For Lima, we need to create files inside the VM
-          if (target === "lima") {
+          if (target === "local-lima") {
             const { execSync } = await import("child_process");
             execSync('limactl shell bands-executor -- bash -c "echo test-content > /tmp/test-read.txt"');
             execSync('limactl shell bands-executor -- bash -c "echo secret > /tmp/.env.secret"');
@@ -157,7 +157,7 @@ export function runFileIOSuite(
           await harness.init();
 
           // Create output directory for Lima
-          if (target === "lima") {
+          if (target === "local-lima") {
             const { execSync } = await import("child_process");
             execSync('limactl shell bands-executor -- bash -c "mkdir -p /tmp/output"');
           } else if (target === "local-dangerously") {
@@ -316,7 +316,7 @@ export function runAllFileIOSuites() {
   });
 
   // Lima - has full filesystem
-  runFileIOSuite("lima", {
+  runFileIOSuite("local-lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });

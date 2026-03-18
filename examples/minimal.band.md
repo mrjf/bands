@@ -1,15 +1,9 @@
 ---
 band: hello-world
 version: 1
-icon: 👋
+icon: "\U0001F44B"
 description: The simplest possible band
-schemas:
-  input:
-    ref: https://github.com/acme/schemas/blob/main/text-input.json
-  output:
-    ref: https://github.com/acme/schemas/blob/main/text-output.json
-returns:
-  supports:
-    - sync
-  default: sync
+contract:
+  input: https://github.com/acme/schemas/blob/main/text-input.json
+  output: https://github.com/acme/schemas/blob/main/text-output.json
 ---

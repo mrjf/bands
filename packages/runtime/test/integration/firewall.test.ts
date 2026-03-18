@@ -427,7 +427,7 @@ export function printFirewallSkippedSummary() {
     for (const target of skippedTargets) {
       let reason = "";
       switch (target) {
-        case "lima":
+        case "local-lima":
           reason = "Lima VM not running (limactl start bands-executor)";
           break;
         case "cloudflare":
@@ -453,7 +453,7 @@ export function runAllFirewallSuites() {
   });
 
   // Lima - requires Lima VM, enforces permissions
-  runFirewallSuite("lima", {
+  runFirewallSuite("local-lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });

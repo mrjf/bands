@@ -313,7 +313,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
 
   // Force Lima execution if requested — reject local-dangerously
   if (forceLima && executionTarget === "local-dangerously") {
-    executionTarget = "lima";
+    executionTarget = "local-lima";
   }
 
   // Create temp files for input/output
@@ -419,7 +419,7 @@ async function executeScript(
   skillRoot?: string,
   configPath?: string
 ): Promise<BandExecResult> {
-  if (executionTarget === "lima") {
+  if (executionTarget === "local-lima") {
     // Delegate to lima-exec
     const { limaExec } = await import("./lima-exec");
     return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot, configPath);

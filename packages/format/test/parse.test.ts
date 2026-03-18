@@ -82,13 +82,13 @@ allow:
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  test("warns on missing required fields", () => {
+  test("errors on missing required fields", () => {
     const source = `---
 icon: "❌"
 ---`;
     const result = parseBandMd(source);
-    expect(result.warnings.some((w) => w.path === "band")).toBe(true);
-    expect(result.warnings.some((w) => w.path === "description")).toBe(true);
+    expect(result.errors.some((e) => e.path === "band")).toBe(true);
+    expect(result.errors.some((e) => e.path === "description")).toBe(true);
   });
 
   test("parses bandConfig from band-namespaced key", () => {
@@ -119,6 +119,40 @@ description: "No config"
 ---`;
     const result = parseBandMd(source);
     expect(result.document.bandConfig).toBeUndefined();
+  });
+
+  test("parses band with version", () => {
+    const source = `---
+band: versioned-band
+icon: "📦"
+description: "A versioned band"
+version: 2
+---`;
+    const result = parseBandMd(source);
+    expect(result.errors).toHaveLength(0);
+    expect(result.document.version).toBe(2);
+  });
+
+  test("does not set version when absent", () => {
+    const source = `---
+band: no-version
+icon: "🎵"
+description: "No version"
+---`;
+    const result = parseBandMd(source);
+    expect(result.errors).toHaveLength(0);
+    expect(result.document.version).toBeUndefined();
+  });
+
+  test("errors on non-integer version", () => {
+    const source = `---
+band: bad-version
+icon: "❌"
+description: "Bad version"
+version: "foo"
+---`;
+    const result = parseBandMd(source);
+    expect(result.errors.some((e) => e.path === "version")).toBe(true);
   });
 
   test("does not set bandConfig for non-object band-named key", () => {

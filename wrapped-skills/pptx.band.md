@@ -9,38 +9,28 @@ description: 'Use this skill any time a .pptx file is involved in any way — as
   Trigger whenever the user mentions \"deck,\" \"slides,\" \"presentation,\" or references a .pptx filename, regardless
   of what they plan to do with the content afterward. If a .pptx file needs to be opened, created, or touched, use this
   skill.'
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:bash
-      - claude:edit
-      - claude:glob
-      - claude:read
-      - claude:write
-  filesystem:
-    default: deny
-    allow:
-      - read:**/*
-      - write:**/*
-  network:
-    egress:
-      default: deny
-      allow_dns:
-        - "*.githubusercontent.com"
-        - api.github.com
-        - pypi.org
-        - registry.npmjs.org
-limits:
+    - claude:bash
+    - claude:edit
+    - claude:glob
+    - claude:read
+    - claude:write
+  read:
+    - "**/*"
+  write:
+    - "**/*"
+  net:
+    - "*.githubusercontent.com"
+    - api.github.com
+    - pypi.org
+    - registry.npmjs.org
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000
 execution:
-  target: local-docker
+  target: local-lima
 ---
 
 # Skill: pptx

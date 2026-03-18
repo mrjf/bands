@@ -14,21 +14,20 @@ const DEFAULT_LIMITS = {
  * Prepares firewall rules and merges limits with defaults.
  */
 export function compileBand(band: BandDocument): CompiledBand {
-  // Build firewall rules from network capabilities
-  const egress = band.capabilities?.network?.egress;
+  // Build firewall rules from Model A permission fields
   const firewall = {
-    allowedDns: new Set<string>(egress?.allow_dns ?? []),
-    allowedIp: new Set<string>(egress?.allow_ip ?? []),
-    deniedIp: new Set<string>(egress?.deny_ip ?? []),
-    defaultEgress: (egress?.default ?? "deny") as "allow" | "deny",
+    allowedDns: new Set<string>(band.allow?.net ?? []),
+    allowedIp: new Set<string>(),
+    deniedIp: new Set<string>(),
+    defaultEgress: "deny" as "allow" | "deny",
   };
 
   // Merge limits with defaults
   const limits = {
-    maxInputBytes: band.limits?.maxInputBytes ?? DEFAULT_LIMITS.maxInputBytes,
-    maxOutputBytes: band.limits?.maxOutputBytes ?? DEFAULT_LIMITS.maxOutputBytes,
-    maxRuntimeMs: band.limits?.maxRuntimeMs ?? DEFAULT_LIMITS.maxRuntimeMs,
-    maxCostDollars: band.limits?.maxCostDollars ?? DEFAULT_LIMITS.maxCostDollars,
+    maxInputBytes: band.limit?.maxInputBytes ?? DEFAULT_LIMITS.maxInputBytes,
+    maxOutputBytes: band.limit?.maxOutputBytes ?? DEFAULT_LIMITS.maxOutputBytes,
+    maxRuntimeMs: band.limit?.maxRuntimeMs ?? DEFAULT_LIMITS.maxRuntimeMs,
+    maxCostDollars: band.limit?.maxCostDollars ?? DEFAULT_LIMITS.maxCostDollars,
   };
 
   return {

@@ -4,7 +4,7 @@ import type { BandDocument } from "../src/types";
 
 describe("exportBandMd", () => {
   test("exports minimal document", () => {
-    const doc: BandDocument = { band: "test",  icon: "🎵" };
+    const doc: BandDocument = { band: "test", icon: "🎵", description: "test" };
     const output = exportBandMd(doc);
     expect(output).toStartWith("---\n");
     expect(output).toContain("band: test");

@@ -6,29 +6,18 @@ description: Create distinctive, production-grade frontend interfaces with high 
   user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing
   pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative,
   polished code and UI design that avoids generic AI aesthetics.
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:edit
-      - claude:write
-  filesystem:
-    default: deny
-    allow:
-      - write:**/*
-  network:
-    egress:
-      default: deny
-limits:
+    - claude:edit
+    - claude:write
+  write:
+    - "**/*"
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000
 execution:
-  target: local-docker
+  target: local-lima
 ---
 
 # Skill: frontend-design

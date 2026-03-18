@@ -9,37 +9,27 @@ description: 'Use this skill whenever the user wants to create, read, edit, or m
   files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks
   for a \"report\", \"memo\", \"letter\", \"template\", or similar deliverable as a Word or .docx file, use this skill.
   Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation.'
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:bash
-      - claude:edit
-      - claude:read
-      - claude:write
-  filesystem:
-    default: deny
-    allow:
-      - read:**/*
-      - write:**/*
-  network:
-    egress:
-      default: deny
-      allow_dns:
-        - "*.githubusercontent.com"
-        - api.github.com
-        - pypi.org
-        - registry.npmjs.org
-limits:
+    - claude:bash
+    - claude:edit
+    - claude:read
+    - claude:write
+  read:
+    - "**/*"
+  write:
+    - "**/*"
+  net:
+    - "*.githubusercontent.com"
+    - api.github.com
+    - pypi.org
+    - registry.npmjs.org
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000
 execution:
-  target: local-docker
+  target: local-lima
 ---
 
 # Skill: docx

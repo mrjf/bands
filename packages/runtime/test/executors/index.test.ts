@@ -26,7 +26,7 @@ const createTestBand = (target?: ExecutionTarget): BandDocument => ({
 describe("Executor Registry", () => {
   test("should have all executors registered", () => {
     expect(executorRegistry.get("local-dangerously")).toBeDefined();
-    expect(executorRegistry.get("lima")).toBeDefined();
+    expect(executorRegistry.get("local-lima")).toBeDefined();
     expect(executorRegistry.get("cloudflare")).toBeDefined();
   });
 
@@ -34,7 +34,7 @@ describe("Executor Registry", () => {
     const localDangerous = executorRegistry.create("local-dangerously");
     expect(localDangerous).toBeInstanceOf(LocalDangerousExecutor);
 
-    const lima = executorRegistry.create("lima");
+    const lima = executorRegistry.create("local-lima");
     expect(lima).toBeInstanceOf(LimaExecutor);
 
     const cloudflare = executorRegistry.create("cloudflare");
@@ -123,8 +123,8 @@ describe("LocalDangerousExecutor", () => {
 describe("LimaExecutor", () => {
   test("should have correct name and target", () => {
     const executor = new LimaExecutor();
-    expect(executor.name).toBe("lima");
-    expect(executor.target).toBe("lima");
+    expect(executor.name).toBe("local-lima");
+    expect(executor.target).toBe("local-lima");
   });
 
   test("isAvailable should check for Lima VM", async () => {
@@ -182,7 +182,7 @@ describe("isTargetAvailable", () => {
   });
 
   test("should return boolean for all targets", async () => {
-    const targets: ExecutionTarget[] = ["local-dangerously", "lima", "cloudflare"];
+    const targets: ExecutionTarget[] = ["local-dangerously", "local-lima", "cloudflare"];
     for (const target of targets) {
       const available = await isTargetAvailable(target);
       expect(typeof available).toBe("boolean");
@@ -239,6 +239,88 @@ describe("executeBand", () => {
     expect(typeof result.metrics.durationMs).toBe("number");
     expect(typeof result.metrics.inputBytes).toBe("number");
     expect(typeof result.metrics.outputBytes).toBe("number");
+  });
+});
+
+describe("executeBand contract enforcement", () => {
+  test("rejects input that violates contract.input", async () => {
+    const band: BandDocument = {
+      band: "contract-test",
+      icon: "📋",
+      description: "Test band",
+      contract: {
+        input: {
+          type: "object",
+          properties: { name: { type: "string" } },
+          required: ["name"],
+        },
+      },
+    };
+
+    const result = await executeBand(band, { wrong: 123 });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("CONTRACT_INPUT_INVALID");
+    expect(result.error?.message).toContain("contract.input validation failed");
+  });
+
+  test("rejects output that violates contract.output", async () => {
+    const band: BandDocument = {
+      band: "contract-test",
+      icon: "📋",
+      description: "Test band",
+      contract: {
+        output: {
+          type: "object",
+          properties: { result: { type: "number" } },
+          required: ["result"],
+        },
+      },
+    };
+
+    // LocalDangerousExecutor returns { success: true, band: ..., input: ... }
+    // which won't match the output schema requiring { result: number }
+    const result = await executeBand(band, { data: "hello" });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("CONTRACT_OUTPUT_INVALID");
+    expect(result.error?.message).toContain("contract.output validation failed");
+  });
+
+  test("skips contract enforcement for string schema refs", async () => {
+    const band: BandDocument = {
+      band: "contract-test",
+      icon: "📋",
+      description: "Test band",
+      contract: {
+        input: "./schemas/input.json",
+        output: "https://example.com/output.json",
+      },
+    };
+
+    const result = await executeBand(band, { anything: true });
+
+    // String refs are skipped — execution proceeds normally
+    expect(result.success).toBe(true);
+  });
+
+  test("allows valid input through contract check", async () => {
+    const band: BandDocument = {
+      band: "contract-test",
+      icon: "📋",
+      description: "Test band",
+      contract: {
+        input: {
+          type: "object",
+          properties: { name: { type: "string" } },
+          required: ["name"],
+        },
+      },
+    };
+
+    const result = await executeBand(band, { name: "alice" });
+
+    expect(result.success).toBe(true);
   });
 });
 

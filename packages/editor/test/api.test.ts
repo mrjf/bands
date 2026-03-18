@@ -34,7 +34,7 @@ describe("API routes", () => {
     const res = await app.request("/api/validate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ band: "test", version: 1, icon: "🎵" }),
+      body: JSON.stringify({ band: "test", version: 1, icon: "🎵", description: "test" }),
     });
     expect(res.status).toBe(200);
     const json = await res.json();

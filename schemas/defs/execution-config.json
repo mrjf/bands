@@ -7,7 +7,7 @@
       "enum": [
         "local-dangerously",
         "cloudflare",
-        "lima"
+        "local-lima"
       ]
     },
     "cloudflare": {

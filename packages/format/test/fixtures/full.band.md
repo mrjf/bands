@@ -7,73 +7,39 @@ extends:
   - https://github.com/acme/bands/tree/main/base
 includes:
   - https://github.com/acme/bands/tree/main/github-adapter
-schemas:
-  input:
-    ref: https://github.com/acme/schemas/blob/main/input.json
-  output:
-    ref: https://github.com/acme/schemas/blob/main/output.json
-  streamChunk:
-    ref: https://github.com/acme/schemas/blob/main/chunk.json
-returns:
-  supports:
-    - sync
-    - stream
-    - async
-  default: sync
-  sync:
-    schema: schemas.output
-  stream:
-    finalSchema: schemas.output
-    chunkSchema: schemas.streamChunk
-  async:
-    schema: schemas.output
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - https://github.com/acme/tools/tree/main/search
-      - https://github.com/acme/tools/tree/main/calculator
-    deny:
-      - https://github.com/acme/tools/tree/main/dangerous
-    insist:
-      - https://github.com/acme/tools/tree/main/logging
+    - https://github.com/acme/tools/tree/main/search
+    - https://github.com/acme/tools/tree/main/calculator
   skills:
-    allow:
-      - https://github.com/acme/skills/tree/main/summarize
-      - kind: local
-        ref: ./skills/custom-skill
-    deny:
-      - https://github.com/acme/skills/tree/main/banned-skill
+    - https://github.com/acme/skills/tree/main/summarize
+    - kind: local
+      ref: ./skills/custom-skill
   mcps:
-    allow:
-      - https://github.com/acme/mcps/tree/main/memory
+    - https://github.com/acme/mcps/tree/main/memory
   apis:
-    allow:
-      - https://github.com/acme/api-adapters/tree/main/github
-  filesystem:
-    default: deny
-    allow:
-      - "*.txt"
-      - op: read
-        paths:
-          - /tmp/**
-          - /data/**
-  network:
-    egress:
-      default: deny
-      allow_dns:
-        - "*.example.com"
-        - api.github.com
-      allow_ip:
-        - 10.0.0.0/8
-      deny_ip:
-        - 0.0.0.0/0
-limits:
+    - https://github.com/acme/api-adapters/tree/main/github
+  read:
+    - "*.txt"
+    - /tmp/**
+    - /data/**
+  write:
+    - "*.txt"
+  net:
+    - "*.example.com"
+    - api.github.com
+deny:
+  tools:
+    - https://github.com/acme/tools/tree/main/dangerous
+  skills:
+    - https://github.com/acme/skills/tree/main/banned-skill
+insist:
+  tools:
+    - https://github.com/acme/tools/tree/main/logging
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 5242880
   maxRuntimeMs: 30000
-  maxAsyncDurationMs: 300000
-  maxStreamItems: 1000
 provides:
   apis:
     - github-rest
@@ -85,6 +51,9 @@ requires:
   network:
     egress:
       - api.github.com
+contract:
+  input: https://github.com/acme/schemas/blob/main/input.json
+  output: https://github.com/acme/schemas/blob/main/output.json
 ---
 
 # Full Band

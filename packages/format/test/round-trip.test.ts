@@ -94,6 +94,27 @@ contract:
     expect(doc2).toEqual(doc1);
   });
 
+  test("round-trips version field", () => {
+    const source = `---
+icon: "📦"
+band: versioned
+description: Version round-trip test
+version: 3
+---`;
+
+    const result1 = parseBandMd(source);
+    expect(result1.errors).toHaveLength(0);
+    expect(result1.document.version).toBe(3);
+
+    const exported = exportBandMd(result1.document);
+    const result2 = parseBandMd(exported);
+    expect(result2.errors).toHaveLength(0);
+
+    const doc1 = stripBody(result1.document);
+    const doc2 = stripBody(result2.document);
+    expect(doc2).toEqual(doc1);
+  });
+
   test("export is idempotent", () => {
     const doc: BandDocument = {
       band: "idempotent",

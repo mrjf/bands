@@ -55,6 +55,8 @@ export interface Sandbox {
   canAccessPath(op: "read" | "write", path: string): boolean;
   /** Check if network access is allowed */
   canAccessNetwork(host: string): boolean;
+  /** Check if a CLI command is allowed */
+  canRunCli(command: string): boolean;
   /** Get allowed environment variables */
   getAllowedEnv(): Record<string, string>;
   /** Execute code within sandbox */

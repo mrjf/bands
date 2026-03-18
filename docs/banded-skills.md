@@ -188,7 +188,7 @@ allow:
     - "python3 *"
     - "jq *"
 execution:
-  target: lima
+  target: local-lima
 ---
 ```
 

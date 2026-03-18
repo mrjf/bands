@@ -7,6 +7,7 @@
     "band": { "type": "string" },
     "icon": { "type": "string" },
     "description": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
     "url": { "type": "string" },
     "path": { "type": "string" },
     "extends": { "type": "array", "items": { "type": "string" } },

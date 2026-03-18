@@ -29,7 +29,7 @@ export function validate(raw: Record<string, unknown>): {
   if (!isReference) {
     for (const field of REQUIRED_FIELDS) {
       if (raw[field] === undefined || raw[field] === null || raw[field] === "") {
-        warnings.push({
+        errors.push({
           path: field,
           message: `Required field "${field}" is missing`,
         });
@@ -61,6 +61,9 @@ export function validate(raw: Record<string, unknown>): {
   }
   if (raw.description !== undefined && typeof raw.description !== "string") {
     errors.push({ path: "description", message: "description must be a string", value: raw.description });
+  }
+  if (raw.version !== undefined && (typeof raw.version !== "number" || !Number.isInteger(raw.version) || raw.version < 1)) {
+    errors.push({ path: "version", message: "version must be a positive integer", value: raw.version });
   }
   if (raw.extends !== undefined && !Array.isArray(raw.extends)) {
     errors.push({ path: "extends", message: "extends must be an array", value: raw.extends });

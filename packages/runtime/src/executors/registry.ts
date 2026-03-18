@@ -74,8 +74,8 @@ export async function getExecutor(
 
 function getHelpText(target: ExecutionTarget): string {
   switch (target) {
-    case "local-docker":
-      return "Make sure Docker is installed and running.";
+    case "local-lima":
+      return "Make sure Lima VM is running (limactl start bands-executor).";
     case "cloudflare":
       return "Make sure you have configured Cloudflare credentials.";
     case "local-dangerously":

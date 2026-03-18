@@ -3,7 +3,7 @@
  *
  * Executors are responsible for running bands in different environments:
  * - local-dangerously: No isolation, runs in the current process
- * - local-docker: Runs in a Docker container with restrictions enforced
+ * - local-lima: Runs in a Lima VM with restrictions enforced
  * - cloudflare: Runs in a remote Cloudflare Worker
  */
 
@@ -89,7 +89,7 @@ export interface ExecutorOptions {
   /** Enable verbose logging */
   verbose?: boolean;
 
-  /** Custom Docker image (for local-docker) */
+  /** Custom Docker image (for local-lima) */
   dockerImage?: string;
 
   /** Cloudflare API token (for cloudflare) */

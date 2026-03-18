@@ -5,23 +5,12 @@ icon: 🔧
 description: Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from
   having Anthropic's look-and-feel. Use it when brand colors or style guidelines, visual formatting, or company design
   standards apply.
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:read
-  filesystem:
-    default: deny
-    allow:
-      - read:**/*
-  network:
-    egress:
-      default: deny
-limits:
+    - claude:read
+  read:
+    - "**/*"
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000

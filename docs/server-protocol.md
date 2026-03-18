@@ -4,22 +4,27 @@ The `@bands/server` package provides an HTTP server that enforces band permissio
 
 ## Overview
 
-The server is stateless - each request includes both the band configuration and the payload. This allows the same server deployment to handle multiple bands.
+The server is stateful — a band is loaded once via `POST /init`, then payloads are executed against it via `POST /`. This keeps execution requests lightweight since the band configuration is already in memory.
 
 ```
-┌──────────────┐         POST /execute          ┌──────────────┐
-│   Executor   │ ─────────────────────────────▶ │    Server    │
-│              │   { band, payload }            │              │
-│              │ ◀───────────────────────────── │  Enforces    │
-└──────────────┘   { success, data, metrics }   │  Permissions │
-                                                └──────────────┘
+┌──────────────┐       1. POST /init              ┌──────────────┐
+│   Executor   │ ─────────────────────────────▶   │    Server    │
+│              │   BandDocument body              │              │
+│              │ ◀─────────────────────────────   │  Loads band, │
+│              │   { ok, band, version }          │  creates     │
+│              │                                  │  sandbox     │
+│              │       2. POST /                  │              │
+│              │ ─────────────────────────────▶   │  Enforces    │
+│              │   payload (any)                  │  Permissions │
+│              │ ◀─────────────────────────────   │              │
+└──────────────┘   result | { error }             └──────────────┘
 ```
 
 ## Endpoints
 
 ### GET /health
 
-Health check endpoint.
+Health check endpoint. Returns the server's readiness state along with the currently loaded band name and version.
 
 **Request:**
 ```http
@@ -27,41 +32,48 @@ GET /health HTTP/1.1
 Host: localhost:9000
 ```
 
-**Response:**
+**Response (band loaded):**
 ```json
 {
-  "ready": true
+  "ready": true,
+  "band": "my-band",
+  "version": 1
 }
 ```
 
-### POST /execute
+**Response (no band loaded):**
+```json
+{
+  "ready": false,
+  "band": null,
+  "version": null
+}
+```
 
-Execute a band with the given payload.
+### POST /init
+
+Initialize the server with a band configuration. Creates an execution sandbox constrained by the band's permissions.
 
 **Request:**
 ```http
-POST /execute HTTP/1.1
+POST /init HTTP/1.1
 Host: localhost:9000
 Content-Type: application/json
 
 {
-  "band": {
-    "band": "my-band",
-    "icon": "🔒",
-    "description": "My band",
-    "allow": {
-      "cli": ["echo *"],
-      "read": ["/tmp/**"]
-    },
-    "deny": {
-      "cli": ["rm *"]
-    },
-    "insist": {
-      "cli": ["echo *"]
-    }
+  "band": "my-band",
+  "icon": "🔒",
+  "version": 1,
+  "description": "My band",
+  "allow": {
+    "cli": ["echo *"],
+    "read": ["/tmp/**"]
   },
-  "payload": {
-    "testCli": "echo hello"
+  "deny": {
+    "cli": ["rm *"]
+  },
+  "insist": {
+    "cli": ["echo *"]
   }
 }
 ```
@@ -70,21 +82,85 @@ Content-Type: application/json
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
-X-Band-Input-Bytes: 128
-X-Band-Output-Bytes: 256
+
+{
+  "ok": true,
+  "band": "my-band",
+  "version": 1
+}
+```
+
+**Error Response (Invalid Band):**
+```http
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "INVALID_BAND",
+    "message": "Missing required fields"
+  }
+}
+```
+
+**Error Response (Init Failed):**
+```http
+HTTP/1.1 500 Internal Server Error
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "INIT_ERROR",
+    "message": "Init failed"
+  }
+}
+```
+
+### POST /
+
+Execute a payload against the initialized band. Requires a prior successful `POST /init` call.
+
+**Request:**
+```http
+POST / HTTP/1.1
+Host: localhost:9000
+Content-Type: application/json
+
+{
+  "testCli": "echo hello"
+}
+```
+
+**Success Response:**
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Band-Input-Bytes: 24
+X-Band-Output-Bytes: 128
 X-Band-Duration-Ms: 15
 
 {
   "success": true,
-  "band": "my-band",
   "permissions": {
     "cli": {
       "command": "echo hello",
       "allowed": true
     }
   },
-  "enforced": true,
-  "timestamp": "2024-01-15T10:30:00.000Z"
+  "enforced": true
+}
+```
+
+**Error Response (Not Initialized):**
+```http
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "NOT_INITIALIZED",
+    "message": "Call /init first"
+  }
 }
 ```
 
@@ -131,9 +207,44 @@ Content-Type: application/json
 }
 ```
 
+### GET /band
+
+Debug endpoint. Returns the currently loaded band configuration.
+
+**Request:**
+```http
+GET /band HTTP/1.1
+Host: localhost:9000
+```
+
+**Response (band loaded):**
+```json
+{
+  "band": "my-band",
+  "icon": "🔒",
+  "version": 1,
+  "description": "My band",
+  "allow": { "cli": ["echo *"] },
+  "deny": { "cli": ["rm *"] }
+}
+```
+
+**Error Response (no band loaded):**
+```http
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "NOT_INITIALIZED",
+    "message": "No band loaded"
+  }
+}
+```
+
 ## Payload Types
 
-The server recognizes three types of payloads:
+The server recognizes three types of payloads. Since the band is already loaded via `/init`, payloads are sent directly without a wrapper.
 
 ### 1. Firewall Test Payloads
 
@@ -234,13 +345,13 @@ Any other payload is passed through with band info added.
     "data": { "key": "value" }
   },
   "timestamp": "2024-01-15T10:30:00.000Z",
-  "executedOn": "lima"
+  "executedOn": "local-lima"
 }
 ```
 
 ## Response Headers
 
-The server includes metrics in response headers:
+The server includes metrics in response headers on `POST /` responses:
 
 | Header | Description |
 |--------|-------------|
@@ -252,9 +363,15 @@ The server includes metrics in response headers:
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
+| `NOT_INITIALIZED` | 400 | `POST /` called before `POST /init` |
+| `INVALID_BAND` | 400 | Band document missing required fields (`band`, `version`, `icon`) |
+| `CONTRACT_INPUT_INVALID` | 400 | Request payload fails `contract.input` JSON Schema validation |
+| `CONTRACT_OUTPUT_INVALID` | 400 | Response fails `contract.output` JSON Schema validation |
+| `INPUT_TOO_LARGE` | 400 | Request payload exceeds `limit.maxInputBytes` |
+| `OUTPUT_TOO_LARGE` | 400 | Response exceeds `limit.maxOutputBytes` |
 | `PERMISSION_DENIED` | 403 | Operation blocked by allow/deny rules |
 | `INSIST_NOT_SATISFIED` | 400 | Required operations not performed |
-| `INVALID_REQUEST` | 400 | Malformed request (missing band or payload) |
+| `INIT_ERROR` | 500 | Failed to create sandbox from band config |
 | `EXECUTION_ERROR` | 500 | Internal execution error |
 
 ## CORS
@@ -295,37 +412,42 @@ The same code runs in both environments - only the deployment method differs.
 ## Example: Full Request Flow
 
 ```bash
-# 1. Health check
+# 1. Health check (no band loaded yet)
 curl http://localhost:9000/health
-# {"ready":true}
+# {"ready":false,"band":null,"version":null}
 
-# 2. Test a permission
-curl -X POST http://localhost:9000/execute \
+# 2. Initialize with a band
+curl -X POST http://localhost:9000/init \
   -H "Content-Type: application/json" \
   -d '{
-    "band": {
-      "band": "test",
-      "icon": "🧪",
-      "allow": { "cli": ["echo *"] },
-      "deny": { "cli": ["rm *"] }
-    },
-    "payload": { "testCli": "echo hello" }
+    "band": "test",
+    "icon": "🧪",
+    "version": 1,
+    "description": "Test band",
+    "allow": { "cli": ["echo *"] },
+    "deny": { "cli": ["rm *"] }
   }'
+# {"ok":true,"band":"test","version":1}
+
+# 3. Health check (band loaded)
+curl http://localhost:9000/health
+# {"ready":true,"band":"test","version":1}
+
+# 4. Test an allowed operation
+curl -X POST http://localhost:9000/ \
+  -H "Content-Type: application/json" \
+  -d '{ "testCli": "echo hello" }'
 # {"success":true,"permissions":{"cli":{"command":"echo hello","allowed":true}},"enforced":true}
 
-# 3. Test a denied operation
-curl -X POST http://localhost:9000/execute \
+# 5. Test a denied operation
+curl -X POST http://localhost:9000/ \
   -H "Content-Type: application/json" \
-  -d '{
-    "band": {
-      "band": "test",
-      "icon": "🧪",
-      "allow": { "cli": ["echo *"] },
-      "deny": { "cli": ["rm *"] }
-    },
-    "payload": { "testCli": "rm -rf /" }
-  }'
+  -d '{ "testCli": "rm -rf /" }'
 # {"success":false,"error":{"code":"PERMISSION_DENIED","message":"CLI command denied: rm -rf /"},"enforced":true}
+
+# 6. Debug: view loaded band config
+curl http://localhost:9000/band
+# {"band":"test","icon":"🧪","version":1,"description":"Test band","allow":{"cli":["echo *"]},"deny":{"cli":["rm *"]}}
 ```
 
 ## Implementation Notes
