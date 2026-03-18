@@ -5,39 +5,29 @@ icon: 🔧
 description: Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with
   external services through well-designed tools. Use when building MCP servers to integrate external APIs or services,
   whether in Python (FastMCP) or Node/TypeScript (MCP SDK).
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:bash
-      - claude:glob
-      - claude:read
-      - claude:write
-  filesystem:
-    default: deny
-    allow:
-      - read:**/*
-      - write:**/*
-  network:
-    egress:
-      default: deny
-      allow_dns:
-        - "*.githubusercontent.com"
-        - 127.0.0.1
-        - api.github.com
-        - localhost
-        - pypi.org
-        - registry.npmjs.org
-limits:
+    - claude:bash
+    - claude:glob
+    - claude:read
+    - claude:write
+  read:
+    - "**/*"
+  write:
+    - "**/*"
+  net:
+    - "*.githubusercontent.com"
+    - 127.0.0.1
+    - api.github.com
+    - localhost
+    - pypi.org
+    - registry.npmjs.org
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000
 execution:
-  target: local-docker
+  target: local-lima
 ---
 
 # Skill: mcp-builder

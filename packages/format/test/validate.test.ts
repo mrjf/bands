@@ -3,15 +3,15 @@ import { validate } from "../src/validate";
 
 describe("validate", () => {
   test("valid minimal document has no errors", () => {
-    const { errors } = validate({ band: "test",  icon: "🎵" });
+    const { errors } = validate({ band: "test", icon: "🎵", description: "test" });
     expect(errors).toHaveLength(0);
   });
 
-  test("warns on missing required fields", () => {
-    const { warnings } = validate({});
-    expect(warnings.some((w) => w.path === "band")).toBe(true);
-    expect(warnings.some((w) => w.path === "icon")).toBe(true);
-    expect(warnings.some((w) => w.path === "description")).toBe(true);
+  test("errors on missing required fields", () => {
+    const { errors } = validate({});
+    expect(errors.some((e) => e.path === "band")).toBe(true);
+    expect(errors.some((e) => e.path === "icon")).toBe(true);
+    expect(errors.some((e) => e.path === "description")).toBe(true);
   });
 
   test("warns on unknown top-level keys", () => {
@@ -124,6 +124,7 @@ describe("validate", () => {
     const { errors, warnings } = validate({
       band: "test",
       icon: "🎵",
+      description: "test",
       contract: { input: "just-a-string" },
     });
     expect(errors).toHaveLength(0);

@@ -4,39 +4,29 @@ version: 1
 icon: 🔧
 description: Toolkit for interacting with and testing local web applications using Playwright. Supports verifying
   frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:bash
-      - claude:glob
-      - claude:read
-      - claude:write
-  filesystem:
-    default: deny
-    allow:
-      - read:**/*
-      - write:**/*
-  network:
-    egress:
-      default: deny
-      allow_dns:
-        - "*.githubusercontent.com"
-        - 127.0.0.1
-        - api.github.com
-        - localhost
-        - pypi.org
-        - registry.npmjs.org
-limits:
+    - claude:bash
+    - claude:glob
+    - claude:read
+    - claude:write
+  read:
+    - "**/*"
+  write:
+    - "**/*"
+  net:
+    - "*.githubusercontent.com"
+    - 127.0.0.1
+    - api.github.com
+    - localhost
+    - pypi.org
+    - registry.npmjs.org
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000
 execution:
-  target: local-docker
+  target: local-lima
 ---
 
 # Skill: webapp-testing

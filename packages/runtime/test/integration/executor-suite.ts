@@ -34,7 +34,7 @@ export function printSkippedSummary() {
     for (const target of skippedTargets) {
       let reason = "";
       switch (target) {
-        case "lima":
+        case "local-lima":
           reason = "Lima VM not running (limactl start bands-executor)";
           break;
         case "cloudflare":
@@ -466,7 +466,7 @@ export function runAllExecutorSuites() {
   });
 
   // Lima - requires Lima VM (macOS)
-  runExecutorSuite("lima", {
+  runExecutorSuite("local-lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });
@@ -490,7 +490,7 @@ export function runAllPermissionSuites() {
   // Currently executors just echo input - they don't actually enforce permissions
 
   // // Lima - has VM isolation + band-shell
-  // runPermissionSuite("lima", {
+  // runPermissionSuite("local-lima", {
   //   timeout: 180000,
   //   skipIfUnavailable: true,
   // });

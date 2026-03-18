@@ -16,9 +16,10 @@ import { createLimaExecutor } from "./lima";
 // Register all executors on module load
 executorRegistry.register("local-dangerously", createLocalDangerousExecutor);
 executorRegistry.register("cloudflare", createCloudflareExecutor);
-executorRegistry.register("lima", createLimaExecutor);
+executorRegistry.register("local-lima", createLimaExecutor);
 
 import type { BandDocument, ExecutionTarget } from "@bands/format";
+import { validateContractSchema } from "@bands/format";
 import type { ExecutorInput, ExecutorResult, ExecutorOptions } from "./types";
 
 /**
@@ -47,6 +48,20 @@ export async function executeBand(
 ): Promise<ExecutorResult> {
   const target = options.target || band.execution?.target || "local-dangerously";
 
+  // Validate input against contract schema (skip string refs — resolution is separate)
+  const inputSchema = band.contract?.input;
+  if (inputSchema && typeof inputSchema === "object") {
+    const err = await validateContractSchema(payload, inputSchema, "contract.input");
+    if (err) {
+      return {
+        success: false,
+        error: { code: "CONTRACT_INPUT_INVALID", message: err },
+        metrics: { startupMs: 0, durationMs: 0, inputBytes: 0, outputBytes: 0 },
+        target,
+      };
+    }
+  }
+
   const executor = await getExecutor(target, options.executorOptions);
 
   const input: ExecutorInput = {
@@ -57,7 +72,25 @@ export async function executeBand(
     timeoutMs: options.timeoutMs,
   };
 
-  return executor.execute(input);
+  const result = await executor.execute(input);
+
+  // Validate output against contract schema (skip string refs)
+  if (result.success) {
+    const outputSchema = band.contract?.output;
+    if (outputSchema && typeof outputSchema === "object") {
+      const err = await validateContractSchema(result.data, outputSchema, "contract.output");
+      if (err) {
+        return {
+          success: false,
+          error: { code: "CONTRACT_OUTPUT_INVALID", message: err },
+          metrics: result.metrics,
+          target,
+        };
+      }
+    }
+  }
+
+  return result;
 }
 
 /**

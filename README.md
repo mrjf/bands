@@ -110,7 +110,7 @@ Execute bands on different targets:
 import { executeBand } from "@bands/runtime";
 
 const result = await executeBand(band, payload, {
-  target: "lima",  // or "cloudflare", "local-dangerously"
+  target: "local-lima",  // or "cloudflare", "local-dangerously"
 });
 
 if (result.success) {
@@ -125,12 +125,19 @@ if (result.success) {
 HTTP server that enforces band permissions. Deployed to Lima VM or Cloudflare Workers.
 
 ```
-POST /execute
-  Body: { band: BandDocument, payload: any }
-  Returns: { success: true, data: any } | { success: false, error: {...} }
+POST /init
+  Body: BandDocument
+  Returns: { ok: true, band: "name", version: 1 }
+
+POST /
+  Body: payload (any)
+  Returns: result | { error: {...} }
 
 GET /health
-  Returns: { ready: true }
+  Returns: { ready: true, band: "name", version: 1 }
+
+GET /band
+  Returns: BandDocument (debug)
 ```
 
 ## Permission Model

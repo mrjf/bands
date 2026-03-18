@@ -39,13 +39,115 @@ Optional markdown documentation about this band.
 |-------|------|-------------|
 | `band` | string | Unique identifier (lowercase, hyphens allowed) |
 | `icon` | emoji | Single emoji representing the band |
+| `description` | string | Human-readable description |
 
 ## Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `description` | string | Human-readable description |
 | `version` | number | Version number (integer) |
+| `url` | string | Band reference URL (delegates to another band) |
+| `path` | string | Band reference path (delegates to another band) |
+| `extends` | string[] | Parent bands to inherit from (GitHub URLs) |
+| `includes` | string[] | Bands to merge into this one (GitHub URLs) |
+| `env` | object | Environment configuration (secrets and variables) |
+| `provides` | object | APIs, tools, skills, and MCPs this band offers |
+| `requires` | object | Secrets and network access this band needs |
+| `contract` | object | I/O contract (inline JSON Schema or path/URL ref) |
+
+### Band References
+
+A band can delegate to another band via `url` or `path`. When present, the required field check for `band`/`icon`/`description` is skipped — the referenced band provides them.
+
+```yaml
+---
+url: https://github.com/acme/bands/tree/main/data-analyst
+---
+```
+
+### Composition
+
+Bands support inheritance (`extends`) and merging (`includes`):
+
+```yaml
+extends:
+  - https://github.com/acme/bands/tree/main/base
+includes:
+  - https://github.com/acme/bands/tree/main/python-tools
+```
+
+- `extends`: Parent bands whose permissions this band inherits. Child permissions are intersected with parent permissions.
+- `includes`: Bands whose permissions are merged (unioned) into this band.
+
+### Environment
+
+The `env` field configures secrets and variables passed to the execution environment:
+
+```yaml
+env:
+  secrets:
+    - API_KEY
+    - DB_PASSWORD
+  variables:
+    - NODE_ENV=production
+    - LOG_LEVEL=info
+```
+
+- `secrets`: Sensitive values (masked in logs). Fetched from the running environment or `.env` file.
+- `variables`: Non-sensitive environment variables.
+
+### Provides & Requires
+
+Bands can declare what they offer and what they need:
+
+```yaml
+provides:
+  apis:
+    - https://github.com/acme/apis/tree/main/search
+  tools:
+    - https://github.com/acme/tools/tree/main/formatter
+  skills:
+    - https://github.com/acme/skills/tree/main/summarize
+  mcps:
+    - https://github.com/acme/mcps/tree/main/memory
+
+requires:
+  secrets:
+    - API_KEY
+  network:
+    egress:
+      - api.example.com
+```
+
+### Contract
+
+The `contract` field defines input/output schemas for validation. Values can be inline JSON Schema objects or string references (file paths or URLs). Inline schemas are enforced at runtime; string refs are parsed and stored but not yet resolved (see `docs/TODO.md`).
+
+```yaml
+contract:
+  input: ./schemas/input.json
+  output:
+    type: object
+    properties:
+      result:
+        type: string
+```
+
+### Band-Specific Config
+
+A band can include skill-specific configuration under a key matching the band name. This is extracted into the `bandConfig` field at parse time:
+
+```yaml
+band: slack
+icon: 💬
+description: Slack integration
+
+slack:
+  channels:
+    allow: [general]
+    deny: []
+  dm: false
+```
 
 ## Permission Model
 
@@ -266,20 +368,20 @@ Bands can specify where they should run:
 
 ```yaml
 execution:
-  target: cloudflare       # or: lima, local-dangerously
+  target: cloudflare       # or: local-lima, local-dangerously
 ```
 
 | Target | Description | Isolation |
 |--------|-------------|-----------|
 | `local-dangerously` | Runs in current process | None (dev only) |
-| `lima` | Lima VM on macOS | Full (Linux VM) |
+| `local-lima` | Lima VM on macOS | Full (Linux VM) |
 | `cloudflare` | Cloudflare Workers | Full (V8 isolate) |
 
 Target-specific configuration:
 
 ```yaml
 execution:
-  target: lima
+  target: local-lima
   lima:
     vmName: bands-executor    # VM name (default: bands-executor)
     port: 9000                # Server port (default: 9000)
@@ -329,7 +431,7 @@ const output = exportBandMd(document);
 ## Validation
 
 The parser validates:
-- Required fields (`band`, `icon`)
+- Required fields (`band`, `icon`, `description`)
 - Valid emoji for `icon`
 - Valid glob patterns
 - Numeric limits (or parseable duration/size strings)

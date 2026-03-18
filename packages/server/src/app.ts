@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { BandDocument } from "@bands/format";
+import { parseBytes, validateContractSchema } from "@bands/format";
 import type { BandRequest, BandResult, BandMetrics } from "./types";
 import { createSandbox } from "./sandbox";
 
@@ -37,7 +38,7 @@ export function createBandApp(options: BandAppOptions = {}) {
     try {
       const band = await c.req.json<BandDocument>();
 
-      if (!band.band || !band.version || !band.icon) {
+      if (!band.band || !band.icon || !band.description) {
         return c.json({ error: { code: "INVALID_BAND", message: "Missing required fields" } }, 400);
       }
 
@@ -66,12 +67,25 @@ export function createBandApp(options: BandAppOptions = {}) {
       const inputBytes = JSON.stringify(payload).length;
 
       // Check input size limit
-      const maxInput = currentBand.limits?.maxInputBytes;
+      const rawMaxInput = currentBand.limit?.maxInputBytes;
+      const maxInput = rawMaxInput != null ? parseBytes(rawMaxInput) : null;
       if (maxInput && inputBytes > maxInput) {
         return c.json(
           { error: { code: "INPUT_TOO_LARGE", message: `Input ${inputBytes} bytes exceeds limit ${maxInput}` } },
           400
         );
+      }
+
+      // Validate input against contract schema (skip string refs — resolution is separate)
+      const inputSchema = currentBand.contract?.input;
+      if (inputSchema && typeof inputSchema === "object") {
+        const err = await validateContractSchema(payload, inputSchema, "contract.input");
+        if (err) {
+          return c.json(
+            { error: { code: "CONTRACT_INPUT_INVALID", message: err } },
+            400
+          );
+        }
       }
 
       // Execute
@@ -85,8 +99,21 @@ export function createBandApp(options: BandAppOptions = {}) {
       const outputStr = JSON.stringify(result);
       const outputBytes = outputStr.length;
 
+      // Validate output against contract schema (skip string refs)
+      const outputSchema = currentBand.contract?.output;
+      if (outputSchema && typeof outputSchema === "object") {
+        const err = await validateContractSchema(result, outputSchema, "contract.output");
+        if (err) {
+          return c.json(
+            { error: { code: "CONTRACT_OUTPUT_INVALID", message: err } },
+            400
+          );
+        }
+      }
+
       // Check output size limit
-      const maxOutput = currentBand.limits?.maxOutputBytes;
+      const rawMaxOutput = currentBand.limit?.maxOutputBytes;
+      const maxOutput = rawMaxOutput != null ? parseBytes(rawMaxOutput) : null;
       if (maxOutput && outputBytes > maxOutput) {
         return c.json(
           { error: { code: "OUTPUT_TOO_LARGE", message: `Output ${outputBytes} bytes exceeds limit ${maxOutput}` } },

@@ -7,7 +7,7 @@ Bands can run on different execution targets, each providing different levels of
 | Target | Isolation | Enforcement | Use Case |
 |--------|-----------|-------------|----------|
 | `local-dangerously` | None | Reports only | Development, testing |
-| `lima` | Full (VM) | Enforces | Production on macOS |
+| `local-lima` | Full (VM) | Enforces | Production on macOS |
 | `cloudflare` | Full (V8) | Enforces | Production at edge |
 
 ## local-dangerously
@@ -41,13 +41,13 @@ const result = await executeBand(band, payload, {
 
 Even though `allowed: false`, the operation would succeed because `enforced: false`.
 
-## lima
+## local-lima
 
 Runs the band in a **Lima VM** on macOS using Virtualization.framework.
 
 ```typescript
 const result = await executeBand(band, payload, {
-  target: "lima"
+  target: "local-lima"
 });
 ```
 
@@ -80,7 +80,7 @@ limactl list
 **Configuration:**
 ```yaml
 execution:
-  target: lima
+  target: local-lima
   lima:
     vmName: bands-executor  # Default
     port: 9000              # Default
@@ -189,11 +189,11 @@ interface ExecutorResult {
 import { isTargetAvailable, listAvailableTargets } from "@bands/runtime";
 
 // Check specific target
-const limaAvailable = await isTargetAvailable("lima");
+const limaAvailable = await isTargetAvailable("local-lima");
 
 // List all available targets
 const targets = await listAvailableTargets();
-// ["local-dangerously", "lima"]  // if Lima VM is running
+// ["local-dangerously", "local-lima"]  // if Lima VM is running
 ```
 
 ## Using the CLI
@@ -207,7 +207,7 @@ bun run packages/runtime/src/cli.ts targets
 #     Run in current process (no isolation)
 #     Isolation: None - full system access
 #
-# ✓ lima
+# ✓ local-lima
 #     Run in Lima VM (macOS)
 #     Isolation: Full - Linux VM via Virtualization.framework
 #
@@ -218,13 +218,13 @@ bun run packages/runtime/src/cli.ts targets
 
 # Run with specific target
 bun run packages/runtime/src/cli.ts run ./my-band.md \
-  --target lima \
+  --target local-lima \
   --input '{"task": "process data"}'
 ```
 
 ## Enforcement Differences
 
-| Behavior | local-dangerously | lima | cloudflare |
+| Behavior | local-dangerously | local-lima | cloudflare |
 |----------|-------------------|------|------------|
 | Permission denied | Returns `allowed: false`, continues | Returns error, fails | Returns error, fails |
 | Insist not met | Reports missing, succeeds | Returns error, fails | Returns error, fails |
@@ -236,7 +236,7 @@ bun run packages/runtime/src/cli.ts run ./my-band.md \
 All executors return execution metrics:
 
 ```typescript
-const result = await executeBand(band, payload, { target: "lima" });
+const result = await executeBand(band, payload, { target: "local-lima" });
 
 console.log(result.metrics);
 // {

@@ -5,36 +5,26 @@ icon: 🔧
 description: Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this
   when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems. Create
   original algorithmic art rather than copying existing artists' work to avoid copyright violations.
-returns:
-  default: sync
-  supports:
-    - sync
-capabilities:
+allow:
   tools:
-    default: deny
-    allow:
-      - claude:edit
-      - claude:read
-      - claude:write
-  filesystem:
-    default: deny
-    allow:
-      - read:**/*
-      - write:**/*
-  network:
-    egress:
-      default: deny
-      allow_dns:
-        - "*.githubusercontent.com"
-        - api.github.com
-        - pypi.org
-        - registry.npmjs.org
-limits:
+    - claude:edit
+    - claude:read
+    - claude:write
+  read:
+    - "**/*"
+  write:
+    - "**/*"
+  net:
+    - "*.githubusercontent.com"
+    - api.github.com
+    - pypi.org
+    - registry.npmjs.org
+limit:
   maxInputBytes: 1048576
   maxOutputBytes: 10485760
   maxRuntimeMs: 30000
 execution:
-  target: local-docker
+  target: local-lima
 ---
 
 # Skill: algorithmic-art

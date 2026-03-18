@@ -2,7 +2,7 @@
  * Generate a Band configuration that wraps an AgentSkills.io skill
  */
 
-import type { BandDocument, CapabilitySet, FilesystemCapabilitySet, Capabilities, ExecutionTarget } from "@bands/format";
+import type { BandDocument, ExecutionTarget } from "@bands/format";
 import type { LoadedSkill } from "./types";
 
 export interface GenerateBandOptions {
@@ -66,29 +66,21 @@ export function generateSkillBand(
     icon: options.icon || "🔧",
     description: buildDescription(frontmatter.description, options.descriptionSuffix),
 
-    returns: {
-      supports: ["sync"],
-      default: "sync",
-    },
-
     execution: {
       target: executionTarget,
     },
 
-    limits: {
+    limit: {
       maxRuntimeMs: options.maxRuntimeMs ?? 30000,
       maxInputBytes: options.maxInputBytes ?? 1024 * 1024, // 1MB
       maxOutputBytes: options.maxOutputBytes ?? 10 * 1024 * 1024, // 10MB
     },
 
-    // Set up capabilities based on skill requirements
-    // Note: skills.allow is intentionally omitted - once a skill is invoked,
-    // its instructions are loaded into context and executed with the allowed
-    // tools. The skill doesn't need to "call itself" recursively.
-    capabilities: {
-      tools: buildToolsCapability(allowedTools),
-      filesystem: buildFilesystemCapability(allowedTools),
-      network: buildNetworkCapability(needsNetwork, needsLocalhost),
+    // Set up permissions based on skill requirements (Model A)
+    allow: {
+      tools: buildToolsList(allowedTools),
+      ...buildFilesystemPermissions(allowedTools),
+      net: buildNetList(needsNetwork, needsLocalhost),
     },
 
     // Include skill instructions as body
@@ -184,11 +176,11 @@ function buildDescription(base: string, suffix?: string): string {
 }
 
 /**
- * Build tools capability based on allowed tools list.
+ * Build tools list for Model A allow.tools.
  */
-function buildToolsCapability(allowedTools: string[]): CapabilitySet {
+function buildToolsList(allowedTools: string[]): string[] {
   if (allowedTools.length === 0) {
-    return { default: "deny" };
+    return [];
   }
 
   // Map common tool names to their full identifiers
@@ -206,20 +198,15 @@ function buildToolsCapability(allowedTools: string[]): CapabilitySet {
     NotebookEdit: "claude:notebookedit",
   };
 
-  const mappedTools = allowedTools.map(
+  return allowedTools.map(
     (tool) => toolMapping[tool] || `claude:${tool.toLowerCase()}`
   );
-
-  return {
-    default: "deny",
-    allow: mappedTools,
-  };
 }
 
 /**
- * Build filesystem capability based on allowed tools.
+ * Build filesystem permissions for Model A allow.read / allow.write.
  */
-function buildFilesystemCapability(allowedTools: string[]): FilesystemCapabilitySet {
+function buildFilesystemPermissions(allowedTools: string[]): { read?: string[]; write?: string[] } {
   const hasRead = allowedTools.some((t) =>
     ["Read", "Glob", "Grep"].includes(t)
   );
@@ -227,23 +214,16 @@ function buildFilesystemCapability(allowedTools: string[]): FilesystemCapability
     ["Write", "Edit", "NotebookEdit"].includes(t)
   );
 
-  const ops: string[] = [];
+  const result: { read?: string[]; write?: string[] } = {};
 
   if (hasRead) {
-    ops.push("read:**/*");
+    result.read = ["**/*"];
   }
   if (hasWrite) {
-    ops.push("write:**/*");
+    result.write = ["**/*"];
   }
 
-  if (ops.length === 0) {
-    return { default: "deny" };
-  }
-
-  return {
-    default: "deny",
-    allow: ops,
-  };
+  return result;
 }
 
 /**
@@ -295,7 +275,7 @@ function inferLocalhostNeeds(instructions: string): boolean {
 /**
  * Infer the best execution target based on skill requirements.
  *
- * - Skills needing Bash, filesystem, or localhost → local-docker (isolated but has system access)
+ * - Skills needing Bash, filesystem, or localhost → local-lima (isolated but has system access)
  * - Skills with only network needs → cloudflare (edge execution)
  * - Simple skills → cloudflare (fast, scalable)
  */
@@ -312,7 +292,7 @@ function inferExecutionTarget(
     needsLocalhost;
 
   if (needsSystemAccess) {
-    return "local-docker";
+    return "local-lima";
   }
 
   // Default to Cloudflare for better isolation and scalability
@@ -320,28 +300,24 @@ function inferExecutionTarget(
 }
 
 /**
- * Build network capability based on skill requirements.
+ * Build network allow list for Model A allow.net.
  */
-function buildNetworkCapability(needsNetwork: boolean, needsLocalhost: boolean = false): Capabilities["network"] {
+function buildNetList(needsNetwork: boolean, needsLocalhost: boolean = false): string[] {
   if (!needsNetwork && !needsLocalhost) {
-    return {
-      egress: {
-        default: "deny",
-      },
-    };
+    return [];
   }
 
-  const allowedDns: string[] = [];
+  const allowed: string[] = [];
 
   // Add localhost access for web testing skills
   if (needsLocalhost) {
-    allowedDns.push("localhost");
-    allowedDns.push("127.0.0.1");
+    allowed.push("localhost");
+    allowed.push("127.0.0.1");
   }
 
   // Add common safe domains for network-enabled skills
   if (needsNetwork) {
-    allowedDns.push(
+    allowed.push(
       "*.githubusercontent.com",
       "api.github.com",
       "registry.npmjs.org",
@@ -349,12 +325,7 @@ function buildNetworkCapability(needsNetwork: boolean, needsLocalhost: boolean =
     );
   }
 
-  return {
-    egress: {
-      default: "deny",
-      allow_dns: allowedDns,
-    },
-  };
+  return allowed;
 }
 
 /**

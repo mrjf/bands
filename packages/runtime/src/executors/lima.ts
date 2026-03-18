@@ -20,8 +20,8 @@ const DEFAULT_VM_NAME = "bands-executor";
 const DEFAULT_PORT = 9000;
 
 export class LimaExecutor implements Executor {
-  readonly name = "lima";
-  readonly target = "lima" as const;
+  readonly name = "local-lima";
+  readonly target = "local-lima" as const;
 
   private options: ExecutorOptions;
   private vmReady = false;

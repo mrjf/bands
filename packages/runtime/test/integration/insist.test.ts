@@ -176,6 +176,61 @@ export function runInsistSuite(
       }, timeout);
     });
 
+    describe("Write Insist", () => {
+      const harness = new IntegrationTestHarness({
+        name: `${target}-insist-write`,
+        bandPath: join(FIXTURES_DIR, "insist-write.band.md"),
+        target,
+        timeout,
+      });
+
+      let available = false;
+
+      beforeAll(async () => {
+        available = await harness.checkAvailability();
+        if (available) {
+          await harness.init();
+        }
+      }, timeout);
+
+      afterAll(async () => {
+        if (available) {
+          await harness.cleanup();
+        }
+      });
+
+      test("succeeds when insist file is written", async () => {
+        if (skipIf(!available, `${target} not available`)) return;
+
+        // Band insists on writing /tmp/output/required.txt
+        const result = await harness.execute({
+          writeFiles: [{ path: "/tmp/output/required.txt", content: "done" }],
+        });
+
+        expect(result.success).toBe(true);
+        const data = result.data as any;
+        expect(data.insist?.satisfied).toBe(true);
+      }, timeout);
+
+      test("fails when insist file is NOT written", async () => {
+        if (skipIf(!available, `${target} not available`)) return;
+
+        // Band insists on /tmp/output/required.txt but we write something else
+        const result = await harness.execute({
+          writeFiles: [{ path: "/tmp/output/other.txt", content: "nope" }],
+        });
+
+        if (target === "local-dangerously") {
+          expect(result.success).toBe(true);
+          const data = result.data as any;
+          expect(data.insist?.satisfied).toBe(false);
+        } else {
+          expect(result.success).toBe(false);
+          expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
+        }
+      }, timeout);
+    });
+
     describe("Network Insist", () => {
       const harness = new IntegrationTestHarness({
         name: `${target}-insist-net`,
@@ -260,7 +315,7 @@ export function runAllInsistSuites() {
   });
 
   // Lima - requires Lima VM, enforces insist
-  runInsistSuite("lima", {
+  runInsistSuite("local-lima", {
     timeout: 180000,
     skipIfUnavailable: true,
   });

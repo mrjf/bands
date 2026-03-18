@@ -14,6 +14,7 @@ export { union, intersect, removeItems } from "./merge";
 export { computeEffective } from "./effective";
 export { resolve } from "./resolve";
 export { detectConflicts } from "./conflicts";
+export { validateContractSchema } from "./contract";
 export {
   parseBytes,
   formatBytes,
