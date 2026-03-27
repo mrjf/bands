@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeEach } from "bun:test";
 import { join } from "path";
 import { parseExecArgs, printHelp, bandExec } from "../../../src/banded-skills/exec";
+import { clearValidatorCache } from "../../../src/banded-skills/schema-loader";
 
 const FIXTURES = join(import.meta.dir, "../../fixtures/banded-skills");
 
@@ -75,6 +76,10 @@ describe("printHelp", () => {
 });
 
 describe("bandExec", () => {
+  beforeEach(() => {
+    clearValidatorCache();
+  });
+
   test("help mode returns schema info", async () => {
     const resourceDir = join(
       FIXTURES,
@@ -174,5 +179,144 @@ describe("bandExec", () => {
       expect(result.error).toMatch(/lima|limactl|VM/i);
     }
     // If it succeeds, that's fine too — lima is available
+  });
+
+  // ---- CLI arg type coercion tests ----
+
+  describe("type coercion from CLI string args", () => {
+    const refResourceDir = join(FIXTURES, "ref-skill/scripts/resources/ref-echo");
+    const refSkillRoot = join(FIXTURES, "ref-skill");
+    const coerceResourceDir = join(FIXTURES, "valid-skill/scripts/resources/coerce-test");
+    const coerceSkillRoot = join(FIXTURES, "valid-skill");
+
+    test("coerces string to integer via $ref schema", async () => {
+      const result = await bandExec({
+        resourceDir: refResourceDir,
+        args: { name: "test", greeting: "hello", limit: "5" },
+        skillRoot: refSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("coerces string to boolean via $ref schema", async () => {
+      const result = await bandExec({
+        resourceDir: refResourceDir,
+        args: { name: "test", greeting: "hello", verbose: "true" },
+        skillRoot: refSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("coerces string to integer via inline type", async () => {
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: { count: "10" },
+        skillRoot: coerceSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("coerces string to number (float) via inline type", async () => {
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: { count: "1", rate: "3.14" },
+        skillRoot: coerceSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("coerces string to boolean via inline type", async () => {
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: { count: "1", verbose: "true" },
+        skillRoot: coerceSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("coerces 'false' string to boolean false", async () => {
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: { count: "1", verbose: "false" },
+        skillRoot: coerceSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("coerces multiple types simultaneously", async () => {
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: { count: "42", rate: "2.5", verbose: "true", label: "test" },
+        skillRoot: coerceSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("coerces $ref integer and $ref boolean together", async () => {
+      const result = await bandExec({
+        resourceDir: refResourceDir,
+        args: { name: "test", greeting: "hello", limit: "10", verbose: "false" },
+        skillRoot: refSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("rejects non-numeric string for integer $ref", async () => {
+      const result = await bandExec({
+        resourceDir: refResourceDir,
+        args: { name: "test", greeting: "hello", limit: "notanumber" },
+        skillRoot: refSkillRoot,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Input validation failed");
+    });
+
+    test("rejects non-numeric string for inline integer", async () => {
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: { count: "abc" },
+        skillRoot: coerceSkillRoot,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Input validation failed");
+    });
+
+    test("respects $ref integer minimum constraint after coercion", async () => {
+      // limit.json has minimum: 1
+      const result = await bandExec({
+        resourceDir: refResourceDir,
+        args: { name: "test", greeting: "hello", limit: "0" },
+        skillRoot: refSkillRoot,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Input validation failed");
+    });
+
+    test("does not coerce when input comes from --input_path", async () => {
+      // When using inputPath, data is already parsed JSON — no coercion needed
+      const { writeFileSync, mkdtempSync } = await import("fs");
+      const { tmpdir } = await import("os");
+      const tmpDir = mkdtempSync(join(tmpdir(), "band-test-"));
+      const inputFile = join(tmpDir, "input.json");
+      writeFileSync(inputFile, JSON.stringify({ count: 5 }));
+
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: {},
+        inputPath: inputFile,
+        skillRoot: coerceSkillRoot,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("string values remain strings when schema type is string", async () => {
+      const result = await bandExec({
+        resourceDir: coerceResourceDir,
+        args: { count: "1", label: "42" },
+        skillRoot: coerceSkillRoot,
+      });
+      // "42" should stay as string for the label field (type: string)
+      expect(result.success).toBe(true);
+    });
   });
 });

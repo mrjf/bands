@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "count": {
+      "type": "integer",
+      "description": "An integer count"
+    },
+    "rate": {
+      "type": "number",
+      "description": "A floating point rate"
+    },
+    "verbose": {
+      "type": "boolean",
+      "description": "Whether to be verbose"
+    },
+    "label": {
+      "type": "string",
+      "description": "A label"
+    }
+  },
+  "required": ["count"]
+}

@@ -6,6 +6,12 @@
     },
     "name": {
       "$ref": "name.json"
+    },
+    "limit": {
+      "$ref": "limit.json"
+    },
+    "verbose": {
+      "$ref": "verbose.json"
     }
   },
   "required": ["name"]

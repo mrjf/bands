@@ -168,15 +168,16 @@ async function validateAgainstSchema(
   data: unknown,
   schema: Record<string, unknown>,
   label: string,
-  skillRoot?: string
+  skillRoot?: string,
+  opts?: { coerceTypes?: boolean }
 ): Promise<string | null> {
   const Ajv = (await import("ajv")).default;
   let ajv: InstanceType<typeof Ajv>;
 
   if (skillRoot) {
-    ajv = await createValidator(skillRoot);
+    ajv = await createValidator(skillRoot, opts);
   } else {
-    ajv = new Ajv({ allErrors: true });
+    ajv = new Ajv({ allErrors: true, ...(opts?.coerceTypes && { coerceTypes: true }) });
   }
 
   const validate = ajv.compile(schema);
@@ -243,25 +244,10 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   }
 
   // Validate input against schema if present
+  // Ajv with coerceTypes handles string→integer/number/boolean coercion,
+  // including through $ref resolution (e.g. "$ref": "limit.json" → type: "integer")
   if (inputSchemaObj) {
-    const schema = inputSchemaObj;
-
-    // Coerce CLI string args to schema types (--limit=5 arrives as "5")
-    if ((schema as any).properties && !inputPath) {
-      for (const [key, prop] of Object.entries((schema as any).properties)) {
-        if (key in inputData && typeof inputData[key] === "string") {
-          const schemaProp = prop as { type?: string };
-          if (schemaProp.type === "integer" || schemaProp.type === "number") {
-            const num = Number(inputData[key]);
-            if (!isNaN(num)) inputData[key] = schemaProp.type === "integer" ? Math.floor(num) : num;
-          } else if (schemaProp.type === "boolean") {
-            inputData[key] = inputData[key] === "true";
-          }
-        }
-      }
-    }
-
-    const error = await validateAgainstSchema(inputData, schema, "Input", skillRoot);
+    const error = await validateAgainstSchema(inputData, inputSchemaObj, "Input", skillRoot, { coerceTypes: true });
     if (error) {
       return { success: false, error };
     }

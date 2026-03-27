@@ -1,14 +1,16 @@
 ---
 name: github
 description: Interact with GitHub repositories, issues, pull requests, releases, gists, labels, and CI/CD
-allowed-tools: Bash(band *)
+allowed-tools: Bash(./scripts/*)
 ---
 
 # GitHub
 
 Manage GitHub repositories, issues, pull requests, releases, gists, labels, and CI/CD.
 
-Run all scripts with `band <script-name>`, e.g. `band gist-list --limit=5`. Use `--help` on any script to see its parameters.
+**IMPORTANT: You MUST use ONLY the scripts provided below for ALL GitHub operations. Do NOT use `gh`, `curl`, the GitHub API directly, `git` commands that hit the GitHub API, or any other CLI or library. Every GitHub interaction must go through `./scripts/<script-name>`. If a script doesn't exist for what you need, say so — do not work around it.**
+
+Run scripts with `./scripts/<script-name>`, e.g. `./scripts/gist-list --limit=5`. Use `--help` on any script to see its parameters.
 
 ## Available scripts
 

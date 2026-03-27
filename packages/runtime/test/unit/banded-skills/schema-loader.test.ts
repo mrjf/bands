@@ -79,9 +79,9 @@ describe("loadSchemas", () => {
 describe("loadSchemaDefs", () => {
   test("loads all defs from schemas/defs/", () => {
     const defs = loadSchemaDefs(REF_SKILL);
-    expect(defs.length).toBe(3); // greeting.json, name.json, echo-result.json
+    expect(defs.length).toBe(5); // echo-result.json, greeting.json, limit.json, name.json, verbose.json
     const ids = defs.map((d) => (d as any).$id).sort();
-    expect(ids).toEqual(["echo-result.json", "greeting.json", "name.json"]);
+    expect(ids).toEqual(["echo-result.json", "greeting.json", "limit.json", "name.json", "verbose.json"]);
   });
 
   test("returns empty array when no defs dir exists", () => {

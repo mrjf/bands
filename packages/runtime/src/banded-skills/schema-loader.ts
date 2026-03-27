@@ -78,18 +78,20 @@ export function loadBandConfigSchema(
 
 // Cache validators per skill root to avoid re-creating Ajv instances
 const validatorCache = new Map<string, Ajv>();
+const coercingValidatorCache = new Map<string, Ajv>();
 
 /**
  * Create an Ajv validator instance pre-loaded with all defs for a skill.
  * Cached per skillRoot.
  */
-export async function createValidator(skillRoot: string): Promise<Ajv> {
-  const cached = validatorCache.get(skillRoot);
+export async function createValidator(skillRoot: string, opts?: { coerceTypes?: boolean }): Promise<Ajv> {
+  const cache = opts?.coerceTypes ? coercingValidatorCache : validatorCache;
+  const cached = cache.get(skillRoot);
   if (cached) return cached;
 
   const AjvModule = await import("ajv");
   const Ajv = AjvModule.default;
-  const ajv = new Ajv({ allErrors: true });
+  const ajv = new Ajv({ allErrors: true, ...(opts?.coerceTypes && { coerceTypes: true }) });
 
   // Pre-load all defs so $ref works
   const defs = loadSchemaDefs(skillRoot);
@@ -97,7 +99,7 @@ export async function createValidator(skillRoot: string): Promise<Ajv> {
     ajv.addSchema(def);
   }
 
-  validatorCache.set(skillRoot, ajv);
+  cache.set(skillRoot, ajv);
   return ajv;
 }
 
@@ -106,4 +108,5 @@ export async function createValidator(skillRoot: string): Promise<Ajv> {
  */
 export function clearValidatorCache(): void {
   validatorCache.clear();
+  coercingValidatorCache.clear();
 }

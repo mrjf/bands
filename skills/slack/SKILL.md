@@ -1,14 +1,16 @@
 ---
 name: slack
 description: Send messages, manage channels, reactions, and files in Slack with declarative channel-level permissions
-allowed-tools: Bash(band *)
+allowed-tools: Bash(./scripts/*)
 ---
 
 # Slack
 
 Send messages, manage channels, reactions, and files in Slack. All operations respect declarative channel-level and feature-level permissions defined in `slack-permissions.yaml`.
 
-Run all scripts with `band <script-name>`, e.g. `band channel-list --limit=5`. Use `--help` on any script to see its parameters.
+**IMPORTANT: You MUST use ONLY the scripts provided below for ALL Slack operations. Do NOT use `curl`, the Slack API directly, any Slack CLI, SDK, or any other tool. Every Slack interaction must go through `./scripts/<script-name>`. If a script doesn't exist for what you need, say so — do not work around it.**
+
+Run scripts with `./scripts/<script-name>`, e.g. `./scripts/channel-list --limit=5`. Use `--help` on any script to see its parameters.
 
 ## Permissions
 
