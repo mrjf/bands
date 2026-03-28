@@ -117,12 +117,12 @@ describe("Lima user separation", () => {
   );
 
   test(
-    "sandbox cannot read /etc/passwd",
+    "sandbox cannot read /etc/shadow (sensitive, root-only)",
     async () => {
       if (skip()) return;
       const result = await runScript(
         `#!/bin/bash
-        if cat /etc/passwd >/dev/null 2>&1; then
+        if cat /etc/shadow >/dev/null 2>&1; then
           echo '{"can_read": true}' > "$OUTPUT_PATH"
         else
           echo '{"can_read": false}' > "$OUTPUT_PATH"
@@ -522,12 +522,14 @@ describe("Lima iptables firewall", () => {
         ["example.com"]
       );
 
-      // Check no BAND- chains remain
+      // Check no per-execution BAND- chains remain (BAND-DEFAULT is permanent)
       const chains = execSync(
         `limactl shell ${VM_NAME} -- sudo iptables -L -n 2>&1`,
         { encoding: "utf-8" }
       );
-      expect(chains).not.toContain("BAND-");
+      // Per-execution chains are named BAND-<8chars>, not BAND-DEFAULT
+      const perExecChains = chains.match(/BAND-[a-z0-9]{6,}/g) || [];
+      expect(perExecChains.length).toBe(0);
     },
     TIMEOUT
   );

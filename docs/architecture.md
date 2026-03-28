@@ -90,27 +90,16 @@ Key responsibilities:
 - Deploy servers to targets (Lima, Cloudflare)
 - Handle timeouts and metrics
 
-### @bands/server
+### Band Server (band-server.ts)
 
-HTTP server that enforces band permissions. Same code deploys to:
-- Lima VM (as Bun server)
-- Cloudflare Workers (as Worker)
-
-```
-packages/server/
-├── src/
-│   ├── server.ts      # Hono HTTP app
-│   ├── enforcement.ts # Permission checking
-│   ├── insist.ts      # Insist tracking
-│   └── types.ts       # Request/response types
-└── test/
-```
+Execution server deployed inside the Lima VM. Single file: `packages/runtime/src/band-server.ts`.
 
 Key responsibilities:
-- Receive band config + payload via HTTP
-- Check firewall permissions (allow/deny)
-- Track operations for insist verification
-- Return structured results with metrics
+- Receive script + input + secrets + allow rules via `POST /exec`
+- Set up per-execution iptables firewall (kernel-level network enforcement)
+- Run script inside bubblewrap sandbox (mount namespace isolation)
+- Clean up firewall and workdir after execution
+- Single-use mutex: rejects concurrent requests
 
 ## Execution Flow
 
@@ -154,32 +143,13 @@ const response = await fetch(`${serverUrl}/execute`, {
 
 ### 4. Server Enforcement
 
-```typescript
-// Inside @bands/server
-
-// Check firewall permissions
-if (isFirewallTest(payload)) {
-  const allowed = checkPermission(payload.testCli, band.allow?.cli, band.deny?.cli);
-  if (!allowed) {
-    return { success: false, error: { code: "PERMISSION_DENIED" } };
-  }
-}
-
-// Track operations for insist
-if (isOperationPayload(payload)) {
-  for (const cmd of payload.runCli) {
-    tracker.cli.push(cmd);
-    if (!checkPermission(cmd, band.allow?.cli, band.deny?.cli)) {
-      return { success: false, error: { code: "PERMISSION_DENIED" } };
-    }
-  }
-
-  // Verify insist requirements
-  const insistCheck = checkInsistSatisfied(band, tracker);
-  if (!insistCheck.satisfied) {
-    return { success: false, error: { code: "INSIST_NOT_SATISFIED" } };
-  }
-}
+```
+POST /exec
+  → Server sets up iptables chain for allowNet hosts
+  → Server creates bwrap sandbox with allowRead/allowWrite bind mounts
+  → Script runs as band-runner (unprivileged) inside sandbox
+  → Server captures output, tears down firewall, cleans up
+  → Returns { success, data, metrics }
 ```
 
 ## Test Payload Protocol

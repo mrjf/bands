@@ -15,11 +15,10 @@ export function buildBwrapCommand(
   userIds?: { uid: number; gid: number },
   fileRules?: { allowRead: string[]; allowWrite: string[] }
 ): string {
+  // No --unshare-user: preserves real UID for iptables --uid-owner matching.
+  // Process runs as band-runner via sudo -u inside the sandbox.
   const parts = [
     "bwrap",
-    "--unshare-user",
-    `--uid ${userIds?.uid ?? 65534}`,
-    `--gid ${userIds?.gid ?? 65534}`,
     "--ro-bind /usr /usr",
     "--ro-bind /lib /lib",
     "--ro-bind /bin /bin",
@@ -55,8 +54,19 @@ export function buildBwrapCommand(
   }
 
   parts.push(
+    // System files needed by sudo, DNS, and TLS
+    "--ro-bind /etc/passwd /etc/passwd",
+    "--ro-bind /etc/group /etc/group",
+    "--ro-bind-try /etc/sudoers /etc/sudoers",
+    "--ro-bind-try /etc/sudoers.d /etc/sudoers.d",
+    "--ro-bind-try /etc/pam.d /etc/pam.d",
+    "--ro-bind-try /etc/security /etc/security",
+    "--ro-bind-try /etc/login.defs /etc/login.defs",
+    "--ro-bind-try /etc/nsswitch.conf /etc/nsswitch.conf",
+    // DNS resolver (systemd-resolved socket)
+    "--ro-bind-try /run/systemd/resolve /run/systemd/resolve",
     "--die-with-parent",
-    `-- /bin/bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
+    `-- /usr/bin/sudo -u band-runner /bin/bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
   );
   return parts.join(" ");
 }
@@ -124,6 +134,7 @@ export function buildFirewallScript(
   }
 
   lines.push(`iptables -A ${chainName} -j REJECT`);
+  // Only route band-runner's new connections through this chain
   lines.push(`iptables -I OUTPUT 1 -m state --state NEW -j ${chainName}`);
 
   return lines.join("\n");

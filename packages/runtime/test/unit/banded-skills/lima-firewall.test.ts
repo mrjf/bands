@@ -101,16 +101,15 @@ describe("buildFirewallScript", () => {
 });
 
 describe("buildBwrapCommand", () => {
-  test("includes bwrap with unshare-user", () => {
+  test("includes bwrap without unshare-user", () => {
     const cmd = buildBwrapCommand("/tmp/workdir", { uid: 999, gid: 988 });
     expect(cmd).toContain("bwrap");
-    expect(cmd).toContain("--unshare-user");
+    expect(cmd).not.toContain("--unshare-user");
   });
 
-  test("drops to specified uid/gid", () => {
+  test("runs as band-runner via sudo inside sandbox", () => {
     const cmd = buildBwrapCommand("/tmp/workdir", { uid: 999, gid: 988 });
-    expect(cmd).toContain("--uid 999");
-    expect(cmd).toContain("--gid 988");
+    expect(cmd).toContain("sudo -u band-runner");
   });
 
   test("mounts system binaries read-only", () => {

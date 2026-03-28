@@ -95,14 +95,15 @@ function setupFirewall(
   }
 
   cmds.push(`iptables -A ${chainName} -j REJECT`);
-  cmds.push(`iptables -I OUTPUT 1 -m state --state NEW -j ${chainName}`);
+  // Only route band-runner's new connections through this chain
+  cmds.push(`iptables -I OUTPUT 1 -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName}`);
 
   shell(cmds.join("\n"));
 }
 
 function teardownFirewall(chainName: string): void {
   shellIgnoreError(
-    `iptables -D OUTPUT -m state --state NEW -j ${chainName} 2>/dev/null; ` +
+    `iptables -D OUTPUT -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
       `iptables -F ${chainName} 2>/dev/null; ` +
       `iptables -X ${chainName} 2>/dev/null`
   );
@@ -115,29 +116,32 @@ function buildBwrapArgs(
   allowRead: string[],
   allowWrite: string[]
 ): string[] {
+  // Don't use --unshare-user: it remaps UIDs in a new namespace, which
+  // breaks iptables --uid-owner matching. Instead, bwrap runs as root
+  // (via sudo) with only mount namespace isolation. The process inside
+  // runs as band-runner via sudo -u in the command.
   const args = [
     "bwrap",
-    "--unshare-user",
-    "--uid", String(bandRunnerIds.uid),
-    "--gid", String(bandRunnerIds.gid),
+    // System: read-only
     "--ro-bind", "/usr", "/usr",
     "--ro-bind", "/lib", "/lib",
     "--ro-bind", "/bin", "/bin",
     "--ro-bind", "/sbin", "/sbin",
     "--symlink", "usr/lib64", "/lib64",
-    "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
-    "--ro-bind-try", "/etc/ssl", "/etc/ssl",
-    "--ro-bind-try", "/etc/ca-certificates", "/etc/ca-certificates",
-    "--ro-bind-try", "/etc/alternatives", "/etc/alternatives",
+    "--ro-bind", "/etc", "/etc",
+    // Runtime state (DNS resolver sockets, sudo, dbus)
+    "--bind-try", "/run", "/run",
     "--proc", "/proc",
     "--dev", "/dev",
+    // Isolated /tmp and /home
     "--tmpfs", "/tmp",
     "--tmpfs", "/home",
+    // Workdir (only writable persistent mount)
     "--bind", workdir, workdir,
     "--die-with-parent",
   ];
 
-  // File access mounts
+  // File access mounts from allow.read / allow.write
   const mounted = new Set<string>();
   for (const pattern of allowRead) {
     const dir = extractMountDir(pattern);
@@ -154,7 +158,9 @@ function buildBwrapArgs(
     }
   }
 
-  args.push("--", "/bin/bash", "-c",
+  // Run as band-runner via sudo inside the sandbox.
+  // This preserves the real UID for iptables --uid-owner matching.
+  args.push("--", "/usr/bin/sudo", "-u", BAND_RUNNER_USER, "/bin/bash", "-c",
     `source ${workdir}/env.sh && bash ${workdir}/run.sh`
   );
   return args;
@@ -232,6 +238,9 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       envLines.push(`export ${key}=$(echo '${b64}' | base64 -d)`);
     }
     writeFile(`${workdir}/env.sh`, envLines.join("\n") + "\n");
+
+    // Make workdir readable/writable by band-runner
+    shell(`chown -R ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${workdir}`);
 
     // Set up iptables firewall
     if (req.allowNet && req.allowNet.length > 0) {

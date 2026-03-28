@@ -25,9 +25,6 @@ jobs:
       - name: Editor package tests
         run: bun test --cwd packages/editor
 
-      - name: Server package tests
-        run: bun test --cwd packages/server
-
       - name: Runtime unit tests
         run: bun test test/unit/ test/executors/
         working-directory: packages/runtime

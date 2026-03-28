@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@bands/format": "workspace:*",
-    "@bands/server": "workspace:*",
     "hono": "^4.0.0",
     "ajv": "^8.12.0"
   },

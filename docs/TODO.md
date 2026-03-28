@@ -39,17 +39,14 @@ See also: `SECURITY.md` for the current threat model.
 
 ## Stubs (parsed but not enforced)
 
-### 6. Server path stubs (getAllowedEnv, executeCode)
-- **Status: NEEDS DECISION**
-- `getAllowedEnv()` returns `{}` — `packages/server/src/sandbox.ts`
-- `executeCode()` returns `{ executed: true }` — `packages/server/src/sandbox.ts`
-- The script-based path (`lima-exec.ts`) is the primary execution mode and handles secrets correctly.
-- **Decision needed:** Is the HTTP server path still the plan, or dead code to remove?
+### 6. Server path stubs
+- **Status: REMOVED**
+- `packages/server/` was dead code superseded by `band-server.ts` (runs in VM).
+- Removed entirely.
 
 ### 7. Cost limit enforcement
 - **Status: NEEDS DECISION**
 - `limit.maxCostDollars` parsed but never checked.
-- `packages/server/src/app.ts`
 - **Decision needed:** What does "cost" mean? Per-execution metering? Aggregate budget? API call counting?
 
 ### 8. Cloudflare executor implementation
