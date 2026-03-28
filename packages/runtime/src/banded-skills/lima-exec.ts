@@ -109,12 +109,13 @@ export async function limaExec(
     }
     writeFileSync(join(stagingDir, "env.sh"), envLines.join("\n") + "\n");
 
-    // Create workdir in VM owned by band-runner with strict permissions
-    // Files are only readable by band-runner — not by other users or processes
+    // Create workdir in VM. Filesystem isolation is handled by bwrap's mount
+    // namespace — only the sandboxed process can see this directory. The workdir
+    // uses 755 because bwrap --unshare-user maps UIDs, so strict ownership
+    // would lock out the sandbox process itself.
     try {
       limaShell(vmName, `sudo mkdir -p ${vmWorkdir}`);
-      limaShell(vmName, `sudo chown ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${vmWorkdir}`);
-      limaShell(vmName, `sudo chmod 700 ${vmWorkdir}`);
+      limaShell(vmName, `sudo chmod 755 ${vmWorkdir}`);
 
       // Copy files to a temp location first (limactl copy runs as host user),
       // then move into the restricted workdir
@@ -128,10 +129,9 @@ export async function limaExec(
         execSync(`limactl copy ${join(stagingDir, "config.json")} ${vmName}:${vmStagingDir}/config.json`, { stdio: "pipe" });
       }
 
-      // Move files into restricted workdir and set ownership
+      // Move files into workdir. bwrap namespace isolation means only the
+      // sandboxed process can see this directory.
       limaShell(vmName, `sudo mv ${vmStagingDir}/* ${vmWorkdir}/`);
-      limaShell(vmName, `sudo chown -R ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${vmWorkdir}`);
-      limaShell(vmName, `sudo chmod 600 ${vmWorkdir}/env.sh`); // secrets file extra-restricted
       limaShell(vmName, `rm -rf ${vmStagingDir}`);
     } catch (e) {
       return {
@@ -159,12 +159,18 @@ export async function limaExec(
       }
     }
 
-    // Run the script as band-runner (unprivileged user)
+    // Run the script inside a bubblewrap sandbox.
+    // bwrap runs as root (needs privileges for namespace setup),
+    // then drops to band-runner inside the sandbox via --uid/--gid.
+    // The sandbox mounts: system binaries (ro), /proc, /dev, the workdir (rw).
+    // Everything else (home dirs, /etc, other /tmp) is invisible.
+    const bandRunnerIds = getBandRunnerIds(vmName);
+    const bwrapCmd = buildBwrapCommand(vmWorkdir, bandRunnerIds);
     let stdout: string;
     let stderr: string;
     try {
       const result = execSync(
-        `limactl shell ${vmName} -- sudo -u ${BAND_RUNNER_USER} bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
+        `limactl shell ${vmName} -- sudo ${bwrapCmd}`,
         { stdio: "pipe", timeout: 60000 }
       );
       stdout = result.toString();
@@ -323,6 +329,85 @@ function ensureBandRunnerUser(vmName: string): void {
 /** Reset the cached flag (for testing). */
 export function resetBandRunnerCache(): void {
   bandRunnerCreated = false;
+}
+
+// ── Filesystem sandbox ────────────────────────────────────────────────
+
+/**
+ * Build a bubblewrap (bwrap) command that runs the script inside a
+ * mount namespace with only system binaries and the workdir visible.
+ *
+ * bwrap runs as root (needs privileges for namespace setup), then
+ * drops to band-runner inside the sandbox via --uid/--gid/--unshare-user.
+ *
+ * What's mounted:
+ * - /usr, /lib, /bin, /sbin (read-only) — system binaries
+ * - /lib64 → symlink to usr/lib64
+ * - /etc/resolv.conf, /etc/ssl, /etc/alternatives (read-only) — DNS + TLS
+ * - /proc, /dev — process info and devices
+ * - /tmp, /home — fresh tmpfs (empty, isolated)
+ * - workdir (read-write) — the only writable persistent location
+ *
+ * What's NOT visible:
+ * - Other users' home directories
+ * - Host /tmp contents
+ * - /etc/passwd, /etc/shadow, other host config
+ * - Any files outside the explicit mounts
+ */
+export function buildBwrapCommand(
+  vmWorkdir: string,
+  userIds?: { uid: number; gid: number }
+): string {
+  const parts = [
+    "bwrap",
+    // Drop to unprivileged user inside the sandbox
+    "--unshare-user",
+    `--uid ${userIds?.uid ?? 65534}`,
+    `--gid ${userIds?.gid ?? 65534}`,
+    // System binaries (read-only)
+    "--ro-bind /usr /usr",
+    "--ro-bind /lib /lib",
+    "--ro-bind /bin /bin",
+    "--ro-bind /sbin /sbin",
+    "--symlink usr/lib64 /lib64",
+    // DNS resolution and TLS certificates
+    "--ro-bind /etc/resolv.conf /etc/resolv.conf",
+    "--ro-bind-try /etc/ssl /etc/ssl",
+    "--ro-bind-try /etc/ca-certificates /etc/ca-certificates",
+    "--ro-bind-try /etc/alternatives /etc/alternatives",
+    // Process and device access
+    "--proc /proc",
+    "--dev /dev",
+    // Isolated tmp and home (fresh tmpfs, not host's)
+    "--tmpfs /tmp",
+    "--tmpfs /home",
+    // The workdir is the only writable persistent mount
+    `--bind ${vmWorkdir} ${vmWorkdir}`,
+    // Die when parent exits (prevent orphans)
+    "--die-with-parent",
+    // Run the script
+    `-- /bin/bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
+  ];
+  return parts.join(" ");
+}
+
+/**
+ * Get the UID/GID of the band-runner user in the VM.
+ * Cached per process.
+ */
+let cachedIds: { uid: number; gid: number } | null = null;
+
+function getBandRunnerIds(vmName: string): { uid: number; gid: number } {
+  if (cachedIds) return cachedIds;
+  const output = limaShell(vmName, `id -u ${BAND_RUNNER_USER} && id -g ${BAND_RUNNER_USER}`);
+  const [uid, gid] = output.trim().split("\n").map(Number);
+  cachedIds = { uid, gid };
+  return cachedIds;
+}
+
+/** Reset cached IDs (for testing). */
+export function resetBandRunnerIdCache(): void {
+  cachedIds = null;
 }
 
 // ── Firewall ──────────────────────────────────────────────────────────

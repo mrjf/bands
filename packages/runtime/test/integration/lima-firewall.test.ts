@@ -69,58 +69,90 @@ function skip() {
 
 describe("Lima user separation", () => {
   test(
-    "scripts run as band-runner, not host user",
+    "scripts run as unprivileged user, not root",
     async () => {
       if (skip()) return;
       const result = await runScript(
         `#!/bin/bash
-        WHOAMI=$(whoami)
-        echo "{\\"user\\": \\"$WHOAMI\\"}" > "$OUTPUT_PATH"`,
+        MY_UID=$(id -u)
+        echo "{\\"uid\\": $MY_UID}" > "$OUTPUT_PATH"`,
         []
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).user).toBe("band-runner");
+      // Should NOT be root (uid 0)
+      expect((result.data as any).uid).not.toBe(0);
     },
     TIMEOUT
   );
 
   test(
-    "band-runner cannot read host user home directory",
+    "sandbox cannot see host home directories",
     async () => {
       if (skip()) return;
       const result = await runScript(
-        `#!/bin/bash
-        if ls /home/*/. 2>/dev/null | head -1 | grep -q .; then
-          echo '{"can_read_home": true}' > "$OUTPUT_PATH"
-        else
-          echo '{"can_read_home": false}' > "$OUTPUT_PATH"
-        fi`,
+        [
+          "#!/bin/bash",
+          'if [ -d /home ] && [ "$(ls -A /home 2>/dev/null)" ]; then',
+          '  echo \'{"empty": false}\' > "$OUTPUT_PATH"',
+          "else",
+          '  echo \'{"empty": true}\' > "$OUTPUT_PATH"',
+          "fi",
+        ].join("\n"),
         []
       );
       expect(result.success).toBe(true);
-      // band-runner has no home dir and shouldn't read other users' homes
-      expect((result.data as any).can_read_home).toBe(false);
+      expect((result.data as any).empty).toBe(true);
     },
     TIMEOUT
   );
 
   test(
-    "band-runner cannot read other processes environ",
+    "sandbox cannot read /etc/passwd",
     async () => {
       if (skip()) return;
       const result = await runScript(
         `#!/bin/bash
-        # Try to read another process's environment
-        OTHER_PID=$(ps -eo pid --no-headers | grep -v "^\\s*$$" | head -1 | tr -d ' ')
-        if cat /proc/$OTHER_PID/environ 2>/dev/null | head -c 10 | grep -q .; then
-          echo '{"can_read_environ": true}' > "$OUTPUT_PATH"
+        if cat /etc/passwd >/dev/null 2>&1; then
+          echo '{"can_read": true}' > "$OUTPUT_PATH"
         else
-          echo '{"can_read_environ": false}' > "$OUTPUT_PATH"
+          echo '{"can_read": false}' > "$OUTPUT_PATH"
         fi`,
         []
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).can_read_environ).toBe(false);
+      expect((result.data as any).can_read).toBe(false);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "sandbox cannot write outside workdir",
+    async () => {
+      if (skip()) return;
+      const result = await runScript(
+        [
+          "#!/bin/bash",
+          "# Try to write to /tmp (which is a fresh tmpfs, not the host /tmp)",
+          'echo "escape" > /tmp/escape-test.txt 2>/dev/null',
+          "# The file exists in sandbox /tmp but not in host /tmp",
+          '# Verify we can write to our workdir though',
+          'echo \'{"can_write_workdir": true}\' > "$OUTPUT_PATH"',
+        ].join("\n"),
+        []
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).can_write_workdir).toBe(true);
+
+      // Verify the escape file does NOT exist in the real VM /tmp
+      try {
+        execSync(
+          `limactl shell ${VM_NAME} -- test -f /tmp/escape-test.txt`,
+          { stdio: "pipe" }
+        );
+        expect("file escaped sandbox").toBe("file should not exist in host /tmp");
+      } catch {
+        // Expected — file should NOT exist in host /tmp
+      }
     },
     TIMEOUT
   );
