@@ -16,31 +16,31 @@ Run scripts with `./scripts/<script-name>`, e.g. `./scripts/gist-list --limit=5`
 
 ### Issues
 - **`issue-list`** — List issues. Input: `repo`, `state`, `labels`, `assignee`, `limit`
-- **`issue-create`** — Create an issue. Input: `repo`, `title`, `body`, `labels`, `assignees`
+- **`issue-create`** — Create an issue. Input: `repo`, `title`, `body`, `labels`, `assignees`, `milestone`
 - **`issue-view`** — View issue details. Input: `repo`, `number`, `comments`
 - **`issue-comment`** — Comment on an issue. Input: `repo`, `number`, `body`
-- **`issue-edit`** — Edit an issue. Input: `repo`, `number`, `title`, `body`, `labels`, `assignees`, `milestone`
+- **`issue-edit`** — Edit an issue. Input: `repo`, `number`, `title`, `body`, `milestone`, `add_labels`, `remove_labels`, `add_assignees`, `remove_assignees`
 - **`issue-close`** — Close an issue. Input: `repo`, `number`, `reason`, `comment`
-- **`issue-reopen`** — Reopen an issue. Input: `repo`, `number`
+- **`issue-reopen`** — Reopen an issue. Input: `repo`, `number`, `comment`
 
 ### Pull Requests
 - **`pr-list`** — List PRs. Input: `repo`, `state`, `base`, `head`, `label`, `limit`
-- **`pr-create`** — Create a PR. Input: `repo`, `title`, `body`, `base`, `head`, `draft`
-- **`pr-view`** — View PR details. Input: `repo`, `number`
-- **`pr-diff`** — View PR diff. Input: `repo`, `number`, `name_only`
-- **`pr-checks`** — View CI checks. Input: `repo`, `number`
+- **`pr-create`** — Create a PR. Input: `repo`, `title`, `body`, `base`, `head`, `draft`, `labels`, `reviewers`
+- **`pr-view`** — View PR details. Input: `repo`, `number`, `comments`
+- **`pr-diff`** — View PR diff. Input: `repo`, `number`, `name_only`, `patch`
+- **`pr-checks`** — View CI checks. Input: `repo`, `number`, `required`
 - **`pr-review`** — Review a PR. Input: `repo`, `number`, `event`, `body`
 - **`pr-merge`** — Merge a PR. Input: `repo`, `number`, `method`, `delete_branch`
-- **`pr-close`** — Close a PR. Input: `repo`, `number`
+- **`pr-close`** — Close a PR. Input: `repo`, `number`, `comment`, `delete_branch`
 
 ### Releases
-- **`release-create`** — Create a release. Input: `repo`, `tag`, `title`, `notes`, `draft`, `prerelease`
+- **`release-create`** — Create a release. Input: `repo`, `tag`, `title`, `notes`, `draft`, `prerelease`, `target`, `generate_notes`
 - **`release-list`** — List releases. Input: `repo`, `limit`
 - **`release-view`** — View release details. Input: `repo`, `tag`
 - **`release-delete`** — Delete a release. Input: `repo`, `tag`, `cleanup_tag`
 
 ### Labels
-- **`label-list`** — List labels. Input: `repo`
+- **`label-list`** — List labels. Input: `repo`, `limit`
 - **`label-create`** — Create a label. Input: `repo`, `name`, `color`, `description`
 - **`label-delete`** — Delete a label. Input: `repo`, `name`
 
@@ -52,7 +52,7 @@ Run scripts with `./scripts/<script-name>`, e.g. `./scripts/gist-list --limit=5`
 
 ### Repository & CI
 - **`repo-view`** — View repo metadata. Input: `repo`
-- **`run-list`** — List workflow runs. Input: `repo`, `limit`, `workflow`, `status`
+- **`run-list`** — List workflow runs. Input: `repo`, `limit`, `workflow`, `status`, `branch`
 - **`run-view`** — View a workflow run. Input: `repo`, `run_id`
 - **`search`** — Search GitHub. Input: `query`, `type`, `repo`, `limit`
-- **`api`** — Raw API call. Input: `endpoint`, `method`, `body`
+- **`api`** — Raw API call. Input: `endpoint`, `method`, `body`, `headers`

@@ -6,7 +6,7 @@ allowed-tools: Bash(./scripts/*)
 
 # Slack
 
-Send messages, manage channels, reactions, and files in Slack. All operations respect declarative channel-level and feature-level permissions defined in `slack-permissions.yaml`.
+Send messages, manage channels, reactions, and files in Slack. All operations respect declarative channel-level and feature-level permissions defined in the `slack` section of `BAND.md`.
 
 **IMPORTANT: You MUST use ONLY the scripts provided below for ALL Slack operations. Do NOT use `curl`, the Slack API directly, any Slack CLI, SDK, or any other tool. Every Slack interaction must go through `./scripts/<script-name>`. If a script doesn't exist for what you need, say so — do not work around it.**
 
@@ -14,15 +14,15 @@ Run scripts with `./scripts/<script-name>`, e.g. `./scripts/channel-list --limit
 
 ## Permissions
 
-Scripts enforce restrictions from `slack-permissions.yaml` at the skill root before making any API call. This provides application-level authorization on top of Slack API scopes:
+Scripts enforce restrictions from the `slack` config section in `BAND.md` before making any API call. This provides application-level authorization on top of Slack API scopes:
 
-- **channels.allow** — If set, ONLY these channels work. Empty means all allowed.
+- **channels.allow** — If set, ONLY these channels work. Empty means none allowed.
 - **channels.deny** — Always blocked. Deny takes precedence over allow.
 - **dm** — Direct messages (default: disabled).
-- **threads** — Thread replies (default: enabled).
-- **reactions** — Adding/removing reactions (default: enabled).
+- **threads** — Thread replies (default: disabled).
+- **reactions** — Adding/removing reactions (default: disabled).
 - **files** — File uploads (default: disabled).
-- **search** — Message search (default: enabled).
+- **search** — Message search (default: disabled).
 
 ## Available scripts
 
