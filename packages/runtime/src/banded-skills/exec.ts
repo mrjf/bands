@@ -257,6 +257,8 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   let executionTarget = "local-dangerously";
   let envSecrets: Record<string, string> = {};
   let bandConfig: Record<string, unknown> | undefined;
+  let allowNet: string[] = [];
+  let denyNet: string[] = [];
   if (skillRoot) {
     const discovery = discoverBandForScript(skillRoot, scriptName);
     if (discovery?.band?.execution?.target) {
@@ -264,6 +266,12 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     }
     if (discovery?.band?.bandConfig) {
       bandConfig = discovery.band.bandConfig;
+    }
+    if (discovery?.band?.allow?.net) {
+      allowNet = discovery.band.allow.net;
+    }
+    if (discovery?.band?.deny?.net) {
+      denyNet = discovery.band.deny.net;
     }
     // Check required secrets are present
     const requiredSecrets = discovery?.band?.requires?.secrets || [];
@@ -329,7 +337,8 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       executionTarget,
       envSecrets,
       skillRoot,
-      configPath
+      configPath,
+      { allowNet, denyNet }
     );
 
     if (!result.success) {
@@ -403,12 +412,13 @@ async function executeScript(
   executionTarget: string,
   envSecrets: Record<string, string> = {},
   skillRoot?: string,
-  configPath?: string
+  configPath?: string,
+  networkRules?: { allowNet: string[]; denyNet: string[] }
 ): Promise<BandExecResult> {
   if (executionTarget === "local-lima") {
     // Delegate to lima-exec
     const { limaExec } = await import("./lima-exec");
-    return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot, configPath);
+    return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot, configPath, networkRules);
   }
 
   // Default: local-dangerously — run directly

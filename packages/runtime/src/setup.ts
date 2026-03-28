@@ -374,7 +374,7 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
 
   if (!bunInstalled) {
     log("      ", "Installing prerequisites...");
-    limaShell("sudo apt-get update -qq && sudo apt-get install -y -qq unzip curl");
+    limaShell("sudo apt-get update -qq && sudo apt-get install -y -qq unzip curl iptables");
     log("      ", "Installing bun...");
     limaShell("curl -fsSL https://bun.sh/install | bash");
   }

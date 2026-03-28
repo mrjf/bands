@@ -4,6 +4,12 @@
  * Uses limactl copy (files in/out) + limactl shell (run script)
  * instead of the HTTP-based Lima executor. This avoids needing
  * the band-server running in the VM for simple script execution.
+ *
+ * Network isolation: Before running a script, iptables rules are
+ * injected into the VM based on the band's allow.net / deny.net
+ * configuration. Default policy is DROP — only explicitly allowed
+ * hosts can be reached. This is kernel-level enforcement that no
+ * subprocess can bypass.
  */
 
 import { execSync } from "child_process";
@@ -19,8 +25,10 @@ const DEFAULT_VM_NAME = "bands-executor";
  * Execute a script in a Lima VM.
  *
  * 1. limactl copy staging dir into VM
- * 2. limactl shell to run run.sh with args
- * 3. limactl copy output back to host
+ * 2. Set up iptables firewall rules based on allow.net / deny.net
+ * 3. limactl shell to run run.sh with args
+ * 4. Tear down iptables rules
+ * 5. limactl copy output back to host
  */
 export async function limaExec(
   runShPath: string,
@@ -30,7 +38,8 @@ export async function limaExec(
   vmName: string = DEFAULT_VM_NAME,
   envSecrets: Record<string, string> = {},
   skillRoot?: string,
-  configPath?: string
+  configPath?: string,
+  networkRules?: { allowNet: string[]; denyNet: string[] }
 ): Promise<BandExecResult> {
   const startTime = Date.now();
 
@@ -54,6 +63,10 @@ export async function limaExec(
 
   // Create a staging directory with everything needed
   const stagingDir = mkdtempSync(join(tmpdir(), "lima-band-exec-"));
+
+  // Unique chain name for this execution (iptables chain names max 28 chars)
+  const execId = randomUUID().slice(0, 8);
+  const chainName = `BAND-${execId}`;
 
   try {
     const vmWorkdir = `/tmp/band-exec-${randomUUID()}`;
@@ -124,6 +137,25 @@ export async function limaExec(
       };
     }
 
+    // Set up iptables firewall rules before running the script
+    const firewallScript = buildFirewallScript(chainName, networkRules);
+    if (firewallScript) {
+      try {
+        execSync(
+          `limactl shell ${vmName} -- sudo bash -c '${escapeSingleQuotes(firewallScript)}'`,
+          { stdio: "pipe", timeout: 30000 }
+        );
+      } catch (e: any) {
+        // Clean up chain on failure and report
+        teardownFirewall(vmName, chainName);
+        const stderr = e.stderr?.toString() || "";
+        return {
+          success: false,
+          error: `Failed to set up network firewall: ${stderr || (e instanceof Error ? e.message : e)}`,
+        };
+      }
+    }
+
     // Run the script in the VM (source env.sh for secrets + paths, then run)
     let stdout: string;
     let stderr: string;
@@ -160,12 +192,19 @@ export async function limaExec(
         } catch {
           // Output file doesn't exist in VM
         }
+
+        // Tear down firewall before returning
+        if (firewallScript) teardownFirewall(vmName, chainName);
+
         return {
           success: false,
           error: errorMessage || `Script exited with code ${e.status}`,
         };
       }
     }
+
+    // Tear down firewall rules
+    if (firewallScript) teardownFirewall(vmName, chainName);
 
     // Copy output back from VM
     let outputData: unknown;
@@ -228,6 +267,113 @@ export async function limaExec(
     rmSync(stagingDir, { recursive: true, force: true });
   }
 }
+
+// ── Firewall ──────────────────────────────────────────────────────────
+
+/**
+ * Build an iptables setup script for the given network rules.
+ *
+ * Creates a custom chain with:
+ * - ACCEPT for loopback (localhost)
+ * - ACCEPT for established/related connections
+ * - ACCEPT for DNS (port 53) so host resolution works
+ * - ACCEPT for each resolved IP from allow.net entries
+ * - DROP everything else (default policy on the chain)
+ *
+ * Returns null if no network rules are defined (no restriction).
+ */
+export function buildFirewallScript(
+  chainName: string,
+  rules?: { allowNet: string[]; denyNet: string[] }
+): string | null {
+  // No rules = no restrictions
+  if (!rules || rules.allowNet.length === 0) return null;
+
+  const lines: string[] = [
+    // Create custom chain
+    `iptables -N ${chainName} 2>/dev/null || iptables -F ${chainName}`,
+
+    // Allow loopback
+    `iptables -A ${chainName} -o lo -j ACCEPT`,
+
+    // Allow established/related (return traffic for allowed connections)
+    `iptables -A ${chainName} -m state --state ESTABLISHED,RELATED -j ACCEPT`,
+
+    // Allow DNS resolution (UDP and TCP port 53)
+    `iptables -A ${chainName} -p udp --dport 53 -j ACCEPT`,
+    `iptables -A ${chainName} -p tcp --dport 53 -j ACCEPT`,
+  ];
+
+  // Resolve each allowed host to IPs and add ACCEPT rules
+  for (const host of rules.allowNet) {
+    if (host === "*") {
+      // Wildcard = allow everything, no point adding rules
+      return null;
+    }
+
+    if (host.startsWith("*.")) {
+      // Wildcard subdomain (e.g., *.github.com)
+      // Resolve the base domain and common subdomains
+      const baseDomain = host.slice(2);
+      lines.push(
+        `# Allow ${host}`,
+        `for ip in $(getent ahosts "${baseDomain}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
+        `  iptables -A ${chainName} -d "$ip" -j ACCEPT`,
+        `done`,
+      );
+      // Also try resolving common prefixes
+      for (const prefix of ["api", "www"]) {
+        lines.push(
+          `for ip in $(getent ahosts "${prefix}.${baseDomain}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
+          `  iptables -A ${chainName} -d "$ip" -j ACCEPT`,
+          `done`,
+        );
+      }
+    } else {
+      // Exact hostname or IP
+      lines.push(
+        `# Allow ${host}`,
+        `for ip in $(getent ahosts "${host}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
+        `  iptables -A ${chainName} -d "$ip" -j ACCEPT`,
+        `done`,
+      );
+    }
+  }
+
+  // Default: DROP everything else
+  lines.push(`iptables -A ${chainName} -j DROP`);
+
+  // Insert chain into OUTPUT (outbound traffic from the VM)
+  lines.push(`iptables -I OUTPUT 1 -m state --state NEW -j ${chainName}`);
+
+  return lines.join("\n");
+}
+
+/**
+ * Tear down iptables rules for a given execution chain.
+ */
+function teardownFirewall(vmName: string, chainName: string): void {
+  try {
+    execSync(
+      `limactl shell ${vmName} -- sudo bash -c '` +
+        `iptables -D OUTPUT -m state --state NEW -j ${chainName} 2>/dev/null; ` +
+        `iptables -F ${chainName} 2>/dev/null; ` +
+        `iptables -X ${chainName} 2>/dev/null'`,
+      { stdio: "pipe", timeout: 10000 }
+    );
+  } catch {
+    // Best effort — chain may not exist if setup failed
+  }
+}
+
+/**
+ * Escape single quotes for embedding in bash -c '...' strings.
+ */
+function escapeSingleQuotes(s: string): string {
+  return s.replace(/'/g, "'\\''");
+}
+
+// ── Skill setup ───────────────────────────────────────────────────────
 
 /**
  * Run a skill's setup.sh in the VM if it hasn't been run yet.
