@@ -471,17 +471,20 @@ describe("Lima iptables firewall", () => {
   // ── No rules = no restrictions ────────────────────────────────────
 
   test(
-    "allows all traffic when allowNet is empty (no firewall)",
+    "blocks all traffic when allowNet is empty (default DROP)",
     async () => {
       if (skip()) return;
       const result = await runScript(
         `#!/bin/bash
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://httpbin.org/ip)
-        echo "{\\"code\\": $HTTP_CODE}" > "$OUTPUT_PATH"`,
-        [] // empty = no restrictions
+        if curl -s --connect-timeout 3 https://httpbin.org/ip >/dev/null 2>&1; then
+          echo '{"escaped": true}' > "$OUTPUT_PATH"
+        else
+          echo '{"escaped": false}' > "$OUTPUT_PATH"
+        fi`,
+        [] // empty = locked down, no network
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).code).toBe(200);
+      expect((result.data as any).escaped).toBe(false);
     },
     TIMEOUT
   );

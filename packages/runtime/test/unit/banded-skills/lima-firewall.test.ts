@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildFirewallScript, buildBwrapCommand, extractMountPath } from "../../../src/banded-skills/lima-exec";
+import { buildFirewallScript, buildBwrapCommand, extractMountPath } from "../../../src/banded-skills/lima-exec-utils";
 
 describe("buildFirewallScript", () => {
   test("returns null when no rules provided", () => {

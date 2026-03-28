@@ -173,10 +173,10 @@ describe("bandExec", () => {
       forceLima: true,
     });
 
-    // Should either succeed via lima, or fail with a lima/bwrap-related error
+    // Should either succeed via lima, or fail with a lima/server-related error
     // (not succeed via local-dangerously)
     if (!result.success) {
-      expect(result.error).toMatch(/lima|limactl|VM|bwrap|band-runner/i);
+      expect(result.error).toMatch(/lima|limactl|VM|bwrap|band-runner|band server|localhost|9000|JSON/i);
     }
     // If it succeeds, that's fine too — lima is available
   });
