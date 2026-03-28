@@ -287,21 +287,59 @@ describe("executeBand contract enforcement", () => {
     expect(result.error?.message).toContain("contract.output validation failed");
   });
 
-  test("skips contract enforcement for string schema refs", async () => {
+  test("skips unresolvable string schema refs (missing file, URL)", async () => {
     const band: BandDocument = {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
       contract: {
-        input: "./schemas/input.json",
+        input: "./nonexistent/schema.json",
         output: "https://example.com/output.json",
       },
     };
 
     const result = await executeBand(band, { anything: true });
 
-    // String refs are skipped — execution proceeds normally
+    // Unresolvable refs are skipped — execution proceeds normally
     expect(result.success).toBe(true);
+  });
+
+  test("resolves file path string ref for contract.input", async () => {
+    const { mkdtempSync, writeFileSync } = await import("fs");
+    const { tmpdir } = await import("os");
+    const { join } = await import("path");
+
+    const tmpDir = mkdtempSync(join(tmpdir(), "contract-ref-test-"));
+    const schemaPath = join(tmpDir, "input-schema.json");
+    writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        type: "object",
+        properties: { name: { type: "string" } },
+        required: ["name"],
+      })
+    );
+
+    const band: BandDocument = {
+      band: "contract-test",
+      icon: "📋",
+      description: "Test band",
+      contract: {
+        input: "./input-schema.json",
+      },
+    };
+
+    // Valid input — should pass
+    const validResult = await executeBand(band, { name: "test" }, { workdir: tmpDir });
+    expect(validResult.success).toBe(true);
+
+    // Invalid input — should fail
+    const invalidResult = await executeBand(band, { wrong: 123 }, { workdir: tmpDir });
+    expect(invalidResult.success).toBe(false);
+    expect(invalidResult.error?.code).toBe("CONTRACT_INPUT_INVALID");
+
+    const { rmSync } = await import("fs");
+    rmSync(tmpDir, { recursive: true, force: true });
   });
 
   test("allows valid input through contract check", async () => {
