@@ -1,77 +1,75 @@
 # TODO — Hardening & Stubs
 
-Tracked issues with enforcement, isolation, and unimplemented features. Each item has a status and location in the codebase.
+Tracked issues with enforcement, isolation, and unimplemented features.
+See also: `SECURITY.md` for the current threat model.
 
 ## Isolation & Enforcement
 
 ### 1. Network egress enforcement
-- **Status: DONE** (iptables in Lima VM)
-- `lima-exec.ts` injects per-execution iptables chains based on `allow.net`
-- Kernel-level REJECT — no subprocess can bypass
-- Tested: curl, wget, python, /dev/tcp all blocked
+- **Status: DONE**
+- Per-execution iptables chains in Lima VM. Kernel-level REJECT.
+- Tested: curl, wget, python, /dev/tcp all blocked.
+- `packages/runtime/src/banded-skills/lima-exec.ts`
 
 ### 2. Filesystem restrictions (OS-level)
 - **Status: NOT ENFORCED**
-- Currently application-level glob matching only
-- Symlinks could bypass path restrictions
-- No chroot, mount namespaces, or AppArmor
-- **Location:** `packages/runtime/src/setup.ts` (band server), `lima-exec.ts`
-- **Fix:** Use `chroot` or bind-mount a restricted directory tree before execution. Or use AppArmor profiles to restrict file access by path.
+- Application-level glob matching only. Symlinks could bypass.
+- No chroot, mount namespaces, or AppArmor.
+- **Question:** AppArmor profiles vs `unshare --mount` vs chroot? AppArmor is simplest but requires profile authoring. Mount namespaces are more portable.
+- `packages/runtime/src/banded-skills/lima-exec.ts`
 
 ### 3. Permission enforcement tests
 - **Status: DISABLED**
-- Commented out with `// TODO: Enable when permission enforcement is implemented`
-- **Location:** `packages/runtime/test/integration/executor-suite.ts` lines 455-473
-- **Blocked on:** Items 2 (filesystem) — network is now done
+- Commented out: `packages/runtime/test/integration/executor-suite.ts:455-473`
+- **Blocked on:** #2 (filesystem restrictions)
+- Network enforcement has its own test suite (`lima-firewall.test.ts`).
 
-### 4. User privilege separation in VM
-- **Status: NOT IMPLEMENTED**
-- Scripts run as the default Lima user (broad permissions)
-- No seccomp, no capability dropping, no dedicated unprivileged user
-- **Fix:** Create a `band-runner` user with minimal permissions. Run scripts as that user via `sudo -u band-runner`. Drop capabilities with `capsh`.
+### 4. User privilege separation
+- **Status: DONE**
+- Scripts run as `band-runner` (system user, no home, no login shell).
+- Workdir is `chmod 700`, env.sh is `chmod 600`.
+- `/proc/*/environ` isolated per-user.
+- Tested: whoami, home dir access, /proc isolation, cleanup.
+
+### 5. Contract string ref resolution
+- **Status: DONE** (file paths)
+- File path refs (e.g., `./schemas/input.json`) resolved against workdir.
+- URL refs still skipped (would need fetch + caching).
+- **Question:** Should URL refs be supported? Adds network dependency to validation.
+- `packages/runtime/src/executors/index.ts`
 
 ## Stubs (parsed but not enforced)
 
-### 5. Env/secrets management
+### 6. Env/secrets management (server path)
 - **Status: STUB**
-- `getAllowedEnv()` returns `{}` always
-- **Location:** `packages/server/src/sandbox.ts`
-- **Test:** `packages/server/test/env.test.ts`
-
-### 6. Contract string ref resolution
-- **Status: STUB**
-- Inline JSON Schema objects validate. String refs (paths/URLs) silently skipped.
-- **Location:** `packages/server/src/app.ts`, `packages/runtime/src/executors/index.ts` — `typeof schema === "object"` guard
-- **Tests:** `packages/server/test/app.test.ts`, `packages/runtime/test/executors/index.test.ts`
+- `getAllowedEnv()` returns `{}` in the HTTP server path.
+- The script-based path (`lima-exec.ts`) handles secrets correctly.
+- `packages/server/src/sandbox.ts`
+- **Question:** Is the server path still needed? The script path is the primary execution mode for lima.
 
 ### 7. Cost limit enforcement
 - **Status: STUB**
-- `limit.maxCostDollars` parsed but never checked during execution
-- **Location:** `packages/server/src/app.ts`
-- **Test:** `packages/server/test/app.test.ts`
+- `limit.maxCostDollars` parsed but never checked.
+- `packages/server/src/app.ts`
+- **Question:** How should cost be tracked? Per-execution metering? Aggregate budget? What counts as "cost"?
 
 ### 8. Cloudflare worker handler
 - **Status: PLACEHOLDER**
 - Echoes input back. No real execution.
-- **Location:** `packages/runtime/src/worker.ts`
+- `packages/runtime/src/worker.ts`
+- **Not blocking lima work.** Separate track.
 
 ### 9. Server sandbox executeCode()
 - **Status: PLACEHOLDER**
-- Returns `{ executed: true }` without doing anything
-- **Location:** `packages/server/src/sandbox.ts`
+- Returns `{ executed: true }`.
+- `packages/server/src/sandbox.ts`
+- **Question:** Same as #6 — is the server sandbox path still the right architecture?
 
 ## Secrets Handling
 
 ### 10. Secrets exposure in Lima VM
-- **Status: KNOWN RISK**
-- Secrets passed as base64-encoded env vars in temp files
-- Visible in `/proc/<pid>/environ` to any process in the VM
-- Temp files cleaned up best-effort only
-- **Fix:** Use kernel keyring (`keyctl`), or write secrets to a tmpfs that is unmounted after execution. At minimum, run scripts as a different user so `/proc` access is restricted.
-
-## Docs
-
-### 11. User-facing docs don't mention stubs
-- **Status: NOT DONE**
-- `docs/TODO.md` (this file) tracks stubs but nothing in user-facing docs calls out what's enforced vs. not
-- **Fix:** Add a SECURITY.md that honestly describes the current threat model and enforcement status
+- **Status: DONE** (mitigated)
+- Secrets in `chmod 600` file in `chmod 700` dir owned by `band-runner`.
+- `/proc` environ isolated per-user.
+- Workdir cleaned up after execution.
+- **Remaining risk:** Secrets still in process env vars during execution. Kernel keyring (`keyctl`) would be more secure but adds complexity.
