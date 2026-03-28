@@ -11,12 +11,10 @@
  * Run with: bun test test/integration/
  */
 
-import { afterAll } from "bun:test";
 import { runAllExecutorSuites, runAllPermissionSuites } from "./executor-suite";
 import { runAllFirewallSuites } from "./firewall.test";
 import { runAllInsistSuites } from "./insist.test";
 import { runAllFileIOSuites } from "./fileio.test";
-import { printFinalSkipSummary } from "./skip-tracker";
 
 console.log(`
 ================================================================================
@@ -54,7 +52,5 @@ runAllInsistSuites();
 // Run actual file I/O tests across all executors
 runAllFileIOSuites();
 
-// Print the skip summary — uses process.stderr.write to bypass buffering
-afterAll(() => {
-  printFinalSkipSummary();
-});
+// Skip summary is printed by print-skip-summary.ts AFTER bun test exits.
+// See test:all and test:integration scripts in package.json.

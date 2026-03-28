@@ -14,8 +14,8 @@
     "test": "bun test test/unit/ test/executors/",
     "test:unit": "bun test test/unit/",
     "test:executors": "bun test test/executors/",
-    "test:integration": "bun test test/integration/",
-    "test:all": "bun test test/unit/ test/executors/ test/integration/"
+    "test:integration": "rm -f /tmp/bands-skip-summary.json; bun test test/integration/; STATUS=$?; bun test/integration/print-skip-summary.ts; exit $STATUS",
+    "test:all": "rm -f /tmp/bands-skip-summary.json; bun test test/unit/ test/executors/ test/integration/; STATUS=$?; bun test/integration/print-skip-summary.ts; exit $STATUS"
   },
   "dependencies": {
     "@bands/format": "workspace:*",
