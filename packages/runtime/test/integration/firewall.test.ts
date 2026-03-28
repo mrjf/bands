@@ -13,11 +13,9 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { IntegrationTestHarness } from "./runner";
 import type { ExecutionTarget } from "@bands/format";
 import { join } from "path";
+import { trackSkip } from "./skip-tracker";
 
 const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
-
-// Track skipped targets
-const skippedTargets = new Set<string>();
 
 /**
  * Run firewall tests for a given executor.
@@ -33,6 +31,7 @@ export function runFirewallSuite(
     const skipIf = (condition: boolean, msg: string) => {
       if (condition) {
         console.log(`  ⏭  Skipping: ${msg}`);
+        trackSkip(target, "Firewall");
         return true;
       }
       return false;
@@ -53,9 +52,7 @@ export function runFirewallSuite(
         if (!available && !skipIfUnavailable) {
           throw new Error(`${target} executor is not available`);
         }
-        if (!available) {
-          skippedTargets.add(target);
-        }
+        // Skip tracking happens per-test via skipIf
         if (available) {
           await harness.init();
         }
@@ -413,33 +410,6 @@ export function runFirewallSuite(
       }, timeout);
     });
   });
-}
-
-/**
- * Print summary of skipped targets.
- */
-export function printFirewallSkippedSummary() {
-  if (skippedTargets.size > 0) {
-    console.log("\n" + "=".repeat(80));
-    console.log("                    SKIPPED FIREWALL TESTS");
-    console.log("=".repeat(80));
-    console.log("\nThe following executors were not available:\n");
-    for (const target of skippedTargets) {
-      let reason = "";
-      switch (target) {
-        case "local-lima":
-          reason = "Lima VM not running (limactl start bands-executor)";
-          break;
-        case "cloudflare":
-          reason = "Wrangler not installed or no network/credentials";
-          break;
-        default:
-          reason = "Executor not available";
-      }
-      console.log(`  • ${target}: ${reason}`);
-    }
-    console.log("\n" + "=".repeat(80) + "\n");
-  }
 }
 
 /**

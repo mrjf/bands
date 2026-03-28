@@ -13,10 +13,11 @@
  */
 
 import { afterAll } from "bun:test";
-import { runAllExecutorSuites, runAllPermissionSuites, printSkippedSummary } from "./executor-suite";
-import { runAllFirewallSuites, printFirewallSkippedSummary } from "./firewall.test";
-import { runAllInsistSuites, printInsistSkippedSummary } from "./insist.test";
-import { runAllFileIOSuites, printFileIOSkippedSummary } from "./fileio.test";
+import { runAllExecutorSuites, runAllPermissionSuites } from "./executor-suite";
+import { runAllFirewallSuites } from "./firewall.test";
+import { runAllInsistSuites } from "./insist.test";
+import { runAllFileIOSuites } from "./fileio.test";
+import { printFinalSkipSummary } from "./skip-tracker";
 
 console.log(`
 ================================================================================
@@ -54,10 +55,7 @@ runAllInsistSuites();
 // Run actual file I/O tests across all executors
 runAllFileIOSuites();
 
-// Print summary of skipped tests at the end
+// Print a single, loud summary of ALL skipped tests at the very end
 afterAll(() => {
-  printSkippedSummary();
-  printFirewallSkippedSummary();
-  printInsistSkippedSummary();
-  printFileIOSkippedSummary();
+  printFinalSkipSummary();
 });
