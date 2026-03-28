@@ -14,7 +14,7 @@ type SkipRecord = {
 const skippedTargets = new Map<string, SkipRecord>();
 
 const TARGET_REASONS: Record<string, string> = {
-  "local-lima": "Lima VM not running — start with: limactl start bands-executor",
+  "local-lima": "Lima VM not running -- start with: limactl start bands-executor",
   cloudflare: "Wrangler not installed or no network/credentials",
 };
 
@@ -38,7 +38,7 @@ export function trackSkip(target: string, suite: string): void {
 
 /**
  * Print a final summary of all skipped tests.
- * This should be called once, at the very end of the test run.
+ * Uses process.stderr.write to avoid buffering issues with bun test.
  */
 export function printFinalSkipSummary(): void {
   if (skippedTargets.size === 0) return;
@@ -51,38 +51,40 @@ export function printFinalSkipSummary(): void {
   const hasLima = skippedTargets.has("local-lima");
   const limaRecord = skippedTargets.get("local-lima");
 
-  console.log("\n");
-  console.log("!".repeat(80));
-  console.log("!".repeat(80));
-  console.log("");
-  console.log(
-    `  ⚠️  ${totalSkipped} INTEGRATION TESTS WERE SKIPPED ⚠️`
-  );
-  console.log("");
+  const lines: string[] = [
+    "",
+    "!".repeat(80),
+    "!".repeat(80),
+    "",
+    `  WARNING: ${totalSkipped} INTEGRATION TESTS WERE SKIPPED`,
+    "",
+  ];
 
   for (const [target, record] of skippedTargets) {
-    console.log(`  ${target}: ${record.count} tests skipped`);
-    console.log(`    → ${record.reason}`);
-    console.log(`    Suites affected: ${[...record.suites].join(", ")}`);
-    console.log("");
+    lines.push(`  ${target}: ${record.count} tests skipped`);
+    lines.push(`    -> ${record.reason}`);
+    lines.push(`    Suites affected: ${[...record.suites].join(", ")}`);
+    lines.push("");
   }
 
   if (hasLima && limaRecord) {
-    console.log("─".repeat(80));
-    console.log("");
-    console.log("  LIMA IS CRITICAL — it is the primary sandbox executor.");
-    console.log(
+    lines.push("-".repeat(80));
+    lines.push("");
+    lines.push("  LIMA IS CRITICAL -- it is the primary sandbox executor.");
+    lines.push(
       `  ${limaRecord.count} tests ran against local-dangerously instead of a real VM.`
     );
-    console.log("  These tests pass trivially without actual isolation enforcement.");
-    console.log("");
-    console.log("  To run the full suite:");
-    console.log("    limactl start bands-executor");
-    console.log("    bun test:all");
-    console.log("");
+    lines.push("  These tests pass trivially without actual isolation enforcement.");
+    lines.push("");
+    lines.push("  To run the full suite:");
+    lines.push("    limactl start bands-executor");
+    lines.push("    bun test:all");
+    lines.push("");
   }
 
-  console.log("!".repeat(80));
-  console.log("!".repeat(80));
-  console.log("");
+  lines.push("!".repeat(80));
+  lines.push("!".repeat(80));
+  lines.push("");
+
+  process.stderr.write(lines.join("\n"));
 }

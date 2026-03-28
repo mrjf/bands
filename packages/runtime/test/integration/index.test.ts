@@ -7,7 +7,6 @@
  * - local-dangerously: Always available (no isolation)
  * - lima: Requires Lima VM running
  * - cloudflare: Requires wrangler + CLOUDFLARE_API_TOKEN
- * - lima: Requires Lima VM (macOS)
  *
  * Run with: bun test test/integration/
  */
@@ -55,7 +54,7 @@ runAllInsistSuites();
 // Run actual file I/O tests across all executors
 runAllFileIOSuites();
 
-// Print a single, loud summary of ALL skipped tests at the very end
+// Print the skip summary — uses process.stderr.write to bypass buffering
 afterAll(() => {
   printFinalSkipSummary();
 });
