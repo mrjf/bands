@@ -69,16 +69,16 @@ describe("buildFirewallScript", () => {
     expect(script).toContain('getent ahosts "www.github.com"');
   });
 
-  test("ends with DROP default", () => {
+  test("ends with REJECT default", () => {
     const script = buildFirewallScript("BAND-test", {
       allowNet: ["example.com"],
       denyNet: [],
     })!;
     const lines = script.split("\n");
-    const dropLine = lines.findIndex((l) => l.includes("-j DROP"));
+    const rejectLine = lines.findIndex((l) => l.includes("-j REJECT"));
     const insertLine = lines.findIndex((l) => l.includes("-I OUTPUT"));
-    expect(dropLine).toBeGreaterThan(0);
-    expect(insertLine).toBeGreaterThan(dropLine);
+    expect(rejectLine).toBeGreaterThan(0);
+    expect(insertLine).toBeGreaterThan(rejectLine);
   });
 
   test("inserts chain into OUTPUT for new connections", () => {

@@ -340,8 +340,9 @@ export function buildFirewallScript(
     }
   }
 
-  // Default: DROP everything else
-  lines.push(`iptables -A ${chainName} -j DROP`);
+  // Default: REJECT everything else (REJECT sends ICMP unreachable so
+  // connections fail fast instead of timing out with DROP)
+  lines.push(`iptables -A ${chainName} -j REJECT`);
 
   // Insert chain into OUTPUT (outbound traffic from the VM)
   lines.push(`iptables -I OUTPUT 1 -m state --state NEW -j ${chainName}`);
