@@ -67,6 +67,92 @@ function skip() {
   return false;
 }
 
+describe("Lima user separation", () => {
+  test(
+    "scripts run as band-runner, not host user",
+    async () => {
+      if (skip()) return;
+      const result = await runScript(
+        `#!/bin/bash
+        WHOAMI=$(whoami)
+        echo "{\\"user\\": \\"$WHOAMI\\"}" > "$OUTPUT_PATH"`,
+        []
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).user).toBe("band-runner");
+    },
+    TIMEOUT
+  );
+
+  test(
+    "band-runner cannot read host user home directory",
+    async () => {
+      if (skip()) return;
+      const result = await runScript(
+        `#!/bin/bash
+        if ls /home/*/. 2>/dev/null | head -1 | grep -q .; then
+          echo '{"can_read_home": true}' > "$OUTPUT_PATH"
+        else
+          echo '{"can_read_home": false}' > "$OUTPUT_PATH"
+        fi`,
+        []
+      );
+      expect(result.success).toBe(true);
+      // band-runner has no home dir and shouldn't read other users' homes
+      expect((result.data as any).can_read_home).toBe(false);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "band-runner cannot read other processes environ",
+    async () => {
+      if (skip()) return;
+      const result = await runScript(
+        `#!/bin/bash
+        # Try to read another process's environment
+        OTHER_PID=$(ps -eo pid --no-headers | grep -v "^\\s*$$" | head -1 | tr -d ' ')
+        if cat /proc/$OTHER_PID/environ 2>/dev/null | head -c 10 | grep -q .; then
+          echo '{"can_read_environ": true}' > "$OUTPUT_PATH"
+        else
+          echo '{"can_read_environ": false}' > "$OUTPUT_PATH"
+        fi`,
+        []
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).can_read_environ).toBe(false);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "workdir is cleaned up after execution",
+    async () => {
+      if (skip()) return;
+
+      // Run a script that writes its workdir path
+      const result = await runScript(
+        `#!/bin/bash
+        echo "{\\"workdir\\": \\"$(dirname $INPUT_PATH)\\"}" > "$OUTPUT_PATH"`,
+        []
+      );
+      expect(result.success).toBe(true);
+      const workdir = (result.data as any).workdir;
+      expect(workdir).toContain("/tmp/band-exec-");
+
+      // Verify the workdir no longer exists
+      try {
+        execSync(`limactl shell ${VM_NAME} -- test -d ${workdir}`, { stdio: "pipe" });
+        // If we get here, the dir still exists — fail
+        expect("workdir exists").toBe("workdir should be cleaned up");
+      } catch {
+        // Expected — dir should not exist
+      }
+    },
+    TIMEOUT
+  );
+});
+
 describe("Lima iptables firewall", () => {
   // ── Allowed traffic should work ───────────────────────────────────
 

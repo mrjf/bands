@@ -2,14 +2,13 @@
  * Lima-specific execution for banded skills.
  *
  * Uses limactl copy (files in/out) + limactl shell (run script)
- * instead of the HTTP-based Lima executor. This avoids needing
- * the band-server running in the VM for simple script execution.
+ * instead of the HTTP-based Lima executor.
  *
- * Network isolation: Before running a script, iptables rules are
- * injected into the VM based on the band's allow.net / deny.net
- * configuration. Default policy is DROP — only explicitly allowed
- * hosts can be reached. This is kernel-level enforcement that no
- * subprocess can bypass.
+ * Security layers:
+ * - User separation: scripts run as `band-runner` (unprivileged)
+ * - Network isolation: iptables REJECT rules from allow.net config
+ * - Secrets isolation: env file readable only by band-runner, cleaned up after
+ * - Workdir isolation: per-execution dir with 700 permissions
  */
 
 import { execSync } from "child_process";
@@ -20,15 +19,18 @@ import { tmpdir } from "os";
 import type { BandExecResult } from "./types";
 
 const DEFAULT_VM_NAME = "bands-executor";
+const BAND_RUNNER_USER = "band-runner";
 
 /**
- * Execute a script in a Lima VM.
+ * Execute a script in a Lima VM with isolation.
  *
- * 1. limactl copy staging dir into VM
- * 2. Set up iptables firewall rules based on allow.net / deny.net
- * 3. limactl shell to run run.sh with args
- * 4. Tear down iptables rules
- * 5. limactl copy output back to host
+ * 1. Ensure band-runner user exists in VM
+ * 2. Create workdir owned by band-runner
+ * 3. Copy files into VM workdir
+ * 4. Set up iptables firewall rules
+ * 5. Run script as band-runner
+ * 6. Tear down firewall and clean up
+ * 7. Copy output back to host
  */
 export async function limaExec(
   runShPath: string,
@@ -53,6 +55,9 @@ export async function limaExec(
     };
   }
 
+  // Ensure band-runner user exists in VM
+  ensureBandRunnerUser(vmName);
+
   // Run skill-level setup.sh if present and not already done
   if (skillRoot) {
     const setupResult = runSkillSetup(skillRoot, vmName);
@@ -72,9 +77,6 @@ export async function limaExec(
     const vmWorkdir = `/tmp/band-exec-${randomUUID()}`;
     const vmInputPath = `${vmWorkdir}/input.json`;
     const vmOutputPath = `${vmWorkdir}/output.json`;
-
-    // Copy resource directory contents to staging
-    const resourceName = basename(resourceDir);
 
     // Copy input to staging
     const stagingInputPath = join(stagingDir, "input.json");
@@ -107,29 +109,30 @@ export async function limaExec(
     }
     writeFileSync(join(stagingDir, "env.sh"), envLines.join("\n") + "\n");
 
-    // Copy staging dir into VM
+    // Create workdir in VM owned by band-runner with strict permissions
+    // Files are only readable by band-runner — not by other users or processes
     try {
-      execSync(`limactl shell ${vmName} -- mkdir -p ${vmWorkdir}`, {
-        stdio: "pipe",
-      });
-      execSync(
-        `limactl copy ${stagingDir}/run.sh ${vmName}:${vmWorkdir}/run.sh`,
-        { stdio: "pipe" }
-      );
-      execSync(
-        `limactl copy ${stagingDir}/env.sh ${vmName}:${vmWorkdir}/env.sh`,
-        { stdio: "pipe" }
-      );
-      execSync(
-        `limactl copy ${stagingInputPath} ${vmName}:${vmInputPath}`,
-        { stdio: "pipe" }
-      );
+      limaShell(vmName, `sudo mkdir -p ${vmWorkdir}`);
+      limaShell(vmName, `sudo chown ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${vmWorkdir}`);
+      limaShell(vmName, `sudo chmod 700 ${vmWorkdir}`);
+
+      // Copy files to a temp location first (limactl copy runs as host user),
+      // then move into the restricted workdir
+      const vmStagingDir = `/tmp/band-staging-${execId}`;
+      limaShell(vmName, `mkdir -p ${vmStagingDir}`);
+
+      execSync(`limactl copy ${stagingDir}/run.sh ${vmName}:${vmStagingDir}/run.sh`, { stdio: "pipe" });
+      execSync(`limactl copy ${stagingDir}/env.sh ${vmName}:${vmStagingDir}/env.sh`, { stdio: "pipe" });
+      execSync(`limactl copy ${stagingInputPath} ${vmName}:${vmStagingDir}/input.json`, { stdio: "pipe" });
       if (configPath) {
-        execSync(
-          `limactl copy ${join(stagingDir, "config.json")} ${vmName}:${vmConfigPath}`,
-          { stdio: "pipe" }
-        );
+        execSync(`limactl copy ${join(stagingDir, "config.json")} ${vmName}:${vmStagingDir}/config.json`, { stdio: "pipe" });
       }
+
+      // Move files into restricted workdir and set ownership
+      limaShell(vmName, `sudo mv ${vmStagingDir}/* ${vmWorkdir}/`);
+      limaShell(vmName, `sudo chown -R ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${vmWorkdir}`);
+      limaShell(vmName, `sudo chmod 600 ${vmWorkdir}/env.sh`); // secrets file extra-restricted
+      limaShell(vmName, `rm -rf ${vmStagingDir}`);
     } catch (e) {
       return {
         success: false,
@@ -146,8 +149,8 @@ export async function limaExec(
           { stdio: "pipe", timeout: 30000 }
         );
       } catch (e: any) {
-        // Clean up chain on failure and report
         teardownFirewall(vmName, chainName);
+        cleanupVmWorkdir(vmName, vmWorkdir);
         const stderr = e.stderr?.toString() || "";
         return {
           success: false,
@@ -156,12 +159,12 @@ export async function limaExec(
       }
     }
 
-    // Run the script in the VM (source env.sh for secrets + paths, then run)
+    // Run the script as band-runner (unprivileged user)
     let stdout: string;
     let stderr: string;
     try {
       const result = execSync(
-        `limactl shell ${vmName} -- bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
+        `limactl shell ${vmName} -- sudo -u ${BAND_RUNNER_USER} bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
         { stdio: "pipe", timeout: 60000 }
       );
       stdout = result.toString();
@@ -193,8 +196,8 @@ export async function limaExec(
           // Output file doesn't exist in VM
         }
 
-        // Tear down firewall before returning
         if (firewallScript) teardownFirewall(vmName, chainName);
+        cleanupVmWorkdir(vmName, vmWorkdir);
 
         return {
           success: false,
@@ -206,9 +209,12 @@ export async function limaExec(
     // Tear down firewall rules
     if (firewallScript) teardownFirewall(vmName, chainName);
 
-    // Copy output back from VM
+    // Copy output back from VM (need to relax dir perms since band-runner owns it)
     let outputData: unknown;
     try {
+      // Temporarily open the workdir so limactl copy (as host user) can access
+      limaShell(vmName, `sudo chmod 755 ${vmWorkdir} 2>/dev/null || true`);
+      limaShell(vmName, `sudo chmod 644 ${vmOutputPath} 2>/dev/null || true`);
       const localOutputPath = join(stagingDir, "output.json");
       execSync(
         `limactl copy ${vmName}:${vmOutputPath} ${localOutputPath}`,
@@ -244,14 +250,8 @@ export async function limaExec(
       );
     }
 
-    // Cleanup in VM
-    try {
-      execSync(`limactl shell ${vmName} -- rm -rf ${vmWorkdir}`, {
-        stdio: "pipe",
-      });
-    } catch {
-      // Best effort cleanup
-    }
+    // Cleanup workdir in VM (as root since band-runner owns it)
+    cleanupVmWorkdir(vmName, vmWorkdir);
 
     const durationMs = Date.now() - startTime;
     return {
@@ -268,6 +268,63 @@ export async function limaExec(
   }
 }
 
+// ── VM helpers ────────────────────────────────────────────────────────
+
+function limaShell(vmName: string, cmd: string): string {
+  return execSync(`limactl shell ${vmName} -- bash -c '${escapeSingleQuotes(cmd)}'`, {
+    stdio: "pipe",
+    encoding: "utf-8",
+  });
+}
+
+function cleanupVmWorkdir(vmName: string, vmWorkdir: string): void {
+  try {
+    limaShell(vmName, `sudo rm -rf ${vmWorkdir}`);
+  } catch {
+    // Best effort
+  }
+}
+
+// ── User setup ────────────────────────────────────────────────────────
+
+let bandRunnerCreated = false;
+
+/**
+ * Ensure the band-runner user exists in the VM.
+ * Called once per process — idempotent.
+ */
+function ensureBandRunnerUser(vmName: string): void {
+  if (bandRunnerCreated) return;
+  try {
+    limaShell(vmName, `id ${BAND_RUNNER_USER}`);
+    bandRunnerCreated = true;
+    return;
+  } catch {
+    // User doesn't exist — create it
+  }
+
+  try {
+    limaShell(
+      vmName,
+      `sudo useradd --system --no-create-home --shell /usr/sbin/nologin ${BAND_RUNNER_USER}`
+    );
+    bandRunnerCreated = true;
+  } catch (e: any) {
+    // May race with concurrent executions — check again
+    try {
+      limaShell(vmName, `id ${BAND_RUNNER_USER}`);
+      bandRunnerCreated = true;
+    } catch {
+      throw new Error(`Failed to create ${BAND_RUNNER_USER} user: ${e.stderr?.toString() || e.message}`);
+    }
+  }
+}
+
+/** Reset the cached flag (for testing). */
+export function resetBandRunnerCache(): void {
+  bandRunnerCreated = false;
+}
+
 // ── Firewall ──────────────────────────────────────────────────────────
 
 /**
@@ -278,7 +335,7 @@ export async function limaExec(
  * - ACCEPT for established/related connections
  * - ACCEPT for DNS (port 53) so host resolution works
  * - ACCEPT for each resolved IP from allow.net entries
- * - DROP everything else (default policy on the chain)
+ * - REJECT everything else (fast failure with ICMP unreachable)
  *
  * Returns null if no network rules are defined (no restriction).
  */
@@ -313,7 +370,6 @@ export function buildFirewallScript(
 
     if (host.startsWith("*.")) {
       // Wildcard subdomain (e.g., *.github.com)
-      // Resolve the base domain and common subdomains
       const baseDomain = host.slice(2);
       lines.push(
         `# Allow ${host}`,
@@ -321,7 +377,6 @@ export function buildFirewallScript(
         `  iptables -A ${chainName} -d "$ip" -j ACCEPT`,
         `done`,
       );
-      // Also try resolving common prefixes
       for (const prefix of ["api", "www"]) {
         lines.push(
           `for ip in $(getent ahosts "${prefix}.${baseDomain}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
@@ -340,8 +395,7 @@ export function buildFirewallScript(
     }
   }
 
-  // Default: REJECT everything else (REJECT sends ICMP unreachable so
-  // connections fail fast instead of timing out with DROP)
+  // Default: REJECT everything else (fast failure with ICMP unreachable)
   lines.push(`iptables -A ${chainName} -j REJECT`);
 
   // Insert chain into OUTPUT (outbound traffic from the VM)
@@ -363,7 +417,7 @@ function teardownFirewall(vmName: string, chainName: string): void {
       { stdio: "pipe", timeout: 10000 }
     );
   } catch {
-    // Best effort — chain may not exist if setup failed
+    // Best effort
   }
 }
 
@@ -389,7 +443,6 @@ function runSkillSetup(
     return { success: true };
   }
 
-  // Use a hash of the skill root as the marker name
   const skillName = basename(skillRoot);
   const markerPath = `/tmp/.band-setup-done-${skillName}`;
 
@@ -398,12 +451,11 @@ function runSkillSetup(
     execSync(`limactl shell ${vmName} -- test -f ${markerPath}`, {
       stdio: "pipe",
     });
-    return { success: true }; // Already set up
+    return { success: true };
   } catch {
     // Marker doesn't exist — need to run setup
   }
 
-  // Copy and run setup.sh
   const stagingDir = mkdtempSync(join(tmpdir(), "lima-band-setup-"));
   try {
     const setupContent = readFileSync(setupPath, "utf-8");
@@ -411,28 +463,15 @@ function runSkillSetup(
     writeFileSync(stagingSetupPath, setupContent);
 
     const vmSetupDir = `/tmp/band-setup-${skillName}`;
-    execSync(`limactl shell ${vmName} -- mkdir -p ${vmSetupDir}`, {
+    execSync(`limactl shell ${vmName} -- mkdir -p ${vmSetupDir}`, { stdio: "pipe" });
+    execSync(`limactl copy ${stagingSetupPath} ${vmName}:${vmSetupDir}/setup.sh`, { stdio: "pipe" });
+    execSync(`limactl shell ${vmName} -- bash ${vmSetupDir}/setup.sh`, {
       stdio: "pipe",
-    });
-    execSync(
-      `limactl copy ${stagingSetupPath} ${vmName}:${vmSetupDir}/setup.sh`,
-      { stdio: "pipe" }
-    );
-
-    execSync(
-      `limactl shell ${vmName} -- bash ${vmSetupDir}/setup.sh`,
-      { stdio: "pipe", timeout: 300000 } // 5 min timeout for installs
-    );
-
-    // Mark as done
-    execSync(`limactl shell ${vmName} -- touch ${markerPath}`, {
-      stdio: "pipe",
+      timeout: 300000,
     });
 
-    // Cleanup setup dir
-    execSync(`limactl shell ${vmName} -- rm -rf ${vmSetupDir}`, {
-      stdio: "pipe",
-    });
+    execSync(`limactl shell ${vmName} -- touch ${markerPath}`, { stdio: "pipe" });
+    execSync(`limactl shell ${vmName} -- rm -rf ${vmSetupDir}`, { stdio: "pipe" });
 
     return { success: true };
   } catch (e: any) {
