@@ -34,6 +34,15 @@ async function runScript(
   script: string,
   allowNet: string[]
 ): Promise<{ success: boolean; data?: any; error?: string }> {
+  return runScriptWithFiles(script, allowNet, { allowRead: [], allowWrite: [] });
+}
+
+/** Create a temp script with both network and file rules. */
+async function runScriptWithFiles(
+  script: string,
+  allowNet: string[],
+  fileRules: { allowRead: string[]; allowWrite: string[] }
+): Promise<{ success: boolean; data?: any; error?: string }> {
   const dir = mkdtempSync(join(tmpdir(), "lima-fw-test-"));
   const runSh = join(dir, "run.sh");
   const inputPath = join(dir, "input.json");
@@ -52,7 +61,8 @@ async function runScript(
       {},
       undefined,
       undefined,
-      { allowNet, denyNet: [] }
+      { allowNet, denyNet: [] },
+      fileRules
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -179,6 +189,140 @@ describe("Lima user separation", () => {
         expect("workdir exists").toBe("workdir should be cleaned up");
       } catch {
         // Expected — dir should not exist
+      }
+    },
+    TIMEOUT
+  );
+});
+
+describe("Lima file access (bwrap bind mounts)", () => {
+  test(
+    "script can read a file via allow.read bind mount",
+    async () => {
+      if (skip()) return;
+
+      // Create a file in the VM that the script should be able to read
+      const testDir = `/tmp/band-file-test-${Date.now()}`;
+      execSync(
+        `limactl shell ${VM_NAME} -- bash -c 'mkdir -p ${testDir} && echo "secret-data" > ${testDir}/input.txt'`,
+        { stdio: "pipe" }
+      );
+
+      try {
+        const result = await runScriptWithFiles(
+          [
+            "#!/bin/bash",
+            `CONTENT=$(cat ${testDir}/input.txt 2>/dev/null || echo "BLOCKED")`,
+            'echo "{\\"content\\": \\"$CONTENT\\"}" > "$OUTPUT_PATH"',
+          ].join("\n"),
+          [],
+          { allowRead: [`${testDir}/**`], allowWrite: [] }
+        );
+        expect(result.success).toBe(true);
+        expect((result.data as any).content).toBe("secret-data");
+      } finally {
+        execSync(`limactl shell ${VM_NAME} -- rm -rf ${testDir}`, { stdio: "pipe" });
+      }
+    },
+    TIMEOUT
+  );
+
+  test(
+    "script cannot read a file NOT in allow.read",
+    async () => {
+      if (skip()) return;
+
+      const testDir = `/tmp/band-file-test-${Date.now()}`;
+      execSync(
+        `limactl shell ${VM_NAME} -- bash -c 'mkdir -p ${testDir} && echo "secret" > ${testDir}/hidden.txt'`,
+        { stdio: "pipe" }
+      );
+
+      try {
+        const result = await runScriptWithFiles(
+          [
+            "#!/bin/bash",
+            `CONTENT=$(cat ${testDir}/hidden.txt 2>/dev/null || echo "BLOCKED")`,
+            'echo "{\\"content\\": \\"$CONTENT\\"}" > "$OUTPUT_PATH"',
+          ].join("\n"),
+          [],
+          { allowRead: [], allowWrite: [] } // no file access granted
+        );
+        expect(result.success).toBe(true);
+        expect((result.data as any).content).toBe("BLOCKED");
+      } finally {
+        execSync(`limactl shell ${VM_NAME} -- rm -rf ${testDir}`, { stdio: "pipe" });
+      }
+    },
+    TIMEOUT
+  );
+
+  test(
+    "script can write to a file via allow.write bind mount",
+    async () => {
+      if (skip()) return;
+
+      const testDir = `/tmp/band-file-test-${Date.now()}`;
+      execSync(
+        `limactl shell ${VM_NAME} -- bash -c 'mkdir -p ${testDir} && chmod 777 ${testDir}'`,
+        { stdio: "pipe" }
+      );
+
+      try {
+        const result = await runScriptWithFiles(
+          [
+            "#!/bin/bash",
+            `echo "written-by-script" > ${testDir}/output.txt`,
+            'echo \'{"wrote": true}\' > "$OUTPUT_PATH"',
+          ].join("\n"),
+          [],
+          { allowRead: [], allowWrite: [`${testDir}/**`] }
+        );
+        expect(result.success).toBe(true);
+        expect((result.data as any).wrote).toBe(true);
+
+        // Verify the file was actually written on the host (persisted through bind mount)
+        const content = execSync(
+          `limactl shell ${VM_NAME} -- cat ${testDir}/output.txt`,
+          { encoding: "utf-8" }
+        ).trim();
+        expect(content).toBe("written-by-script");
+      } finally {
+        execSync(`limactl shell ${VM_NAME} -- rm -rf ${testDir}`, { stdio: "pipe" });
+      }
+    },
+    TIMEOUT
+  );
+
+  test(
+    "script cannot write to a path NOT in allow.write",
+    async () => {
+      if (skip()) return;
+
+      const testDir = `/tmp/band-file-test-${Date.now()}`;
+      execSync(
+        `limactl shell ${VM_NAME} -- bash -c 'mkdir -p ${testDir} && chmod 777 ${testDir}'`,
+        { stdio: "pipe" }
+      );
+
+      try {
+        const result = await runScriptWithFiles(
+          [
+            "#!/bin/bash",
+            `echo "escape" > ${testDir}/escaped.txt 2>/dev/null`,
+            `if [ -f ${testDir}/escaped.txt ]; then`,
+            '  echo \'{"escaped": true}\' > "$OUTPUT_PATH"',
+            "else",
+            '  echo \'{"escaped": false}\' > "$OUTPUT_PATH"',
+            "fi",
+          ].join("\n"),
+          [],
+          { allowRead: [], allowWrite: [] } // no write access
+        );
+        expect(result.success).toBe(true);
+        expect((result.data as any).escaped).toBe(false);
+      } finally {
+        execSync(`limactl shell ${VM_NAME} -- rm -rf ${testDir}`, { stdio: "pipe" });
       }
     },
     TIMEOUT

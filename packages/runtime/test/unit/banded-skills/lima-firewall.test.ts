@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildFirewallScript, buildBwrapCommand } from "../../../src/banded-skills/lima-exec";
+import { buildFirewallScript, buildBwrapCommand, extractMountPath } from "../../../src/banded-skills/lima-exec";
 
 describe("buildFirewallScript", () => {
   test("returns null when no rules provided", () => {
@@ -141,5 +141,82 @@ describe("buildBwrapCommand", () => {
     const cmd = buildBwrapCommand("/tmp/workdir");
     expect(cmd).toContain("source /tmp/workdir/env.sh");
     expect(cmd).toContain("bash /tmp/workdir/run.sh");
+  });
+
+  test("adds ro-bind for allow.read paths", () => {
+    const cmd = buildBwrapCommand("/tmp/workdir", undefined, {
+      allowRead: ["/data/input.csv"],
+      allowWrite: [],
+    });
+    expect(cmd).toContain("--ro-bind-try /data /data");
+  });
+
+  test("adds bind for allow.write paths", () => {
+    const cmd = buildBwrapCommand("/tmp/workdir", undefined, {
+      allowRead: [],
+      allowWrite: ["/output/results.json"],
+    });
+    expect(cmd).toContain("--bind-try /output /output");
+  });
+
+  test("deduplicates mounts when read and write share a parent", () => {
+    const cmd = buildBwrapCommand("/tmp/workdir", undefined, {
+      allowRead: ["/data/input.csv"],
+      allowWrite: ["/data/output.csv"],
+    });
+    // /data should only appear once (read-only from allowRead, since it's mounted first)
+    const matches = cmd.match(/\/data/g) || [];
+    // 2 occurrences: --ro-bind-try /data /data
+    expect(matches.length).toBe(2);
+  });
+
+  test("handles glob patterns by extracting parent dir", () => {
+    const cmd = buildBwrapCommand("/tmp/workdir", undefined, {
+      allowRead: ["/data/**/*.csv"],
+      allowWrite: [],
+    });
+    expect(cmd).toContain("--ro-bind-try /data /data");
+    expect(cmd).not.toContain("**");
+  });
+
+  test("skips system dirs already mounted", () => {
+    const cmd = buildBwrapCommand("/tmp/workdir", undefined, {
+      allowRead: ["/usr/share/data.txt"],
+      allowWrite: [],
+    });
+    // /usr is already mounted ro — don't double-mount
+    expect(cmd).not.toContain("--ro-bind-try /usr /usr");
+  });
+});
+
+describe("extractMountPath", () => {
+  test("extracts dir from absolute file path", () => {
+    expect(extractMountPath("/data/input.csv")).toBe("/data");
+  });
+
+  test("extracts dir from glob pattern", () => {
+    expect(extractMountPath("/data/**/*.csv")).toBe("/data");
+  });
+
+  test("extracts dir from nested path", () => {
+    expect(extractMountPath("/home/user/projects/file.txt")).toBe("/home/user/projects");
+  });
+
+  test("returns null for bare filename glob", () => {
+    expect(extractMountPath("*.txt")).toBeNull();
+  });
+
+  test("returns null for system dirs", () => {
+    expect(extractMountPath("/usr/share/data")).toBeNull();
+    expect(extractMountPath("/bin/something")).toBeNull();
+    expect(extractMountPath("/proc/1/status")).toBeNull();
+  });
+
+  test("handles relative paths with glob", () => {
+    expect(extractMountPath("./output/**")).toBe("./output");
+  });
+
+  test("returns file path for no-glob absolute path", () => {
+    expect(extractMountPath("/data/input.json")).toBe("/data");
   });
 });

@@ -39,30 +39,24 @@ See also: `SECURITY.md` for the current threat model.
 
 ## Stubs (parsed but not enforced)
 
-### 6. Env/secrets management (server path)
-- **Status: STUB**
-- `getAllowedEnv()` returns `{}` in the HTTP server path.
-- The script-based path (`lima-exec.ts`) handles secrets correctly.
-- `packages/server/src/sandbox.ts`
-- **Question:** Is the server path still needed? The script path is the primary execution mode for lima.
+### 6. Server path stubs (getAllowedEnv, executeCode)
+- **Status: NEEDS DECISION**
+- `getAllowedEnv()` returns `{}` — `packages/server/src/sandbox.ts`
+- `executeCode()` returns `{ executed: true }` — `packages/server/src/sandbox.ts`
+- The script-based path (`lima-exec.ts`) is the primary execution mode and handles secrets correctly.
+- **Decision needed:** Is the HTTP server path still the plan, or dead code to remove?
 
 ### 7. Cost limit enforcement
-- **Status: STUB**
+- **Status: NEEDS DECISION**
 - `limit.maxCostDollars` parsed but never checked.
 - `packages/server/src/app.ts`
-- **Question:** How should cost be tracked? Per-execution metering? Aggregate budget? What counts as "cost"?
+- **Decision needed:** What does "cost" mean? Per-execution metering? Aggregate budget? API call counting?
 
-### 8. Cloudflare worker handler
+### 8. Cloudflare executor implementation
 - **Status: PLACEHOLDER**
 - Echoes input back. No real execution.
 - `packages/runtime/src/worker.ts`
-- **Not blocking lima work.** Separate track.
-
-### 9. Server sandbox executeCode()
-- **Status: PLACEHOLDER**
-- Returns `{ executed: true }`.
-- `packages/server/src/sandbox.ts`
-- **Question:** Same as #6 — is the server sandbox path still the right architecture?
+- Separate track from Lima hardening.
 
 ## Secrets Handling
 

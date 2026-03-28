@@ -41,7 +41,8 @@ export async function limaExec(
   envSecrets: Record<string, string> = {},
   skillRoot?: string,
   configPath?: string,
-  networkRules?: { allowNet: string[]; denyNet: string[] }
+  networkRules?: { allowNet: string[]; denyNet: string[] },
+  fileRules?: { allowRead: string[]; allowWrite: string[] }
 ): Promise<BandExecResult> {
   const startTime = Date.now();
 
@@ -165,7 +166,7 @@ export async function limaExec(
     // The sandbox mounts: system binaries (ro), /proc, /dev, the workdir (rw).
     // Everything else (home dirs, /etc, other /tmp) is invisible.
     const bandRunnerIds = getBandRunnerIds(vmName);
-    const bwrapCmd = buildBwrapCommand(vmWorkdir, bandRunnerIds);
+    const bwrapCmd = buildBwrapCommand(vmWorkdir, bandRunnerIds, fileRules);
     let stdout: string;
     let stderr: string;
     try {
@@ -356,7 +357,8 @@ export function resetBandRunnerCache(): void {
  */
 export function buildBwrapCommand(
   vmWorkdir: string,
-  userIds?: { uid: number; gid: number }
+  userIds?: { uid: number; gid: number },
+  fileRules?: { allowRead: string[]; allowWrite: string[] }
 ): string {
   const parts = [
     "bwrap",
@@ -383,12 +385,67 @@ export function buildBwrapCommand(
     "--tmpfs /home",
     // The workdir is the only writable persistent mount
     `--bind ${vmWorkdir} ${vmWorkdir}`,
+  ];
+
+  // Add file access bind mounts from allow.read / allow.write
+  if (fileRules) {
+    const mounted = new Set<string>();
+
+    // Read-only mounts for allow.read paths
+    for (const pattern of fileRules.allowRead) {
+      const dir = extractMountPath(pattern);
+      if (dir && !mounted.has(dir)) {
+        parts.push(`--ro-bind-try ${dir} ${dir}`);
+        mounted.add(dir);
+      }
+    }
+
+    // Read-write mounts for allow.write paths
+    for (const pattern of fileRules.allowWrite) {
+      const dir = extractMountPath(pattern);
+      if (dir && !mounted.has(dir)) {
+        parts.push(`--bind-try ${dir} ${dir}`);
+        mounted.add(dir);
+      }
+    }
+  }
+
+  parts.push(
     // Die when parent exits (prevent orphans)
     "--die-with-parent",
     // Run the script
     `-- /bin/bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
-  ];
+  );
   return parts.join(" ");
+}
+
+/**
+ * Extract a concrete mount path from a glob pattern.
+ *
+ * - "/data/input.json" → "/data/input.json"
+ * - "/data/**" → "/data"
+ * - "./output/*.csv" → "./output"
+ * - "*.txt" → null (no directory component)
+ *
+ * Returns null if the pattern has no usable directory prefix.
+ */
+export function extractMountPath(pattern: string): string | null {
+  // Strip glob suffixes: everything from the first wildcard char
+  const globIdx = pattern.search(/[*?{[]/);
+  const concrete = globIdx === -1 ? pattern : pattern.slice(0, globIdx);
+
+  // Remove trailing slash and filename after last slash
+  const lastSlash = concrete.lastIndexOf("/");
+  if (lastSlash <= 0 && !concrete.startsWith("/")) return null;
+
+  const dir = lastSlash === 0 ? "/" : concrete.slice(0, lastSlash);
+  // Don't mount paths under system dirs that bwrap already mounts
+  const systemPrefixes = ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/dev", "/proc"];
+  for (const prefix of systemPrefixes) {
+    if (dir === prefix || dir.startsWith(prefix + "/")) return null;
+  }
+  if (dir === "/") return null;
+  return dir;
 }
 
 /**
