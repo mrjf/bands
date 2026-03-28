@@ -12,24 +12,23 @@ See also: `SECURITY.md` for the current threat model.
 - `packages/runtime/src/banded-skills/lima-exec.ts`
 
 ### 2. Filesystem restrictions (OS-level)
-- **Status: NOT ENFORCED**
-- Application-level glob matching only. Symlinks could bypass.
-- No chroot, mount namespaces, or AppArmor.
-- **Question:** AppArmor profiles vs `unshare --mount` vs chroot? AppArmor is simplest but requires profile authoring. Mount namespaces are more portable.
-- `packages/runtime/src/banded-skills/lima-exec.ts`
+- **Status: DONE** (bubblewrap mount namespace)
+- Scripts run inside `bwrap --unshare-user` with explicit bind mounts.
+- Only system binaries (ro) and workdir (rw) are visible.
+- /home, /etc/passwd, host /tmp, and all other paths are invisible.
+- Tested: /etc/passwd blocked, /home empty, /tmp writes don't escape.
+- **TODO:** File copy-in/copy-out for skills that need to modify local files.
 
 ### 3. Permission enforcement tests
-- **Status: DISABLED**
-- Commented out: `packages/runtime/test/integration/executor-suite.ts:455-473`
-- **Blocked on:** #2 (filesystem restrictions)
-- Network enforcement has its own test suite (`lima-firewall.test.ts`).
+- **Status: PARTIALLY DONE**
+- Network enforcement tested in `lima-firewall.test.ts`
+- Filesystem enforcement tested in `lima-firewall.test.ts` (bwrap isolation)
+- HTTP executor path tests still disabled: `executor-suite.ts:455-473`
 
 ### 4. User privilege separation
 - **Status: DONE**
-- Scripts run as `band-runner` (system user, no home, no login shell).
-- Workdir is `chmod 700`, env.sh is `chmod 600`.
-- `/proc/*/environ` isolated per-user.
-- Tested: whoami, home dir access, /proc isolation, cleanup.
+- bwrap `--unshare-user --uid/--gid` drops to band-runner inside sandbox.
+- Tested: uid is not root, /home empty, /etc/passwd blocked, workdir cleanup.
 
 ### 5. Contract string ref resolution
 - **Status: DONE** (file paths)

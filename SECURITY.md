@@ -18,7 +18,8 @@ what is enforced, what is not, and the current threat model.
 | Layer | Mechanism | Bypass resistance |
 |-------|-----------|-------------------|
 | **Network egress** | Per-execution iptables chain. Default REJECT, explicit ACCEPT for `allow.net` hosts. | Kernel-level. No subprocess (curl, wget, python, raw sockets) can bypass. |
-| **User separation** | Scripts run as `band-runner` (unprivileged system user, no home dir, no login shell). | OS-level. Cannot read other users' files or `/proc/*/environ`. |
+| **Filesystem** | Bubblewrap mount namespace (`bwrap --unshare-user`). Only system binaries (ro) and workdir (rw) are visible. | Kernel-level. `/home`, `/etc/passwd`, host `/tmp`, and all other paths are invisible. |
+| **User separation** | `bwrap --uid/--gid` drops to `band-runner` inside the sandbox. | Namespace-level. Runs as unprivileged user, cannot escalate. |
 | **Process isolation** | Full VM boundary (KVM / Virtualization.framework). | Hypervisor-level. |
 
 ### Enforced at application level
@@ -26,25 +27,21 @@ what is enforced, what is not, and the current threat model.
 | Layer | Mechanism | Limitations |
 |-------|-----------|-------------|
 | **CLI command allow/deny** | Pattern matching in band server, returns 403. | Only checked when using the HTTP executor path. Script-based path (`lima-exec.ts`) does not enforce CLI restrictions — the script runs `bash` directly. |
-| **File read/write allow/deny** | Pattern matching in band server. | Application-level only. No OS-level filesystem restrictions (no chroot, AppArmor, or mount namespaces). Symlink traversal is not prevented. |
 
 ### Not enforced
 
 | Feature | Status |
 |---------|--------|
-| Filesystem OS-level restrictions | Not implemented. Scripts can read/write anything `band-runner` has access to. |
-| seccomp / capability dropping | Not implemented. `band-runner` has default Linux capabilities. |
-| AppArmor / SELinux profiles | Not implemented. |
+| File copy-in/out | Scripts that need to modify local files must have files copied into the workdir. Not yet implemented. |
+| seccomp / capability dropping | Not implemented. Mitigated by bwrap user namespace. |
 | Cost limits (`maxCostDollars`) | Parsed but never checked. |
 
 ## Secrets
 
 - Secrets are passed as environment variables via a file (`env.sh`) in the
   execution workdir.
-- The workdir is `chmod 700` owned by `band-runner`.
-- `env.sh` is `chmod 600` — only `band-runner` can read it.
-- `/proc/<pid>/environ` is only readable by the process owner (`band-runner`),
-  not by other users in the VM.
+- The workdir is only visible inside the bwrap mount namespace.
+- Other processes in the VM cannot see the workdir or its contents.
 - Workdir is cleaned up (`sudo rm -rf`) after every execution.
 - Base64 encoding is used to avoid shell quoting issues, not for security.
 
@@ -66,7 +63,7 @@ is defense-in-depth.
 
 ## Questions for Future Work
 
-- Should we add AppArmor profiles to restrict `band-runner` filesystem access?
-- Should we use `unshare --mount` to create per-execution mount namespaces?
 - Should CLI command allow/deny be enforced in the script-based path (`lima-exec.ts`)?
 - Should we support cost tracking and enforcement for API-calling skills?
+- Should we add file copy-in/out for skills that need to read/write local files?
+- Should we add seccomp profiles on top of bwrap namespace isolation?
