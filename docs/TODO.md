@@ -49,11 +49,12 @@ See also: `SECURITY.md` for the current threat model.
 - Tested: cli passes/fails, specific pattern match, write fails, no-insist succeeds.
 
 ### 10. deny.net
-- **Status: TODO**
-- `deny.net` is parsed but the iptables firewall only uses `allow.net`.
-- Deny is implicit (REJECT default), so anything not in allow.net is blocked.
-- Explicit deny.net would be needed if allow.net contains wildcards and you want to exclude specific hosts within that wildcard (e.g., allow `*.github.com` but deny `evil.github.com`).
-- **Implementation:** Add REJECT rules for deny.net hosts before ACCEPT rules in the per-execution iptables chain.
+- **Status: DONE**
+- deny.net hosts are resolved to IPs and added as REJECT rules BEFORE ACCEPT rules in iptables.
+- Supports: allow wildcard + deny specific (e.g., allow `*.github.com` deny `api.github.com`).
+- Supports: allow `*` + deny specific (allow everything except denied hosts).
+- deny.cli: DONE (via wrapper pattern matching).
+- deny.read/deny.write: TODO (needs file-command wrappers to check paths against deny patterns).
 
 ### 11. limit.maxInputBytes / limit.maxOutputBytes
 - **Status: TODO**
