@@ -47,9 +47,9 @@ See also: `SECURITY.md` for the current threat model.
 ### 7. Cost limit enforcement
 - **Status: TODO**
 - `limit.maxCostDollars` parsed but never checked.
-- **Approach:** Track via Claude Code's cost return values at the agent harness layer (`scripts/agent-test-helpers.ts`), not at the VM/band-server level. The VM runs bash scripts — it has no concept of API cost. The caller (Claude Code) knows the cost.
-- **Implementation:** After each `agentCall()`, read cost from Claude's response headers/metadata, accumulate, and refuse further calls when budget is exceeded.
-- **Blocked on:** Claude Code exposing cost per invocation in a machine-readable way.
+- **Context:** Cost tracking is for skills that make Claude API calls *from inside the VM*. No current skills do this — GitHub/Slack skills call external APIs, not Claude. When a skill does invoke Claude Code internally, the band server needs to track cost within that execution and kill the script if the budget is exceeded.
+- **Implementation:** Pass `maxCostDollars` to band server. Scripts that call Claude Code write cost to `$COST_PATH`. Server monitors and kills if over budget.
+- **Blocked on:** Having a skill that actually makes Claude API calls from inside the VM.
 
 ### 8. Cloudflare executor implementation
 - **Status: PLACEHOLDER**
