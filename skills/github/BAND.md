@@ -6,6 +6,9 @@ allow:
   cli:
     - "gh *"
     - "jq *"
+  net:
+    - "*.github.com"
+    - "*.githubusercontent.com"
 env:
   secrets:
     - GITHUB_TOKEN

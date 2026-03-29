@@ -181,7 +181,7 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
   limaShell(`sudo iptables -A BAND-DEFAULT -j REJECT`);
   // Route band-runner's outbound traffic through the restrictive chain
   limaShell(`sudo iptables -A OUTPUT -m owner --uid-owner ${bandRunnerUid} -j BAND-DEFAULT`);
-  log("      ", \`Default firewall: REJECT all outbound from band-runner (uid \${bandRunnerUid})\`);
+  log("      ", `Default firewall: REJECT all outbound from band-runner (uid ${bandRunnerUid})`);
   const healthy = await pollHealth(`http://localhost:${PORT}`, 15_000);
 
   if (healthy) {

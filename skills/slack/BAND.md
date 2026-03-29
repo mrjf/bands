@@ -7,6 +7,7 @@ allow:
     - "curl *"
     - "jq *"
   net:
+    - "*.slack.com"
     - "slack.com"
 env:
   secrets:

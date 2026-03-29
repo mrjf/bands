@@ -133,9 +133,9 @@ function buildBwrapArgs(
     "--bind-try", "/run", "/run",
     "--proc", "/proc",
     "--dev", "/dev",
-    // Isolated /tmp and /home
-    "--tmpfs", "/tmp",
-    "--tmpfs", "/home",
+    // Isolated /tmp and /home (1777 = world-writable like normal /tmp)
+    "--perms", "1777", "--tmpfs", "/tmp",
+    "--perms", "1777", "--tmpfs", "/home",
     // Workdir (only writable persistent mount)
     "--bind", workdir, workdir,
     "--die-with-parent",
