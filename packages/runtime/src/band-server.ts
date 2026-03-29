@@ -189,59 +189,69 @@ function extractMountDir(pattern: string): string | null {
 
 // ── CLI deny wrappers ─────────────────────────────────────────────────
 
-/**
- * Convert a CLI glob pattern to a regex string.
- * "rm -rf *" → "^rm -rf .*$"
- */
-function globToRegex(pattern: string): string {
-  return "^" + pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")  // escape regex specials
-    .replace(/\*/g, ".*")                    // * → .*
-    .replace(/\?/g, ".")                     // ? → .
-    + "$";
-}
+// Essential commands always available regardless of allow.cli.
+const ESSENTIAL_COMMANDS = [
+  "bash", "sh", "env",
+  "cat", "echo", "printf", "test", "true", "false",
+  "head", "tail", "grep", "sed", "awk", "sort", "uniq", "wc", "tr", "cut",
+  "mktemp", "rm", "mkdir", "chmod", "chown", "touch", "cp", "mv", "ln",
+  "dirname", "basename", "readlink", "realpath",
+  "tee", "xargs", "find", "date", "sleep", "timeout",
+  "base64", "md5sum", "sha256sum",
+  "id", "whoami", "getent",
+  "sudo", "su",
+];
 
 /**
- * Create wrapper scripts for commands that appear in deny.cli patterns.
+ * Set up CLI enforcement via wrapper scripts.
  *
- * For each unique command prefix in deny patterns (e.g., "rm" from "rm -rf *"),
- * creates a wrapper in wrapperDir that:
- * 1. Reconstructs the full command line
- * 2. Checks against all deny patterns
- * 3. If denied: prints error to stderr, exits 126
- * 4. If allowed: exec's the real binary from its original path
+ * Default deny: PATH is set to ONLY the wrapper directory.
+ * Commands not in allow.cli (or essentials) → "command not found".
+ * Commands matching deny.cli patterns → exit 126 with DENIED message.
  *
- * The wrapper dir is prepended to PATH, so the wrapper shadows the real binary.
+ * Each allowed command gets a wrapper that:
+ * 1. Checks full command line against deny.cli patterns (if any)
+ * 2. If denied: prints error, exits 126
+ * 3. If allowed: exec's the real binary via absolute path
  */
-function setupDenyWrappers(wrapperDir: string, denyPatterns: string[]): void {
-  // Group patterns by command name (first token)
-  const cmdPatterns = new Map<string, string[]>();
+function setupCliWrappers(
+  wrapperDir: string,
+  allowPatterns: string[],
+  denyPatterns: string[]
+): void {
+  // Collect allowed command names
+  const allowedCommands = new Set(ESSENTIAL_COMMANDS);
+  for (const pattern of allowPatterns) {
+    const cmd = pattern.split(/\s+/)[0];
+    if (cmd && !cmd.includes("*") && !cmd.includes("/")) {
+      allowedCommands.add(cmd);
+    }
+  }
+
+  // Group deny patterns by command name
+  const denyByCmd = new Map<string, string[]>();
   for (const pattern of denyPatterns) {
     const cmd = pattern.split(/\s+/)[0];
     if (!cmd) continue;
-    const existing = cmdPatterns.get(cmd) || [];
+    const existing = denyByCmd.get(cmd) || [];
     existing.push(pattern);
-    cmdPatterns.set(cmd, existing);
+    denyByCmd.set(cmd, existing);
   }
 
-  for (const [cmd, patterns] of cmdPatterns) {
-    // Find the real binary path (resolve through symlinks)
+  // Create wrapper for each allowed command
+  for (const cmd of allowedCommands) {
     let realPath: string;
     try {
       realPath = shell(`readlink -f $(which ${cmd}) 2>/dev/null`).trim();
-    } catch {
-      // Binary doesn't exist — no wrapper needed
-      continue;
-    }
+    } catch { continue; }
     if (!realPath) continue;
 
-    // Use a simple string comparison approach: convert glob patterns to
-    // bash extended patterns and check with [[ == ]].
-    // We write a match function that handles the conversion.
-    const patternArray = patterns.map(p => `"${p.replace(/"/g, '\\"')}"`).join(" ");
+    const denyPats = denyByCmd.get(cmd) || [];
 
-    const wrapper = `#!/bin/bash
-# Band deny wrapper for: ${cmd}
+    let wrapper: string;
+    if (denyPats.length > 0) {
+      const patternArray = denyPats.map(p => `"${p.replace(/"/g, '\\"')}"`).join(" ");
+      wrapper = `#!/bin/bash
 FULL_CMD="${cmd} $*"
 DENY_PATTERNS=(${patternArray})
 for P in "\${DENY_PATTERNS[@]}"; do
@@ -252,6 +262,11 @@ for P in "\${DENY_PATTERNS[@]}"; do
 done
 exec ${realPath} "$@"
 `;
+    } else {
+      wrapper = `#!/bin/bash
+exec ${realPath} "$@"
+`;
+    }
 
     writeFile(`${wrapperDir}/${cmd}`, wrapper);
     shell(`chmod +x ${wrapperDir}/${cmd}`);
@@ -317,14 +332,16 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       const b64 = Buffer.from(value).toString("base64");
       envLines.push(`export ${key}=$(echo '${b64}' | base64 -d)`);
     }
-    // Set up deny.cli wrappers if any deny patterns exist
+    // Set up CLI enforcement if allow.cli or deny.cli is specified.
+    // PATH is set to ONLY the wrapper directory — default deny.
+    const allowCli = req.allowCli ?? [];
     const denyCli = req.denyCli ?? [];
-    if (denyCli.length > 0) {
-      const wrapperDir = `${workdir}/.band-deny-wrappers`;
+    if (allowCli.length > 0 || denyCli.length > 0) {
+      const wrapperDir = `${workdir}/.band-cli`;
       shell(`mkdir -p ${wrapperDir}`);
-      setupDenyWrappers(wrapperDir, denyCli);
-      // Prepend wrapper dir to PATH so wrappers shadow real binaries
-      envLines.unshift(`export PATH="${wrapperDir}:$PATH"`);
+      setupCliWrappers(wrapperDir, allowCli, denyCli);
+      // PATH is ONLY the wrapper dir — commands not here don't exist
+      envLines.unshift(`export PATH="${wrapperDir}"`);
     }
 
     writeFile(`${workdir}/env.sh`, envLines.join("\n") + "\n");

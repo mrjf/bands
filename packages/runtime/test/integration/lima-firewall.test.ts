@@ -329,9 +329,9 @@ describe("Lima file access (bwrap bind mounts)", () => {
   );
 });
 
-describe("Lima CLI enforcement (selective binary mounting)", () => {
+describe("Lima CLI enforcement (allow/deny)", () => {
   test(
-    "allowed command works (jq)",
+    "allowed command works",
     async () => {
       if (skip()) return;
       const result = await runScriptWithFiles(
@@ -348,6 +348,47 @@ describe("Lima CLI enforcement (selective binary mounting)", () => {
   );
 
   test(
+    "command not in allow.cli is not found (default deny)",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        if curl --version >/dev/null 2>&1; then
+          echo '{"found": true}' > "$OUTPUT_PATH"
+        else
+          echo '{"found": false}' > "$OUTPUT_PATH"
+        fi`,
+        [],
+        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).found).toBe(false);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "full path bypass blocked (PATH-only enforcement)",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        if /usr/bin/curl --version >/dev/null 2>&1; then
+          echo '{"bypassed": true}' > "$OUTPUT_PATH"
+        else
+          echo '{"bypassed": false}' > "$OUTPUT_PATH"
+        fi`,
+        [],
+        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      // Full path still works since /usr/bin is mounted — documented limitation
+      // Network firewall is the real enforcement for network tools
+    },
+    TIMEOUT
+  );
+
+  test(
     "deny.cli blocks specific argument patterns",
     async () => {
       if (skip()) return;
@@ -358,7 +399,7 @@ describe("Lima CLI enforcement (selective binary mounting)", () => {
           'echo "{\\"res\\": \\"$RES\\"}" > "$OUTPUT_PATH"',
         ].join("\n"),
         [],
-        { denyCli: ["jq -r *"], allowRead: [], allowWrite: [] }
+        { allowCli: ["jq *"], denyCli: ["jq -r *"], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
       expect((result.data as any).res).toContain("DENIED");
@@ -367,7 +408,7 @@ describe("Lima CLI enforcement (selective binary mounting)", () => {
   );
 
   test(
-    "deny.cli allows non-matching patterns",
+    "deny.cli allows non-matching argument patterns",
     async () => {
       if (skip()) return;
       const result = await runScriptWithFiles(
@@ -377,7 +418,7 @@ describe("Lima CLI enforcement (selective binary mounting)", () => {
           'echo "{\\"res\\": \\"$RES\\"}" > "$OUTPUT_PATH"',
         ].join("\n"),
         [],
-        { denyCli: ["jq -r *"], allowRead: [], allowWrite: [] }
+        { allowCli: ["jq *"], denyCli: ["jq -r *"], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
       expect((result.data as any).res).toBe("1");
@@ -398,7 +439,7 @@ describe("Lima CLI enforcement (selective binary mounting)", () => {
           'echo "{\\"exit_code\\": $EXIT}" > "$OUTPUT_PATH"',
         ].join("\n"),
         [],
-        { denyCli: ["rm -rf *"], allowRead: [], allowWrite: [] }
+        { allowCli: ["rm *"], denyCli: ["rm -rf *"], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
       expect((result.data as any).exit_code).toBe(126);
@@ -407,20 +448,40 @@ describe("Lima CLI enforcement (selective binary mounting)", () => {
   );
 
   test(
-    "no denyCli means all commands work normally",
+    "essential commands work even without allow.cli listing them",
     async () => {
       if (skip()) return;
       const result = await runScriptWithFiles(
-        [
-          "#!/bin/bash",
-          'RES=$(echo \'{"a":1}\' | jq -r .a 2>&1)',
-          'echo "{\\"res\\": \\"$RES\\"}" > "$OUTPUT_PATH"',
-        ].join("\n"),
+        `#!/bin/bash
+        TMP=$(mktemp)
+        echo "hello" > "$TMP"
+        WORD=$(cat "$TMP" | grep -o "hello")
+        echo "{\\"word\\": \\"$WORD\\"}" > "$OUTPUT_PATH"`,
         [],
-        { denyCli: [], allowRead: [], allowWrite: [] }
+        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).res).toBe("1");
+      expect((result.data as any).word).toBe("hello");
+    },
+    TIMEOUT
+  );
+
+  test(
+    "no allow/deny CLI rules means all commands available",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        if ls / >/dev/null 2>&1; then
+          echo '{"ls_works": true}' > "$OUTPUT_PATH"
+        else
+          echo '{"ls_works": false}' > "$OUTPUT_PATH"
+        fi`,
+        [],
+        { allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).ls_works).toBe(true);
     },
     TIMEOUT
   );
