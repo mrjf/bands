@@ -34,12 +34,12 @@ See also: `SECURITY.md` for the current threat model.
 
 ## Parsed but not enforced
 
-### 8. CLI command allow/deny
-- **Status: DONE** (allow.cli enforced, deny.cli not yet)
-- When `allow.cli` is specified, bwrap mounts `/usr/bin` as empty tmpfs and only bind-mounts allowed + essential binaries. Unlisted commands don't exist — kernel-level enforcement.
-- Essential binaries (bash, cat, grep, etc.) always available.
-- `deny.cli` not yet implemented — would need to remove specific binaries from the essential set.
-- Tested: allowed commands work, blocked commands fail, essentials always work.
+### 8. CLI command deny enforcement
+- **Status: DONE** (deny.cli via proxy shell wrappers)
+- For each command in `deny.cli`, the band server creates a wrapper script that shadows the real binary via PATH prepend. The wrapper checks the full command line against deny glob patterns. If matched, exits 126. Otherwise exec's the real binary.
+- Example: `deny.cli: ["rm -rf *"]` blocks `rm -rf /` but allows `rm file`.
+- Note: `allow.cli` selective binary mounting was attempted but reverted due to setuid/nosuid complications. Full `/usr` is mounted read-only; deny wrappers provide argument-level enforcement.
+- Tested: deny blocks matching, allows non-matching, rm -rf denied, no-deny works.
 
 ### 9. Insist enforcement
 - **Status: TODO**
