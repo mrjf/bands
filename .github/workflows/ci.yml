@@ -63,6 +63,35 @@ jobs:
           limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
 
+      - name: Set up band server in VM
+        run: |
+          # Install prerequisites
+          limactl shell bands-executor -- sudo apt-get update -qq
+          limactl shell bands-executor -- sudo apt-get install -y -qq unzip curl iptables bubblewrap jq
+          # Install bun
+          limactl shell bands-executor -- bash -c 'curl -fsSL https://bun.sh/install | bash'
+          # Create band-runner user
+          limactl shell bands-executor -- sudo useradd --system --no-create-home --shell /usr/sbin/nologin band-runner 2>/dev/null || true
+          # Deploy band server
+          limactl shell bands-executor -- mkdir -p ~/bands-server
+          base64 packages/runtime/src/band-server.ts | limactl shell bands-executor -- bash -c 'base64 -d > ~/bands-server/server.ts'
+          limactl shell bands-executor -- bash -c 'cd ~/bands-server && ~/.bun/bin/bun add hono'
+          # Start server in background
+          limactl shell bands-executor -- bash -c 'nohup ~/.bun/bin/bun run ~/bands-server/server.ts > ~/bands-server/server.log 2>&1 &'
+          sleep 3
+          # Set up default iptables (restrict band-runner only)
+          BAND_UID=$(limactl shell bands-executor -- id -u band-runner | tr -d '\n\r')
+          limactl shell bands-executor -- sudo iptables -N BAND-DEFAULT 2>/dev/null || true
+          limactl shell bands-executor -- sudo iptables -F BAND-DEFAULT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -o lo -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -m state --state ESTABLISHED,RELATED -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p udp --dport 53 -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -j REJECT
+          limactl shell bands-executor -- sudo iptables -A OUTPUT -m owner --uid-owner $BAND_UID -j BAND-DEFAULT
+          # Verify health
+          curl -sf --max-time 10 http://localhost:9000/health
+
       - name: Install gh CLI in VM
         run: |
           limactl copy skills/github/setup.sh bands-executor:/tmp/setup.sh
@@ -129,6 +158,35 @@ jobs:
         run: |
           limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
+
+      - name: Set up band server in VM
+        run: |
+          # Install prerequisites
+          limactl shell bands-executor -- sudo apt-get update -qq
+          limactl shell bands-executor -- sudo apt-get install -y -qq unzip curl iptables bubblewrap jq
+          # Install bun
+          limactl shell bands-executor -- bash -c 'curl -fsSL https://bun.sh/install | bash'
+          # Create band-runner user
+          limactl shell bands-executor -- sudo useradd --system --no-create-home --shell /usr/sbin/nologin band-runner 2>/dev/null || true
+          # Deploy band server
+          limactl shell bands-executor -- mkdir -p ~/bands-server
+          base64 packages/runtime/src/band-server.ts | limactl shell bands-executor -- bash -c 'base64 -d > ~/bands-server/server.ts'
+          limactl shell bands-executor -- bash -c 'cd ~/bands-server && ~/.bun/bin/bun add hono'
+          # Start server in background
+          limactl shell bands-executor -- bash -c 'nohup ~/.bun/bin/bun run ~/bands-server/server.ts > ~/bands-server/server.log 2>&1 &'
+          sleep 3
+          # Set up default iptables (restrict band-runner only)
+          BAND_UID=$(limactl shell bands-executor -- id -u band-runner | tr -d '\n\r')
+          limactl shell bands-executor -- sudo iptables -N BAND-DEFAULT 2>/dev/null || true
+          limactl shell bands-executor -- sudo iptables -F BAND-DEFAULT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -o lo -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -m state --state ESTABLISHED,RELATED -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p udp --dport 53 -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT
+          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -j REJECT
+          limactl shell bands-executor -- sudo iptables -A OUTPUT -m owner --uid-owner $BAND_UID -j BAND-DEFAULT
+          # Verify health
+          curl -sf --max-time 10 http://localhost:9000/health
 
       - name: Install gh CLI in VM
         run: |
