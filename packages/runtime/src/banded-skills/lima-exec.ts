@@ -73,6 +73,7 @@ export async function limaExec(
     config,
     secrets: envSecrets,
     allowNet: networkRules?.allowNet ?? [],
+    denyNet: networkRules?.denyNet ?? [],
     allowCli: fileRules?.allowCli ?? [],
     denyCli: fileRules?.denyCli ?? [],
     allowRead: fileRules?.allowRead ?? [],

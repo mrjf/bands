@@ -66,10 +66,11 @@ function writeFile(path: string, content: string): void {
 
 function setupFirewall(
   chainName: string,
-  allowNet: string[]
+  allowNet: string[],
+  denyNet: string[]
 ): void {
-  if (allowNet.length === 0) return;
-  if (allowNet.includes("*")) return; // wildcard = don't restrict
+  if (allowNet.length === 0 && denyNet.length === 0) return;
+  if (allowNet.includes("*") && denyNet.length === 0) return;
 
   const cmds: string[] = [
     `iptables -N ${chainName} 2>/dev/null || iptables -F ${chainName}`,
@@ -79,7 +80,17 @@ function setupFirewall(
     `iptables -A ${chainName} -p tcp --dport 53 -j ACCEPT`,
   ];
 
+  // Deny rules FIRST — they punch holes in allow (deny takes precedence)
+  for (const host of denyNet) {
+    const resolveHost = host.startsWith("*.") ? host.slice(2) : host;
+    cmds.push(
+      `for ip in $(getent ahosts "${resolveHost}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j REJECT; done`
+    );
+  }
+
+  // Allow rules
   for (const host of allowNet) {
+    if (host === "*") continue; // handled by not adding final REJECT
     if (host.startsWith("*.")) {
       const base = host.slice(2);
       cmds.push(
@@ -94,8 +105,11 @@ function setupFirewall(
     }
   }
 
-  cmds.push(`iptables -A ${chainName} -j REJECT`);
-  // Only route band-runner's new connections through this chain
+  // Default REJECT (unless allow: ["*"] which means allow everything not denied)
+  if (!allowNet.includes("*")) {
+    cmds.push(`iptables -A ${chainName} -j REJECT`);
+  }
+
   cmds.push(`iptables -I OUTPUT 1 -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName}`);
 
   shell(cmds.join("\n"));
@@ -371,6 +385,7 @@ interface ExecRequest {
   config?: unknown;    // band config JSON (optional)
   secrets?: Record<string, string>; // env secrets
   allowNet?: string[];
+  denyNet?: string[];    // Network hosts denied (punches holes in allowNet)
   allowCli?: string[];   // CLI commands allowed (e.g., "gh *", "jq *")
   denyCli?: string[];    // CLI patterns denied (e.g., "rm -rf *", "curl *")
   allowRead?: string[];
@@ -460,8 +475,10 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     shell(`chown -R ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${workdir}`);
 
     // Set up iptables firewall
-    if (req.allowNet && req.allowNet.length > 0) {
-      setupFirewall(chainName, req.allowNet);
+    const allowNet = req.allowNet ?? [];
+    const denyNet = req.denyNet ?? [];
+    if (allowNet.length > 0 || denyNet.length > 0) {
+      setupFirewall(chainName, allowNet, denyNet);
     }
 
     // Run script inside bubblewrap (sudo needed for namespace setup)

@@ -32,15 +32,17 @@ beforeAll(async () => {
 /** Create a temp script and run it through limaExec with given network rules. */
 async function runScript(
   script: string,
-  allowNet: string[]
+  allowNet: string[],
+  denyNet: string[] = []
 ): Promise<{ success: boolean; data?: any; error?: string }> {
-  return runScriptWithFiles(script, allowNet, { allowRead: [], allowWrite: [] });
+  return runScriptFull(script, allowNet, denyNet, { allowRead: [], allowWrite: [] });
 }
 
-/** Create a temp script with network, CLI, and file rules. */
-async function runScriptWithFiles(
+/** Full version with all rule types. */
+async function runScriptFull(
   script: string,
   allowNet: string[],
+  denyNet: string[],
   fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const dir = mkdtempSync(join(tmpdir(), "lima-fw-test-"));
@@ -61,12 +63,21 @@ async function runScriptWithFiles(
       {},
       undefined,
       undefined,
-      { allowNet, denyNet: [] },
+      { allowNet, denyNet },
       { allowCli: fileRules.allowCli ?? [], denyCli: fileRules.denyCli ?? [], allowRead: fileRules.allowRead, allowWrite: fileRules.allowWrite, insist: fileRules.insist }
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/** Create a temp script with network, CLI, and file rules. */
+async function runScriptWithFiles(
+  script: string,
+  allowNet: string[],
+  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  return runScriptFull(script, allowNet, [], fileRules);
 }
 
 function skip() {
@@ -482,6 +493,69 @@ describe("Lima CLI enforcement (allow/deny)", () => {
       );
       expect(result.success).toBe(true);
       expect((result.data as any).ls_works).toBe(true);
+    },
+    TIMEOUT
+  );
+});
+
+describe("Lima deny.net (holes in allow)", () => {
+  test(
+    "deny.net blocks a host within an allow wildcard",
+    async () => {
+      if (skip()) return;
+      // Allow all of *.github.com but deny api.github.com specifically
+      const result = await runScript(
+        `#!/bin/bash
+        if curl -s --connect-timeout 3 https://api.github.com >/dev/null 2>&1; then
+          echo '{"blocked": false}' > "$OUTPUT_PATH"
+        else
+          echo '{"blocked": true}' > "$OUTPUT_PATH"
+        fi`,
+        ["*.github.com"],
+        ["api.github.com"]
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).blocked).toBe(true);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "deny.net does not affect non-denied hosts in the same allow wildcard",
+    async () => {
+      if (skip()) return;
+      // Allow *.github.com, deny api.github.com — github.com itself should still work
+      const result = await runScript(
+        `#!/bin/bash
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 https://github.com)
+        echo "{\\"code\\": $HTTP_CODE}" > "$OUTPUT_PATH"`,
+        ["*.github.com"],
+        ["api.github.com"]
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).code).toBeGreaterThanOrEqual(200);
+      expect((result.data as any).code).toBeLessThan(500);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "allow * with deny blocks only the denied host",
+    async () => {
+      if (skip()) return;
+      // Allow everything but deny httpbin.org
+      const result = await runScript(
+        `#!/bin/bash
+        if curl -s --connect-timeout 3 https://httpbin.org/ip >/dev/null 2>&1; then
+          echo '{"blocked": false}' > "$OUTPUT_PATH"
+        else
+          echo '{"blocked": true}' > "$OUTPUT_PATH"
+        fi`,
+        ["*"],
+        ["httpbin.org"]
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).blocked).toBe(true);
     },
     TIMEOUT
   );
