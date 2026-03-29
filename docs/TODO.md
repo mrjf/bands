@@ -3,65 +3,71 @@
 Tracked issues with enforcement, isolation, and unimplemented features.
 See also: `SECURITY.md` for the current threat model.
 
-## Isolation & Enforcement
+## Done
 
 ### 1. Network egress enforcement
-- **Status: DONE**
 - Per-execution iptables chains in Lima VM. Kernel-level REJECT.
+- UID-based matching (only band-runner traffic restricted).
 - Tested: curl, wget, python, /dev/tcp all blocked.
-- `packages/runtime/src/banded-skills/lima-exec.ts`
 
 ### 2. Filesystem restrictions (OS-level)
-- **Status: DONE** (bubblewrap mount namespace)
-- Scripts run inside `bwrap --unshare-user` with explicit bind mounts.
-- Only system binaries (ro) and workdir (rw) are visible.
-- /home, /etc/passwd, host /tmp, and all other paths are invisible.
-- Tested: /etc/passwd blocked, /home empty, /tmp writes don't escape.
-- **TODO:** File copy-in/copy-out for skills that need to modify local files.
+- Bubblewrap mount namespace. /etc (ro), /run (rw), workdir (rw).
+- /home, host /tmp isolated. /etc/shadow not readable.
 
-### 3. Permission enforcement tests
-- **Status: PARTIALLY DONE**
-- Network enforcement tested in `lima-firewall.test.ts`
-- Filesystem enforcement tested in `lima-firewall.test.ts` (bwrap isolation)
-- HTTP executor path tests still disabled: `executor-suite.ts:455-473`
+### 3. User privilege separation
+- Scripts run as band-runner via sudo inside bwrap.
+- Real UID preserved for iptables matching.
 
-### 4. User privilege separation
-- **Status: DONE**
-- bwrap `--unshare-user --uid/--gid` drops to band-runner inside sandbox.
-- Tested: uid is not root, /home empty, /etc/passwd blocked, workdir cleanup.
+### 4. Contract string ref resolution (file paths)
+- File path refs resolved against workdir. URL refs skipped.
 
-### 5. Contract string ref resolution
-- **Status: DONE** (file paths)
-- File path refs (e.g., `./schemas/input.json`) resolved against workdir.
-- URL refs still skipped (would need fetch + caching).
-- **Question:** Should URL refs be supported? Adds network dependency to validation.
-- `packages/runtime/src/executors/index.ts`
+### 5. Secrets handling
+- Workdir owned by band-runner, cleaned up after execution.
+- /proc environ isolated per-user.
 
-## Stubs (parsed but not enforced)
+### 6. Band server (v3.0)
+- HTTP server in Lima VM. Single-use mutex. POST /exec.
+- Handles iptables + bwrap setup/teardown per execution.
 
-### 6. Server path stubs
-- **Status: REMOVED**
-- `packages/server/` was dead code superseded by `band-server.ts` (runs in VM).
-- Removed entirely.
+### 7. packages/server removal
+- Dead code removed. Superseded by band-server.ts.
 
-### 7. Cost limit enforcement
+## Parsed but not enforced
+
+### 8. CLI command allow/deny
 - **Status: TODO**
-- `limit.maxCostDollars` parsed but never checked.
-- **Context:** Cost tracking is for skills that make Claude API calls *from inside the VM*. No current skills do this — GitHub/Slack skills call external APIs, not Claude. When a skill does invoke Claude Code internally, the band server needs to track cost within that execution and kill the script if the budget is exceeded.
-- **Implementation:** Pass `maxCostDollars` to band server. Scripts that call Claude Code write cost to `$COST_PATH`. Server monitors and kills if over budget.
-- **Blocked on:** Having a skill that actually makes Claude API calls from inside the VM.
+- `allow.cli` / `deny.cli` are parsed but the band server doesn't check them.
+- Scripts run `bash run.sh` directly inside bwrap — any command in the mounted system binaries is available.
+- **Implementation:** Band server could wrap execution with a shell that intercepts commands, or use seccomp to restrict exec calls. Alternatively, limit which binaries are mounted in bwrap.
 
-### 8. Cloudflare executor implementation
+### 9. Insist enforcement
+- **Status: TODO**
+- `insist` (required operations) is not checked in the server-based path.
+- The old embedded server had insist tracking but it was removed with packages/server.
+- **Implementation:** Band server tracks operations performed during execution and checks against insist requirements before returning success.
+
+### 10. deny.net
+- **Status: TODO**
+- `deny.net` is parsed but the iptables firewall only uses `allow.net`.
+- Deny is implicit (REJECT default), so anything not in allow.net is blocked.
+- Explicit deny.net would be needed if allow.net contains wildcards and you want to exclude specific hosts within that wildcard (e.g., allow `*.github.com` but deny `evil.github.com`).
+- **Implementation:** Add REJECT rules for deny.net hosts before ACCEPT rules in the per-execution iptables chain.
+
+### 11. limit.maxInputBytes / limit.maxOutputBytes
+- **Status: TODO**
+- Parsed but not checked in the band server path.
+- **Implementation:** Band server checks input size before execution, output size after. Reject if exceeded.
+
+### 12. Cost limit enforcement (maxCostDollars)
+- **Status: TODO**
+- Parsed but never checked.
+- Cost tracking is for skills that make Claude API calls from inside the VM. No current skills do this.
+- **Blocked on:** Having a skill that calls Claude from inside the VM.
+
+## Not implemented
+
+### 13. Cloudflare executor
 - **Status: PLACEHOLDER**
 - Echoes input back. No real execution.
 - `packages/runtime/src/worker.ts`
 - Separate track from Lima hardening.
-
-## Secrets Handling
-
-### 10. Secrets exposure in Lima VM
-- **Status: DONE** (mitigated)
-- Secrets in `chmod 600` file in `chmod 700` dir owned by `band-runner`.
-- `/proc` environ isolated per-user.
-- Workdir cleaned up after execution.
-- **Remaining risk:** Secrets still in process env vars during execution. Kernel keyring (`keyctl`) would be more secure but adds complexity.
