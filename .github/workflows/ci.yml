@@ -65,6 +65,9 @@ jobs:
 
       - name: Set up band server in VM
         run: |
+          # Ensure home directory exists (--plain mode doesn't create it)
+          limactl shell bands-executor -- sudo mkdir -p /home/$(whoami)
+          limactl shell bands-executor -- sudo chown $(limactl shell bands-executor -- id -u):$(limactl shell bands-executor -- id -g) /home/$(whoami)
           # Install prerequisites
           limactl shell bands-executor -- sudo apt-get update -qq
           limactl shell bands-executor -- sudo apt-get install -y -qq unzip curl iptables bubblewrap jq
@@ -161,6 +164,9 @@ jobs:
 
       - name: Set up band server in VM
         run: |
+          # Ensure home directory exists (--plain mode doesn't create it)
+          limactl shell bands-executor -- sudo mkdir -p /home/$(whoami)
+          limactl shell bands-executor -- sudo chown $(limactl shell bands-executor -- id -u):$(limactl shell bands-executor -- id -g) /home/$(whoami)
           # Install prerequisites
           limactl shell bands-executor -- sudo apt-get update -qq
           limactl shell bands-executor -- sudo apt-get install -y -qq unzip curl iptables bubblewrap jq
