@@ -41,7 +41,7 @@ async function runScript(
 async function runScriptWithFiles(
   script: string,
   allowNet: string[],
-  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; allowWrite: string[] }
+  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const dir = mkdtempSync(join(tmpdir(), "lima-fw-test-"));
   const runSh = join(dir, "run.sh");
@@ -62,7 +62,7 @@ async function runScriptWithFiles(
       undefined,
       undefined,
       { allowNet, denyNet: [] },
-      { allowCli: fileRules.allowCli ?? [], denyCli: fileRules.denyCli ?? [], allowRead: fileRules.allowRead, allowWrite: fileRules.allowWrite }
+      { allowCli: fileRules.allowCli ?? [], denyCli: fileRules.denyCli ?? [], allowRead: fileRules.allowRead, allowWrite: fileRules.allowWrite, insist: fileRules.insist }
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -482,6 +482,110 @@ describe("Lima CLI enforcement (allow/deny)", () => {
       );
       expect(result.success).toBe(true);
       expect((result.data as any).ls_works).toBe(true);
+    },
+    TIMEOUT
+  );
+});
+
+describe("Lima insist enforcement", () => {
+  test(
+    "insist.cli passes when required command is executed",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        echo '{"a":1}' | jq .a > /dev/null
+        echo '{"ok": true}' > "$OUTPUT_PATH"`,
+        [],
+        {
+          allowCli: ["jq *"],
+          allowRead: [],
+          allowWrite: [],
+          insist: { cli: ["jq *"] },
+        }
+      );
+      expect(result.success).toBe(true);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "insist.cli fails when required command is NOT executed",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        echo '{"ok": true}' > "$OUTPUT_PATH"`,
+        [],
+        {
+          allowCli: ["jq *"],
+          allowRead: [],
+          allowWrite: [],
+          insist: { cli: ["jq *"] },
+        }
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Insist not satisfied");
+      expect(result.error).toContain("cli: jq *");
+    },
+    TIMEOUT
+  );
+
+  test(
+    "insist.cli with specific pattern requires matching args",
+    async () => {
+      if (skip()) return;
+      // insist requires "jq .name", but script runs "jq .age"
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        echo '{"name":"test","age":1}' | jq .age > /dev/null
+        echo '{"ok": true}' > "$OUTPUT_PATH"`,
+        [],
+        {
+          allowCli: ["jq *"],
+          allowRead: [],
+          allowWrite: [],
+          insist: { cli: ["jq .name"] },
+        }
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Insist not satisfied");
+    },
+    TIMEOUT
+  );
+
+  test(
+    "insist.write fails when required file is NOT written",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        echo '{"ok": true}' > "$OUTPUT_PATH"`,
+        [],
+        {
+          allowRead: [],
+          allowWrite: ["/tmp/insist-test/**"],
+          insist: { write: ["/tmp/insist-test/result.json"] },
+        }
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Insist not satisfied");
+      expect(result.error).toContain("write:");
+    },
+    TIMEOUT
+  );
+
+  test(
+    "no insist rules means execution always succeeds",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        echo '{"ok": true}' > "$OUTPUT_PATH"`,
+        [],
+        { allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
     },
     TIMEOUT
   );

@@ -248,6 +248,10 @@ function setupCliWrappers(
 
     const denyPats = denyByCmd.get(cmd) || [];
 
+    // All wrappers log the command to the ops tracker file for insist checking.
+    // BAND_OPS_FILE is set in env.sh when insist rules exist.
+    const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
+
     let wrapper: string;
     if (denyPats.length > 0) {
       const patternArray = denyPats.map(p => `"${p.replace(/"/g, '\\"')}"`).join(" ");
@@ -260,10 +264,12 @@ for P in "\${DENY_PATTERNS[@]}"; do
     exit 126
   fi
 done
+${logLine}
 exec ${realPath} "$@"
 `;
     } else {
       wrapper = `#!/bin/bash
+${logLine}
 exec ${realPath} "$@"
 `;
     }
@@ -271,6 +277,90 @@ exec ${realPath} "$@"
     writeFile(`${wrapperDir}/${cmd}`, wrapper);
     shell(`chmod +x ${wrapperDir}/${cmd}`);
   }
+}
+
+// ── Insist checking ───────────────────────────────────────────────────
+
+/**
+ * Glob match using bash-style patterns.
+ */
+function matchGlob(str: string, pattern: string): boolean {
+  const regex = "^" + pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".")
+    + "$";
+  try {
+    return new RegExp(regex).test(str);
+  } catch {
+    return str === pattern;
+  }
+}
+
+/**
+ * Check insist requirements after script execution.
+ *
+ * - cli: checks logged commands in ops file against insist.cli patterns
+ * - write: checks if files matching insist.write patterns exist in workdir or bind mounts
+ * - read: checks if files matching insist.read patterns were accessed (via ops log)
+ * - net: checks if connections to insist.net hosts were made (via iptables counters)
+ */
+function checkInsist(
+  insist: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] },
+  workdir: string,
+  opsFile: string
+): { satisfied: boolean; missing: string[] } {
+  const missing: string[] = [];
+
+  // Read ops log (commands logged by CLI wrappers)
+  let ops: string[] = [];
+  try {
+    const content = shell(`cat ${opsFile} 2>/dev/null || true`).trim();
+    if (content) ops = content.split("\n").filter(Boolean);
+  } catch { /* empty */ }
+
+  // Check insist.cli — each pattern must match at least one logged command
+  for (const pattern of insist.cli ?? []) {
+    const matched = ops.some(op => matchGlob(op, pattern));
+    if (!matched) missing.push(`cli: ${pattern}`);
+  }
+
+  // Check insist.write — each pattern must match a file that exists
+  for (const pattern of insist.write ?? []) {
+    try {
+      // Use find with the pattern to check if any matching file exists
+      const found = shell(`find / -path '${pattern}' -type f 2>/dev/null | head -1`).trim();
+      if (!found) missing.push(`write: ${pattern}`);
+    } catch {
+      missing.push(`write: ${pattern}`);
+    }
+  }
+
+  // Check insist.read — look for read operations in ops log
+  // (Commands like "cat /path" are logged; we check if any match)
+  for (const pattern of insist.read ?? []) {
+    const matched = ops.some(op => {
+      // Check if any logged command references this path
+      return op.includes(pattern.replace(/\*/g, ""));
+    });
+    if (!matched) missing.push(`read: ${pattern}`);
+  }
+
+  // Check insist.net — check iptables packet counters for allowed hosts
+  for (const pattern of insist.net ?? []) {
+    try {
+      // Check if any packets were sent to the host
+      const host = pattern.replace(/^\*\./, "");
+      const packets = shell(
+        `iptables -L OUTPUT -n -v 2>/dev/null | grep -c '${host}' || echo 0`
+      ).trim();
+      if (packets === "0") missing.push(`net: ${pattern}`);
+    } catch {
+      missing.push(`net: ${pattern}`);
+    }
+  }
+
+  return { satisfied: missing.length === 0, missing };
 }
 
 // ── Execution ─────────────────────────────────────────────────────────
@@ -285,6 +375,12 @@ interface ExecRequest {
   denyCli?: string[];    // CLI patterns denied (e.g., "rm -rf *", "curl *")
   allowRead?: string[];
   allowWrite?: string[];
+  insist?: {             // Operations that MUST be performed
+    cli?: string[];      // CLI commands that must be run
+    read?: string[];     // Files that must be read
+    write?: string[];    // Files that must be written
+    net?: string[];      // Hosts that must be contacted
+  };
   timeoutMs?: number;
 }
 
@@ -342,6 +438,20 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       setupCliWrappers(wrapperDir, allowCli, denyCli);
       // PATH is ONLY the wrapper dir — commands not here don't exist
       envLines.unshift(`export PATH="${wrapperDir}"`);
+    }
+
+    // Set up ops tracker for insist enforcement
+    const hasInsist = req.insist && (
+      (req.insist.cli?.length ?? 0) > 0 ||
+      (req.insist.read?.length ?? 0) > 0 ||
+      (req.insist.write?.length ?? 0) > 0 ||
+      (req.insist.net?.length ?? 0) > 0
+    );
+    const opsFile = `${workdir}/.band-ops`;
+    if (hasInsist) {
+      // CLI wrappers log to this file (via BAND_OPS_FILE env var)
+      envLines.push(`export BAND_OPS_FILE="${opsFile}"`);
+      writeFile(opsFile, ""); // create empty
     }
 
     writeFile(`${workdir}/env.sh`, envLines.join("\n") + "\n");
@@ -406,6 +516,22 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     // Fall back to stdout
     if (data === undefined && stdout.trim()) {
       try { data = JSON.parse(stdout.trim()); } catch { data = stdout.trim(); }
+    }
+
+    // Check insist requirements
+    if (hasInsist && req.insist) {
+      const insistResult = checkInsist(req.insist, workdir, opsFile);
+      if (!insistResult.satisfied) {
+        return {
+          success: false,
+          error: `Insist not satisfied: ${insistResult.missing.join(", ")}`,
+          metrics: {
+            durationMs: Date.now() - startTime,
+            inputBytes: inputStr.length,
+            outputBytes: 0,
+          },
+        };
+      }
     }
 
     return {
