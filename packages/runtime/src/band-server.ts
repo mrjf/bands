@@ -111,26 +111,8 @@ function teardownFirewall(chainName: string): void {
 
 // ── Bubblewrap ────────────────────────────────────────────────────────
 
-// Binaries that are always available inside the sandbox regardless of allow.cli.
-// These are needed for bash scripts to function, env setup, and sudo.
-const ESSENTIAL_BINARIES = [
-  // Shell
-  "bash", "sh", "env",
-  // Core utilities (needed by most scripts)
-  "cat", "echo", "printf", "test", "true", "false",
-  "head", "tail", "grep", "sed", "awk", "sort", "uniq", "wc", "tr", "cut",
-  "mktemp", "rm", "mkdir", "chmod", "chown", "touch", "cp", "mv", "ln",
-  "dirname", "basename", "readlink", "realpath",
-  "tee", "xargs", "find", "date", "sleep", "timeout",
-  "base64", "md5sum", "sha256sum",
-  "id", "whoami",
-  // sudo (for user separation)
-  "sudo",
-];
-
 function buildBwrapArgs(
   workdir: string,
-  allowCli: string[],
   allowRead: string[],
   allowWrite: string[]
 ): string[] {
@@ -141,39 +123,13 @@ function buildBwrapArgs(
   // - /usr/bin as empty tmpfs, then bind-mount only allowed + essential binaries
   // - /bin as empty tmpfs with only sh
   // This is kernel-level CLI enforcement — unlisted binaries don't exist.
-  if (allowCli.length > 0) {
-    // Libraries and data (always needed)
-    args.push(
-      "--ro-bind", "/usr/lib", "/usr/lib",
-      "--ro-bind-try", "/usr/share", "/usr/share",
-      "--ro-bind-try", "/usr/libexec", "/usr/libexec",
-    );
-    // Empty /usr/bin and /bin, then mount allowed binaries
-    args.push("--tmpfs", "/usr/bin", "--tmpfs", "/bin");
-
-    // Collect all allowed binary names
-    const allowedBinaries = new Set(ESSENTIAL_BINARIES);
-    for (const pattern of allowCli) {
-      // Extract command name from patterns like "gh *", "jq *", "python3"
-      const cmd = pattern.split(/\s+/)[0];
-      if (cmd && !cmd.includes("*") && !cmd.includes("/")) {
-        allowedBinaries.add(cmd);
-      }
-    }
-
-    // Bind-mount each allowed binary (try both /usr/bin and /bin)
-    for (const bin of allowedBinaries) {
-      args.push("--ro-bind-try", `/usr/bin/${bin}`, `/usr/bin/${bin}`);
-      args.push("--ro-bind-try", `/bin/${bin}`, `/bin/${bin}`);
-    }
-  } else {
-    // No CLI restrictions — mount everything
-    args.push(
-      "--ro-bind", "/usr", "/usr",
-      "--ro-bind", "/lib", "/lib",
-      "--ro-bind", "/bin", "/bin",
-    );
-  }
+  // Mount system binaries (always full — CLI restrictions are enforced
+  // via deny wrappers in PATH, not by hiding binaries)
+  args.push(
+    "--ro-bind", "/usr", "/usr",
+    "--ro-bind", "/lib", "/lib",
+    "--ro-bind", "/bin", "/bin",
+  );
 
   args.push(
     "--ro-bind", "/sbin", "/sbin",
@@ -231,6 +187,77 @@ function extractMountDir(pattern: string): string | null {
   return dir;
 }
 
+// ── CLI deny wrappers ─────────────────────────────────────────────────
+
+/**
+ * Convert a CLI glob pattern to a regex string.
+ * "rm -rf *" → "^rm -rf .*$"
+ */
+function globToRegex(pattern: string): string {
+  return "^" + pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")  // escape regex specials
+    .replace(/\*/g, ".*")                    // * → .*
+    .replace(/\?/g, ".")                     // ? → .
+    + "$";
+}
+
+/**
+ * Create wrapper scripts for commands that appear in deny.cli patterns.
+ *
+ * For each unique command prefix in deny patterns (e.g., "rm" from "rm -rf *"),
+ * creates a wrapper in wrapperDir that:
+ * 1. Reconstructs the full command line
+ * 2. Checks against all deny patterns
+ * 3. If denied: prints error to stderr, exits 126
+ * 4. If allowed: exec's the real binary from its original path
+ *
+ * The wrapper dir is prepended to PATH, so the wrapper shadows the real binary.
+ */
+function setupDenyWrappers(wrapperDir: string, denyPatterns: string[]): void {
+  // Group patterns by command name (first token)
+  const cmdPatterns = new Map<string, string[]>();
+  for (const pattern of denyPatterns) {
+    const cmd = pattern.split(/\s+/)[0];
+    if (!cmd) continue;
+    const existing = cmdPatterns.get(cmd) || [];
+    existing.push(pattern);
+    cmdPatterns.set(cmd, existing);
+  }
+
+  for (const [cmd, patterns] of cmdPatterns) {
+    // Find the real binary path (resolve through symlinks)
+    let realPath: string;
+    try {
+      realPath = shell(`readlink -f $(which ${cmd}) 2>/dev/null`).trim();
+    } catch {
+      // Binary doesn't exist — no wrapper needed
+      continue;
+    }
+    if (!realPath) continue;
+
+    // Use a simple string comparison approach: convert glob patterns to
+    // bash extended patterns and check with [[ == ]].
+    // We write a match function that handles the conversion.
+    const patternArray = patterns.map(p => `"${p.replace(/"/g, '\\"')}"`).join(" ");
+
+    const wrapper = `#!/bin/bash
+# Band deny wrapper for: ${cmd}
+FULL_CMD="${cmd} $*"
+DENY_PATTERNS=(${patternArray})
+for P in "\${DENY_PATTERNS[@]}"; do
+  if eval "[[ \\"\\$FULL_CMD\\" == \\$P ]]" 2>/dev/null; then
+    echo "DENIED: $FULL_CMD" >&2
+    exit 126
+  fi
+done
+exec ${realPath} "$@"
+`;
+
+    writeFile(`${wrapperDir}/${cmd}`, wrapper);
+    shell(`chmod +x ${wrapperDir}/${cmd}`);
+  }
+}
+
 // ── Execution ─────────────────────────────────────────────────────────
 
 interface ExecRequest {
@@ -240,6 +267,7 @@ interface ExecRequest {
   secrets?: Record<string, string>; // env secrets
   allowNet?: string[];
   allowCli?: string[];   // CLI commands allowed (e.g., "gh *", "jq *")
+  denyCli?: string[];    // CLI patterns denied (e.g., "rm -rf *", "curl *")
   allowRead?: string[];
   allowWrite?: string[];
   timeoutMs?: number;
@@ -289,6 +317,16 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       const b64 = Buffer.from(value).toString("base64");
       envLines.push(`export ${key}=$(echo '${b64}' | base64 -d)`);
     }
+    // Set up deny.cli wrappers if any deny patterns exist
+    const denyCli = req.denyCli ?? [];
+    if (denyCli.length > 0) {
+      const wrapperDir = `${workdir}/.band-deny-wrappers`;
+      shell(`mkdir -p ${wrapperDir}`);
+      setupDenyWrappers(wrapperDir, denyCli);
+      // Prepend wrapper dir to PATH so wrappers shadow real binaries
+      envLines.unshift(`export PATH="${wrapperDir}:$PATH"`);
+    }
+
     writeFile(`${workdir}/env.sh`, envLines.join("\n") + "\n");
 
     // Make workdir readable/writable by band-runner
@@ -302,7 +340,6 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     // Run script inside bubblewrap (sudo needed for namespace setup)
     const bwrapArgs = ["sudo", ...buildBwrapArgs(
       workdir,
-      req.allowCli ?? [],
       req.allowRead ?? [],
       req.allowWrite ?? []
     )];

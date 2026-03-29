@@ -260,6 +260,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   let allowNet: string[] = [];
   let denyNet: string[] = [];
   let allowCli: string[] = [];
+  let denyCli: string[] = [];
   let allowRead: string[] = [];
   let allowWrite: string[] = [];
   if (skillRoot) {
@@ -278,6 +279,9 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     }
     if (discovery?.band?.allow?.cli) {
       allowCli = discovery.band.allow.cli;
+    }
+    if (discovery?.band?.deny?.cli) {
+      denyCli = discovery.band.deny.cli;
     }
     if (discovery?.band?.allow?.read) {
       allowRead = discovery.band.allow.read;
@@ -351,7 +355,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       skillRoot,
       configPath,
       { allowNet, denyNet },
-      { allowCli, allowRead, allowWrite }
+      { allowCli, denyCli, allowRead, allowWrite }
     );
 
     if (!result.success) {
@@ -427,7 +431,7 @@ async function executeScript(
   skillRoot?: string,
   configPath?: string,
   networkRules?: { allowNet: string[]; denyNet: string[] },
-  fileRules?: { allowCli: string[]; allowRead: string[]; allowWrite: string[] }
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[] }
 ): Promise<BandExecResult> {
   if (executionTarget === "local-lima") {
     // Delegate to lima-exec

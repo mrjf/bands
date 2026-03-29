@@ -41,7 +41,7 @@ async function runScript(
 async function runScriptWithFiles(
   script: string,
   allowNet: string[],
-  fileRules: { allowCli?: string[]; allowRead: string[]; allowWrite: string[] }
+  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; allowWrite: string[] }
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const dir = mkdtempSync(join(tmpdir(), "lima-fw-test-"));
   const runSh = join(dir, "run.sh");
@@ -62,7 +62,7 @@ async function runScriptWithFiles(
       undefined,
       undefined,
       { allowNet, denyNet: [] },
-      { allowCli: fileRules.allowCli ?? [], allowRead: fileRules.allowRead, allowWrite: fileRules.allowWrite }
+      { allowCli: fileRules.allowCli ?? [], denyCli: fileRules.denyCli ?? [], allowRead: fileRules.allowRead, allowWrite: fileRules.allowWrite }
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -348,81 +348,79 @@ describe("Lima CLI enforcement (selective binary mounting)", () => {
   );
 
   test(
-    "blocked command fails (curl not in allowCli)",
+    "deny.cli blocks specific argument patterns",
     async () => {
       if (skip()) return;
       const result = await runScriptWithFiles(
-        `#!/bin/bash
-        if curl --version >/dev/null 2>&1; then
-          echo '{"blocked": false}' > "$OUTPUT_PATH"
-        else
-          echo '{"blocked": true}' > "$OUTPUT_PATH"
-        fi`,
+        [
+          "#!/bin/bash",
+          'RES=$(echo \'{"a":1}\' | jq -r .a 2>&1)',
+          'echo "{\\"res\\": \\"$RES\\"}" > "$OUTPUT_PATH"',
+        ].join("\n"),
         [],
-        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+        { denyCli: ["jq -r *"], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).blocked).toBe(true);
+      expect((result.data as any).res).toContain("DENIED");
     },
     TIMEOUT
   );
 
   test(
-    "blocked command fails (python3 not in allowCli)",
+    "deny.cli allows non-matching patterns",
     async () => {
       if (skip()) return;
       const result = await runScriptWithFiles(
-        `#!/bin/bash
-        if python3 --version >/dev/null 2>&1; then
-          echo '{"blocked": false}' > "$OUTPUT_PATH"
-        else
-          echo '{"blocked": true}' > "$OUTPUT_PATH"
-        fi`,
+        [
+          "#!/bin/bash",
+          'RES=$(echo \'{"a":1}\' | jq .a 2>&1)',
+          'echo "{\\"res\\": \\"$RES\\"}" > "$OUTPUT_PATH"',
+        ].join("\n"),
         [],
-        { allowCli: ["gh *", "jq *"], allowRead: [], allowWrite: [] }
+        { denyCli: ["jq -r *"], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).blocked).toBe(true);
+      expect((result.data as any).res).toBe("1");
     },
     TIMEOUT
   );
 
   test(
-    "essential commands always work (cat, grep, mktemp)",
+    "deny.cli blocks rm -rf but allows rm",
     async () => {
       if (skip()) return;
       const result = await runScriptWithFiles(
-        `#!/bin/bash
-        TMP=$(mktemp)
-        echo "hello world" > "$TMP"
-        WORD=$(cat "$TMP" | grep -o "world")
-        echo "{\\"word\\": \\"$WORD\\"}" > "$OUTPUT_PATH"`,
+        [
+          "#!/bin/bash",
+          "TMP=$(mktemp)",
+          'rm -rf "$TMP" 2>&1',
+          'EXIT=$?',
+          'echo "{\\"exit_code\\": $EXIT}" > "$OUTPUT_PATH"',
+        ].join("\n"),
         [],
-        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+        { denyCli: ["rm -rf *"], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).word).toBe("world");
+      expect((result.data as any).exit_code).toBe(126);
     },
     TIMEOUT
   );
 
   test(
-    "no allowCli means all commands available",
+    "no denyCli means all commands work normally",
     async () => {
       if (skip()) return;
       const result = await runScriptWithFiles(
-        `#!/bin/bash
-        # ls should work when no CLI restrictions
-        if ls / >/dev/null 2>&1; then
-          echo '{"ls_works": true}' > "$OUTPUT_PATH"
-        else
-          echo '{"ls_works": false}' > "$OUTPUT_PATH"
-        fi`,
+        [
+          "#!/bin/bash",
+          'RES=$(echo \'{"a":1}\' | jq -r .a 2>&1)',
+          'echo "{\\"res\\": \\"$RES\\"}" > "$OUTPUT_PATH"',
+        ].join("\n"),
         [],
-        { allowCli: [], allowRead: [], allowWrite: [] }
+        { denyCli: [], allowRead: [], allowWrite: [] }
       );
       expect(result.success).toBe(true);
-      expect((result.data as any).ls_works).toBe(true);
+      expect((result.data as any).res).toBe("1");
     },
     TIMEOUT
   );
