@@ -35,10 +35,11 @@ See also: `SECURITY.md` for the current threat model.
 ## Parsed but not enforced
 
 ### 8. CLI command allow/deny
-- **Status: TODO**
-- `allow.cli` / `deny.cli` are parsed but the band server doesn't check them.
-- Scripts run `bash run.sh` directly inside bwrap — any command in the mounted system binaries is available.
-- **Implementation:** Band server could wrap execution with a shell that intercepts commands, or use seccomp to restrict exec calls. Alternatively, limit which binaries are mounted in bwrap.
+- **Status: DONE** (allow.cli enforced, deny.cli not yet)
+- When `allow.cli` is specified, bwrap mounts `/usr/bin` as empty tmpfs and only bind-mounts allowed + essential binaries. Unlisted commands don't exist — kernel-level enforcement.
+- Essential binaries (bash, cat, grep, etc.) always available.
+- `deny.cli` not yet implemented — would need to remove specific binaries from the essential set.
+- Tested: allowed commands work, blocked commands fail, essentials always work.
 
 ### 9. Insist enforcement
 - **Status: TODO**
