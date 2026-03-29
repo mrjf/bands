@@ -81,16 +81,7 @@ jobs:
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
           # Create systemd user service for the band server
           limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
-          limactl shell bands-executor -- bash -c "cat > $VM_HOME/.config/systemd/user/band-server.service << EOF
-[Unit]
-Description=Band execution server
-[Service]
-ExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts
-Restart=always
-WorkingDirectory=$VM_HOME/bands-server
-[Install]
-WantedBy=default.target
-EOF"
+          limactl shell bands-executor -- bash -c "printf '[Unit]\nDescription=Band execution server\n[Service]\nExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts\nRestart=always\nWorkingDirectory=$VM_HOME/bands-server\n[Install]\nWantedBy=default.target\n' > $VM_HOME/.config/systemd/user/band-server.service"
           limactl shell bands-executor -- systemctl --user daemon-reload
           limactl shell bands-executor -- systemctl --user enable band-server
           limactl shell bands-executor -- systemctl --user start band-server
@@ -207,16 +198,7 @@ EOF"
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
           # Create systemd user service for the band server
           limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
-          limactl shell bands-executor -- bash -c "cat > $VM_HOME/.config/systemd/user/band-server.service << EOF
-[Unit]
-Description=Band execution server
-[Service]
-ExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts
-Restart=always
-WorkingDirectory=$VM_HOME/bands-server
-[Install]
-WantedBy=default.target
-EOF"
+          limactl shell bands-executor -- bash -c "printf '[Unit]\nDescription=Band execution server\n[Service]\nExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts\nRestart=always\nWorkingDirectory=$VM_HOME/bands-server\n[Install]\nWantedBy=default.target\n' > $VM_HOME/.config/systemd/user/band-server.service"
           limactl shell bands-executor -- systemctl --user daemon-reload
           limactl shell bands-executor -- systemctl --user enable band-server
           limactl shell bands-executor -- systemctl --user start band-server
