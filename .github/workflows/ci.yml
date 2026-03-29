@@ -79,9 +79,24 @@ jobs:
           limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
           limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
-          # Start server in background
+          # Start server in background and wait for it
           limactl shell bands-executor -- bash -c "nohup $VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts > $VM_HOME/bands-server/server.log 2>&1 &"
-          sleep 3
+          # Wait for server to start (poll health endpoint)
+          for i in $(seq 1 15); do
+            if limactl shell bands-executor -- curl -sf --max-time 2 http://localhost:9000/health 2>/dev/null; then
+              echo "Server healthy after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          # Show server log if health check failed
+          limactl shell bands-executor -- curl -sf --max-time 5 http://localhost:9000/health || {
+            echo "=== Server log ==="
+            limactl shell bands-executor -- cat $VM_HOME/bands-server/server.log 2>&1 || true
+            echo "=== Process list ==="
+            limactl shell bands-executor -- ps aux | grep bun || true
+            exit 1
+          }
           # Set up default iptables (restrict band-runner only)
           BAND_UID=$(limactl shell bands-executor -- id -u band-runner | tr -d '\n\r')
           limactl shell bands-executor -- sudo iptables -N BAND-DEFAULT 2>/dev/null || true
@@ -92,8 +107,6 @@ jobs:
           limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT
           limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -j REJECT
           limactl shell bands-executor -- sudo iptables -A OUTPUT -m owner --uid-owner $BAND_UID -j BAND-DEFAULT
-          # Verify health
-          curl -sf --max-time 10 http://localhost:9000/health
 
       - name: Install gh CLI in VM
         run: |
@@ -178,9 +191,24 @@ jobs:
           limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
           limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
-          # Start server in background
+          # Start server in background and wait for it
           limactl shell bands-executor -- bash -c "nohup $VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts > $VM_HOME/bands-server/server.log 2>&1 &"
-          sleep 3
+          # Wait for server to start (poll health endpoint)
+          for i in $(seq 1 15); do
+            if limactl shell bands-executor -- curl -sf --max-time 2 http://localhost:9000/health 2>/dev/null; then
+              echo "Server healthy after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          # Show server log if health check failed
+          limactl shell bands-executor -- curl -sf --max-time 5 http://localhost:9000/health || {
+            echo "=== Server log ==="
+            limactl shell bands-executor -- cat $VM_HOME/bands-server/server.log 2>&1 || true
+            echo "=== Process list ==="
+            limactl shell bands-executor -- ps aux | grep bun || true
+            exit 1
+          }
           # Set up default iptables (restrict band-runner only)
           BAND_UID=$(limactl shell bands-executor -- id -u band-runner | tr -d '\n\r')
           limactl shell bands-executor -- sudo iptables -N BAND-DEFAULT 2>/dev/null || true
@@ -191,8 +219,6 @@ jobs:
           limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT
           limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -j REJECT
           limactl shell bands-executor -- sudo iptables -A OUTPUT -m owner --uid-owner $BAND_UID -j BAND-DEFAULT
-          # Verify health
-          curl -sf --max-time 10 http://localhost:9000/health
 
       - name: Install gh CLI in VM
         run: |
