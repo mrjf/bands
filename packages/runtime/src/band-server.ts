@@ -111,22 +111,73 @@ function teardownFirewall(chainName: string): void {
 
 // ── Bubblewrap ────────────────────────────────────────────────────────
 
+// Binaries that are always available inside the sandbox regardless of allow.cli.
+// These are needed for bash scripts to function, env setup, and sudo.
+const ESSENTIAL_BINARIES = [
+  // Shell
+  "bash", "sh", "env",
+  // Core utilities (needed by most scripts)
+  "cat", "echo", "printf", "test", "true", "false",
+  "head", "tail", "grep", "sed", "awk", "sort", "uniq", "wc", "tr", "cut",
+  "mktemp", "rm", "mkdir", "chmod", "chown", "touch", "cp", "mv", "ln",
+  "dirname", "basename", "readlink", "realpath",
+  "tee", "xargs", "find", "date", "sleep", "timeout",
+  "base64", "md5sum", "sha256sum",
+  "id", "whoami",
+  // sudo (for user separation)
+  "sudo",
+];
+
 function buildBwrapArgs(
   workdir: string,
+  allowCli: string[],
   allowRead: string[],
   allowWrite: string[]
 ): string[] {
-  // Don't use --unshare-user: it remaps UIDs in a new namespace, which
-  // breaks iptables --uid-owner matching. Instead, bwrap runs as root
-  // (via sudo) with only mount namespace isolation. The process inside
-  // runs as band-runner via sudo -u in the command.
-  const args = [
-    "bwrap",
-    // System: read-only
-    "--ro-bind", "/usr", "/usr",
-    "--ro-bind", "/lib", "/lib",
-    "--ro-bind", "/bin", "/bin",
+  const args = ["bwrap"];
+
+  // If allowCli is specified, mount system dirs selectively:
+  // - /usr/lib, /usr/share, /usr/libexec (libraries/data, read-only)
+  // - /usr/bin as empty tmpfs, then bind-mount only allowed + essential binaries
+  // - /bin as empty tmpfs with only sh
+  // This is kernel-level CLI enforcement — unlisted binaries don't exist.
+  if (allowCli.length > 0) {
+    // Libraries and data (always needed)
+    args.push(
+      "--ro-bind", "/usr/lib", "/usr/lib",
+      "--ro-bind-try", "/usr/share", "/usr/share",
+      "--ro-bind-try", "/usr/libexec", "/usr/libexec",
+    );
+    // Empty /usr/bin and /bin, then mount allowed binaries
+    args.push("--tmpfs", "/usr/bin", "--tmpfs", "/bin");
+
+    // Collect all allowed binary names
+    const allowedBinaries = new Set(ESSENTIAL_BINARIES);
+    for (const pattern of allowCli) {
+      // Extract command name from patterns like "gh *", "jq *", "python3"
+      const cmd = pattern.split(/\s+/)[0];
+      if (cmd && !cmd.includes("*") && !cmd.includes("/")) {
+        allowedBinaries.add(cmd);
+      }
+    }
+
+    // Bind-mount each allowed binary (try both /usr/bin and /bin)
+    for (const bin of allowedBinaries) {
+      args.push("--ro-bind-try", `/usr/bin/${bin}`, `/usr/bin/${bin}`);
+      args.push("--ro-bind-try", `/bin/${bin}`, `/bin/${bin}`);
+    }
+  } else {
+    // No CLI restrictions — mount everything
+    args.push(
+      "--ro-bind", "/usr", "/usr",
+      "--ro-bind", "/lib", "/lib",
+      "--ro-bind", "/bin", "/bin",
+    );
+  }
+
+  args.push(
     "--ro-bind", "/sbin", "/sbin",
+    "--ro-bind", "/lib", "/lib",
     "--symlink", "usr/lib64", "/lib64",
     "--ro-bind", "/etc", "/etc",
     // Runtime state (DNS resolver sockets, sudo, dbus)
@@ -139,7 +190,7 @@ function buildBwrapArgs(
     // Workdir (only writable persistent mount)
     "--bind", workdir, workdir,
     "--die-with-parent",
-  ];
+  );
 
   // File access mounts from allow.read / allow.write
   const mounted = new Set<string>();
@@ -188,6 +239,7 @@ interface ExecRequest {
   config?: unknown;    // band config JSON (optional)
   secrets?: Record<string, string>; // env secrets
   allowNet?: string[];
+  allowCli?: string[];   // CLI commands allowed (e.g., "gh *", "jq *")
   allowRead?: string[];
   allowWrite?: string[];
   timeoutMs?: number;
@@ -247,9 +299,10 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       setupFirewall(chainName, req.allowNet);
     }
 
-    // Run script inside bubblewrap (sudo needed for user namespace setup)
+    // Run script inside bubblewrap (sudo needed for namespace setup)
     const bwrapArgs = ["sudo", ...buildBwrapArgs(
       workdir,
+      req.allowCli ?? [],
       req.allowRead ?? [],
       req.allowWrite ?? []
     )];

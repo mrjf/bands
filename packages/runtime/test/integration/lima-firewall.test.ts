@@ -37,11 +37,11 @@ async function runScript(
   return runScriptWithFiles(script, allowNet, { allowRead: [], allowWrite: [] });
 }
 
-/** Create a temp script with both network and file rules. */
+/** Create a temp script with network, CLI, and file rules. */
 async function runScriptWithFiles(
   script: string,
   allowNet: string[],
-  fileRules: { allowRead: string[]; allowWrite: string[] }
+  fileRules: { allowCli?: string[]; allowRead: string[]; allowWrite: string[] }
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const dir = mkdtempSync(join(tmpdir(), "lima-fw-test-"));
   const runSh = join(dir, "run.sh");
@@ -62,7 +62,7 @@ async function runScriptWithFiles(
       undefined,
       undefined,
       { allowNet, denyNet: [] },
-      fileRules
+      { allowCli: fileRules.allowCli ?? [], allowRead: fileRules.allowRead, allowWrite: fileRules.allowWrite }
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -324,6 +324,105 @@ describe("Lima file access (bwrap bind mounts)", () => {
       } finally {
         execSync(`limactl shell ${VM_NAME} -- rm -rf ${testDir}`, { stdio: "pipe" });
       }
+    },
+    TIMEOUT
+  );
+});
+
+describe("Lima CLI enforcement (selective binary mounting)", () => {
+  test(
+    "allowed command works (jq)",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        RESULT=$(echo '{"a":1}' | jq .a)
+        echo "{\\"result\\": $RESULT}" > "$OUTPUT_PATH"`,
+        [],
+        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).result).toBe(1);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "blocked command fails (curl not in allowCli)",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        if curl --version >/dev/null 2>&1; then
+          echo '{"blocked": false}' > "$OUTPUT_PATH"
+        else
+          echo '{"blocked": true}' > "$OUTPUT_PATH"
+        fi`,
+        [],
+        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).blocked).toBe(true);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "blocked command fails (python3 not in allowCli)",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        if python3 --version >/dev/null 2>&1; then
+          echo '{"blocked": false}' > "$OUTPUT_PATH"
+        else
+          echo '{"blocked": true}' > "$OUTPUT_PATH"
+        fi`,
+        [],
+        { allowCli: ["gh *", "jq *"], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).blocked).toBe(true);
+    },
+    TIMEOUT
+  );
+
+  test(
+    "essential commands always work (cat, grep, mktemp)",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        TMP=$(mktemp)
+        echo "hello world" > "$TMP"
+        WORD=$(cat "$TMP" | grep -o "world")
+        echo "{\\"word\\": \\"$WORD\\"}" > "$OUTPUT_PATH"`,
+        [],
+        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).word).toBe("world");
+    },
+    TIMEOUT
+  );
+
+  test(
+    "no allowCli means all commands available",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        `#!/bin/bash
+        # ls should work when no CLI restrictions
+        if ls / >/dev/null 2>&1; then
+          echo '{"ls_works": true}' > "$OUTPUT_PATH"
+        else
+          echo '{"ls_works": false}' > "$OUTPUT_PATH"
+        fi`,
+        [],
+        { allowCli: [], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).ls_works).toBe(true);
     },
     TIMEOUT
   );

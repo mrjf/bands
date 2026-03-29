@@ -36,7 +36,7 @@ export async function limaExec(
   skillRoot?: string,
   configPath?: string,
   networkRules?: { allowNet: string[]; denyNet: string[] },
-  fileRules?: { allowRead: string[]; allowWrite: string[] }
+  fileRules?: { allowCli: string[]; allowRead: string[]; allowWrite: string[] }
 ): Promise<BandExecResult> {
   const startTime = Date.now();
 
@@ -73,6 +73,7 @@ export async function limaExec(
     config,
     secrets: envSecrets,
     allowNet: networkRules?.allowNet ?? [],
+    allowCli: fileRules?.allowCli ?? [],
     allowRead: fileRules?.allowRead ?? [],
     allowWrite: fileRules?.allowWrite ?? [],
   };
