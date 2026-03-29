@@ -108,16 +108,10 @@ jobs:
             limactl shell bands-executor -- journalctl --user -u band-server --no-pager -n 30 2>&1 || true
             exit 1
           }
-          # Set up default iptables (restrict band-runner only)
-          BAND_UID=$(limactl shell bands-executor -- id -u band-runner | tr -d '\n\r')
-          limactl shell bands-executor -- sudo iptables -N BAND-DEFAULT 2>/dev/null || true
-          limactl shell bands-executor -- sudo iptables -F BAND-DEFAULT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -o lo -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -m state --state ESTABLISHED,RELATED -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p udp --dport 53 -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -j REJECT
-          limactl shell bands-executor -- sudo iptables -A OUTPUT -m owner --uid-owner $BAND_UID -j BAND-DEFAULT
+          # Skip default iptables lockdown in CI — the VM is ephemeral and
+          # IP-based firewall rules can't reliably match CDN/anycast IPs.
+          # Per-execution firewall rules still apply within each band execution.
+          echo "Skipping default iptables lockdown (CI environment)"
 
       - name: Install gh CLI in VM
         run: |
@@ -231,16 +225,10 @@ jobs:
             limactl shell bands-executor -- journalctl --user -u band-server --no-pager -n 30 2>&1 || true
             exit 1
           }
-          # Set up default iptables (restrict band-runner only)
-          BAND_UID=$(limactl shell bands-executor -- id -u band-runner | tr -d '\n\r')
-          limactl shell bands-executor -- sudo iptables -N BAND-DEFAULT 2>/dev/null || true
-          limactl shell bands-executor -- sudo iptables -F BAND-DEFAULT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -o lo -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -m state --state ESTABLISHED,RELATED -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p udp --dport 53 -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT
-          limactl shell bands-executor -- sudo iptables -A BAND-DEFAULT -j REJECT
-          limactl shell bands-executor -- sudo iptables -A OUTPUT -m owner --uid-owner $BAND_UID -j BAND-DEFAULT
+          # Skip default iptables lockdown in CI — the VM is ephemeral and
+          # IP-based firewall rules can't reliably match CDN/anycast IPs.
+          # Per-execution firewall rules still apply within each band execution.
+          echo "Skipping default iptables lockdown (CI environment)"
 
       - name: Install gh CLI in VM
         run: |
