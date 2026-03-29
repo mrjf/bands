@@ -42,10 +42,11 @@ See also: `SECURITY.md` for the current threat model.
 - Tested: deny blocks matching, allows non-matching, rm -rf denied, no-deny works.
 
 ### 9. Insist enforcement
-- **Status: TODO**
-- `insist` (required operations) is not checked in the server-based path.
-- The old embedded server had insist tracking but it was removed with packages/server.
-- **Implementation:** Band server tracks operations performed during execution and checks against insist requirements before returning success.
+- **Status: DONE**
+- CLI wrappers log invocations to ops tracker file (`BAND_OPS_FILE`).
+- After execution, server checks ops against `insist.cli` patterns.
+- `insist.write`: checks if files exist. `insist.read`: checks ops log. `insist.net`: checks iptables counters.
+- Tested: cli passes/fails, specific pattern match, write fails, no-insist succeeds.
 
 ### 10. deny.net
 - **Status: TODO**
