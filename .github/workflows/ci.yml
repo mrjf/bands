@@ -79,9 +79,23 @@ jobs:
           limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
           limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
-          # Start server in background and wait for it
-          limactl shell bands-executor -- bash -c "nohup $VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts > $VM_HOME/bands-server/server.log 2>&1 &"
-          # Wait for server to start (poll health endpoint)
+          # Create systemd user service for the band server
+          limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
+          limactl shell bands-executor -- bash -c "cat > $VM_HOME/.config/systemd/user/band-server.service << EOF
+[Unit]
+Description=Band execution server
+[Service]
+ExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts
+Restart=always
+WorkingDirectory=$VM_HOME/bands-server
+[Install]
+WantedBy=default.target
+EOF"
+          limactl shell bands-executor -- systemctl --user daemon-reload
+          limactl shell bands-executor -- systemctl --user enable band-server
+          limactl shell bands-executor -- systemctl --user start band-server
+          limactl shell bands-executor -- loginctl enable-linger $(limactl shell bands-executor -- whoami | tr -d '\n\r')
+          # Wait for server to start (poll health endpoint from inside VM)
           for i in $(seq 1 15); do
             if limactl shell bands-executor -- curl -sf --max-time 2 http://localhost:9000/health 2>/dev/null; then
               echo "Server healthy after ${i}s"
@@ -89,12 +103,12 @@ jobs:
             fi
             sleep 1
           done
-          # Show server log if health check failed
-          limactl shell bands-executor -- curl -sf --max-time 5 http://localhost:9000/health || {
+          # Verify from host too (via port forward)
+          curl -sf --max-time 10 http://localhost:9000/health || {
+            echo "=== Server status ==="
+            limactl shell bands-executor -- systemctl --user status band-server 2>&1 || true
             echo "=== Server log ==="
-            limactl shell bands-executor -- cat $VM_HOME/bands-server/server.log 2>&1 || true
-            echo "=== Process list ==="
-            limactl shell bands-executor -- ps aux | grep bun || true
+            limactl shell bands-executor -- journalctl --user -u band-server --no-pager -n 30 2>&1 || true
             exit 1
           }
           # Set up default iptables (restrict band-runner only)
@@ -191,9 +205,23 @@ jobs:
           limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
           limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
-          # Start server in background and wait for it
-          limactl shell bands-executor -- bash -c "nohup $VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts > $VM_HOME/bands-server/server.log 2>&1 &"
-          # Wait for server to start (poll health endpoint)
+          # Create systemd user service for the band server
+          limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
+          limactl shell bands-executor -- bash -c "cat > $VM_HOME/.config/systemd/user/band-server.service << EOF
+[Unit]
+Description=Band execution server
+[Service]
+ExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts
+Restart=always
+WorkingDirectory=$VM_HOME/bands-server
+[Install]
+WantedBy=default.target
+EOF"
+          limactl shell bands-executor -- systemctl --user daemon-reload
+          limactl shell bands-executor -- systemctl --user enable band-server
+          limactl shell bands-executor -- systemctl --user start band-server
+          limactl shell bands-executor -- loginctl enable-linger $(limactl shell bands-executor -- whoami | tr -d '\n\r')
+          # Wait for server to start (poll health endpoint from inside VM)
           for i in $(seq 1 15); do
             if limactl shell bands-executor -- curl -sf --max-time 2 http://localhost:9000/health 2>/dev/null; then
               echo "Server healthy after ${i}s"
@@ -201,12 +229,12 @@ jobs:
             fi
             sleep 1
           done
-          # Show server log if health check failed
-          limactl shell bands-executor -- curl -sf --max-time 5 http://localhost:9000/health || {
+          # Verify from host too (via port forward)
+          curl -sf --max-time 10 http://localhost:9000/health || {
+            echo "=== Server status ==="
+            limactl shell bands-executor -- systemctl --user status band-server 2>&1 || true
             echo "=== Server log ==="
-            limactl shell bands-executor -- cat $VM_HOME/bands-server/server.log 2>&1 || true
-            echo "=== Process list ==="
-            limactl shell bands-executor -- ps aux | grep bun || true
+            limactl shell bands-executor -- journalctl --user -u band-server --no-pager -n 30 2>&1 || true
             exit 1
           }
           # Set up default iptables (restrict band-runner only)
