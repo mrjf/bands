@@ -63,10 +63,10 @@ jobs:
           limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
           # Set up SSH port forwarding for band server (--plain mode doesn't auto-forward)
-          SSH_PORT=$(limactl list --json | jq -r '.[] | select(.name=="bands-executor") | .sshLocalPort // empty')
-          if [ -n "$SSH_PORT" ]; then
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.lima/_config/user -p $SSH_PORT -fNL 9000:localhost:9000 127.0.0.1
-            echo "Port 9000 forwarded via SSH port $SSH_PORT"
+          SSH_CONFIG=~/.lima/bands-executor/ssh.config
+          if [ -f "$SSH_CONFIG" ]; then
+            ssh -F "$SSH_CONFIG" -fNL 9000:localhost:9000 lima-bands-executor
+            echo "Port 9000 forwarded"
           fi
 
       - name: Set up band server in VM
@@ -186,10 +186,10 @@ jobs:
           limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
           # Set up SSH port forwarding for band server (--plain mode doesn't auto-forward)
-          SSH_PORT=$(limactl list --json | jq -r '.[] | select(.name=="bands-executor") | .sshLocalPort // empty')
-          if [ -n "$SSH_PORT" ]; then
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.lima/_config/user -p $SSH_PORT -fNL 9000:localhost:9000 127.0.0.1
-            echo "Port 9000 forwarded via SSH port $SSH_PORT"
+          SSH_CONFIG=~/.lima/bands-executor/ssh.config
+          if [ -f "$SSH_CONFIG" ]; then
+            ssh -F "$SSH_CONFIG" -fNL 9000:localhost:9000 lima-bands-executor
+            echo "Port 9000 forwarded"
           fi
 
       - name: Set up band server in VM
