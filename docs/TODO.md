@@ -45,9 +45,11 @@ See also: `SECURITY.md` for the current threat model.
 - Removed entirely.
 
 ### 7. Cost limit enforcement
-- **Status: NEEDS DECISION**
+- **Status: TODO**
 - `limit.maxCostDollars` parsed but never checked.
-- **Decision needed:** What does "cost" mean? Per-execution metering? Aggregate budget? API call counting?
+- **Approach:** Track via Claude Code's cost return values at the agent harness layer (`scripts/agent-test-helpers.ts`), not at the VM/band-server level. The VM runs bash scripts — it has no concept of API cost. The caller (Claude Code) knows the cost.
+- **Implementation:** After each `agentCall()`, read cost from Claude's response headers/metadata, accumulate, and refuse further calls when budget is exceeded.
+- **Blocked on:** Claude Code exposing cost per invocation in a machine-readable way.
 
 ### 8. Cloudflare executor implementation
 - **Status: PLACEHOLDER**
