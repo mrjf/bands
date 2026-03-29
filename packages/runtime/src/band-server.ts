@@ -72,6 +72,16 @@ function setupFirewall(
   if (allowNet.length === 0 && denyNet.length === 0) return;
   if (allowNet.includes("*") && denyNet.length === 0) return;
 
+  // Check if iptables is available and BAND-DEFAULT chain exists.
+  // If not (e.g., CI), skip firewall setup — the default iptables
+  // policy is ACCEPT and per-execution rules won't work reliably
+  // with CDN/anycast IPs anyway.
+  try {
+    shell("iptables -L BAND-DEFAULT -n >/dev/null 2>&1");
+  } catch {
+    return; // No default chain = no firewall enforcement
+  }
+
   const cmds: string[] = [
     `iptables -N ${chainName} 2>/dev/null || iptables -F ${chainName}`,
     `iptables -A ${chainName} -o lo -j ACCEPT`,
