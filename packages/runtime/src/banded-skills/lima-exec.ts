@@ -36,7 +36,7 @@ export async function limaExec(
   skillRoot?: string,
   configPath?: string,
   networkRules?: { allowNet: string[]; denyNet: string[] },
-  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
 ): Promise<BandExecResult> {
   const startTime = Date.now();
 
@@ -79,6 +79,8 @@ export async function limaExec(
     allowRead: fileRules?.allowRead ?? [],
     allowWrite: fileRules?.allowWrite ?? [],
     insist: fileRules?.insist,
+    maxInputBytes: fileRules?.maxInputBytes,
+    maxOutputBytes: fileRules?.maxOutputBytes,
   };
 
   // POST to the band server

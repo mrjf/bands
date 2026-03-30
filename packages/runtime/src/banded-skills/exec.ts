@@ -264,6 +264,8 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   let allowRead: string[] = [];
   let allowWrite: string[] = [];
   let insist: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } | undefined;
+  let maxInputBytes: number | undefined;
+  let maxOutputBytes: number | undefined;
   if (skillRoot) {
     const discovery = discoverBandForScript(skillRoot, scriptName);
     if (discovery?.band?.execution?.target) {
@@ -297,6 +299,16 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
         write: discovery.band.insist.write,
         net: discovery.band.insist.net,
       };
+    }
+    if (discovery?.band?.limit?.maxInputBytes) {
+      maxInputBytes = typeof discovery.band.limit.maxInputBytes === "number"
+        ? discovery.band.limit.maxInputBytes
+        : parseInt(String(discovery.band.limit.maxInputBytes), 10) || undefined;
+    }
+    if (discovery?.band?.limit?.maxOutputBytes) {
+      maxOutputBytes = typeof discovery.band.limit.maxOutputBytes === "number"
+        ? discovery.band.limit.maxOutputBytes
+        : parseInt(String(discovery.band.limit.maxOutputBytes), 10) || undefined;
     }
     // Check required secrets are present
     const requiredSecrets = discovery?.band?.requires?.secrets || [];
@@ -364,7 +376,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       skillRoot,
       configPath,
       { allowNet, denyNet },
-      { allowCli, denyCli, allowRead, allowWrite, insist }
+      { allowCli, denyCli, allowRead, allowWrite, insist, maxInputBytes, maxOutputBytes }
     );
 
     if (!result.success) {
@@ -440,7 +452,7 @@ async function executeScript(
   skillRoot?: string,
   configPath?: string,
   networkRules?: { allowNet: string[]; denyNet: string[] },
-  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
 ): Promise<BandExecResult> {
   if (executionTarget === "local-lima") {
     // Delegate to lima-exec

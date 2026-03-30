@@ -406,6 +406,8 @@ interface ExecRequest {
     write?: string[];    // Files that must be written
     net?: string[];      // Hosts that must be contacted
   };
+  maxInputBytes?: number;
+  maxOutputBytes?: number;
   timeoutMs?: number;
 }
 
@@ -427,6 +429,15 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
   const workdir = `/tmp/band-exec-${execId}`;
 
   const inputStr = JSON.stringify(req.input);
+
+  // Check input size limit
+  if (req.maxInputBytes && inputStr.length > req.maxInputBytes) {
+    return {
+      success: false,
+      error: `Input size ${inputStr.length} bytes exceeds limit of ${req.maxInputBytes} bytes`,
+      metrics: { durationMs: Date.now() - startTime, inputBytes: inputStr.length, outputBytes: 0 },
+    };
+  }
 
   try {
     // Create workdir and write all files via shell (server process may
@@ -543,6 +554,18 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     // Fall back to stdout
     if (data === undefined && stdout.trim()) {
       try { data = JSON.parse(stdout.trim()); } catch { data = stdout.trim(); }
+    }
+
+    // Check output size limit
+    if (req.maxOutputBytes && data !== undefined) {
+      const outputSize = JSON.stringify(data).length;
+      if (outputSize > req.maxOutputBytes) {
+        return {
+          success: false,
+          error: `Output size ${outputSize} bytes exceeds limit of ${req.maxOutputBytes} bytes`,
+          metrics: { durationMs: Date.now() - startTime, inputBytes: inputStr.length, outputBytes: outputSize },
+        };
+      }
     }
 
     // Check insist requirements
