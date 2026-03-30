@@ -14,7 +14,7 @@ describe("agent: releases", () => {
     try {
       await gh("release-delete", { repo: GITHUB_REPO!, tag, cleanup_tag: true });
     } catch {}
-  });
+  }, AGENT_TIMEOUT);
 
   test(
     "release-create",

@@ -14,294 +14,24 @@ import { tmpdir } from "os";
 const VM_NAME = "bands-executor";
 const PORT = 9000;
 
-const SERVER_SOURCE = `\
-/**
- * Band Server — Lima VM
- *
- * Self-contained permission enforcement server.
- * Mirrors the Cloudflare worker logic but with real CLI, file I/O, and fetch.
- */
-import { Hono } from "hono";
-import { cors } from "hono/cors";
+// Server source is loaded from band-server.ts at deploy time
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
 
-let currentBand: any = null;
-
-// --- Permission helpers (identical to Cloudflare worker) ---
-
-function matchGlob(str: string, pattern: string): boolean {
-  if (pattern === str) return true;
-  if (pattern === '*' || pattern === '**') return true;
-  const escaped = pattern
-    .split('**').join('DOUBLESTAR')
-    .split('*').join('SINGLESTAR')
-    .split('.').join('[.]')
-    .split('DOUBLESTAR').join('.*')
-    .split('SINGLESTAR').join('.*');
-  try {
-    return new RegExp('^' + escaped + '$').test(str);
-  } catch {
-    return false;
+function getServerSource(): string {
+  // Try loading from the same directory as this file
+  const candidates = [
+    join(dirname(new URL(import.meta.url).pathname), "band-server.ts"),
+    join(process.cwd(), "packages/runtime/src/band-server.ts"),
+    join(process.cwd(), "src/band-server.ts"),
+  ];
+  for (const p of candidates) {
+    try {
+      return readFileSync(p, "utf-8");
+    } catch { /* try next */ }
   }
+  throw new Error("Could not find band-server.ts");
 }
-
-function checkPermission(value: string, allowPatterns?: string[], denyPatterns?: string[]): boolean {
-  for (const pattern of (denyPatterns || [])) {
-    if (matchGlob(value, pattern)) return false;
-  }
-  for (const pattern of (allowPatterns || [])) {
-    if (matchGlob(value, pattern)) return true;
-  }
-  return false;
-}
-
-function isFirewallTest(payload: any): boolean {
-  if (typeof payload !== 'object' || payload === null) return false;
-  return 'testCli' in payload || 'testRead' in payload || 'testWrite' in payload || 'testNet' in payload;
-}
-
-function isOperationPayload(payload: any): boolean {
-  if (typeof payload !== 'object' || payload === null) return false;
-  return 'runCli' in payload || 'readFiles' in payload || 'writeFiles' in payload || 'fetchUrls' in payload;
-}
-
-function checkInsistSatisfied(band: any, tracker: any) {
-  const missing: any[] = [];
-  for (const pattern of (band.insist?.cli || [])) {
-    const found = tracker.cli.some((cmd: string) => checkPermission(cmd, [pattern], []));
-    if (!found) missing.push({ category: 'cli', pattern });
-  }
-  for (const pattern of (band.insist?.read || [])) {
-    const found = tracker.read.some((path: string) => checkPermission(path, [pattern], []));
-    if (!found) missing.push({ category: 'read', pattern });
-  }
-  for (const pattern of (band.insist?.write || [])) {
-    const found = tracker.write.some((path: string) => checkPermission(path, [pattern], []));
-    if (!found) missing.push({ category: 'write', pattern });
-  }
-  for (const pattern of (band.insist?.net || [])) {
-    const found = tracker.net.some((host: string) => checkPermission(host, [pattern], []));
-    if (!found) missing.push({ category: 'net', pattern });
-  }
-  return { satisfied: missing.length === 0, missing };
-}
-
-function checkPermissions(band: any, payload: any) {
-  const results: any = { anyDenied: false };
-  if (payload.testCli) {
-    const allowed = checkPermission(payload.testCli, band.allow?.cli, band.deny?.cli);
-    results.cli = { command: payload.testCli, allowed };
-    if (!allowed) { results.anyDenied = true; results.deniedReason = 'CLI command denied: ' + payload.testCli; }
-  }
-  if (payload.testRead) {
-    const allowed = checkPermission(payload.testRead, band.allow?.read, band.deny?.read);
-    results.read = { path: payload.testRead, allowed };
-    if (!allowed) { results.anyDenied = true; results.deniedReason = 'Read access denied: ' + payload.testRead; }
-  }
-  if (payload.testWrite) {
-    const allowed = checkPermission(payload.testWrite, band.allow?.write, band.deny?.write);
-    results.write = { path: payload.testWrite, allowed };
-    if (!allowed) { results.anyDenied = true; results.deniedReason = 'Write access denied: ' + payload.testWrite; }
-  }
-  if (payload.testNet) {
-    const allowed = checkPermission(payload.testNet, band.allow?.net, band.deny?.net);
-    results.net = { host: payload.testNet, allowed };
-    if (!allowed) { results.anyDenied = true; results.deniedReason = 'Network access denied: ' + payload.testNet; }
-  }
-  return results;
-}
-
-// --- Hono app ---
-
-const app = new Hono();
-app.use("*", cors());
-
-app.get("/health", (c) => c.json({ ready: !!currentBand, band: currentBand?.band, version: '2.0' }));
-
-app.post("/init", async (c) => {
-  currentBand = await c.req.json();
-  return c.json({ ok: true, band: currentBand.band });
-});
-
-app.post("/", async (c) => {
-  if (!currentBand) return c.json({ error: { code: 'NOT_INITIALIZED', message: 'Call /init first' } }, 400);
-
-  const startTime = Date.now();
-  const band = currentBand;
-  const payload = await c.req.json();
-  const inputBytes = JSON.stringify(payload).length;
-
-  // --- Firewall test (permission check only) ---
-  if (isFirewallTest(payload)) {
-    const permissions = checkPermissions(band, payload);
-
-    if (permissions.anyDenied) {
-      const durationMs = Date.now() - startTime;
-      c.header('X-Band-Duration-Ms', String(durationMs));
-      return c.json({
-        error: { code: 'PERMISSION_DENIED', message: permissions.deniedReason },
-        permissions,
-        enforced: true,
-      }, 403);
-    }
-
-    const result = {
-      success: true,
-      band: band.band,
-      version: band.version,
-      permissions,
-      enforced: true,
-      timestamp: new Date().toISOString(),
-    };
-    const outputBytes = JSON.stringify(result).length;
-    const durationMs = Date.now() - startTime;
-    c.header('X-Band-Input-Bytes', String(inputBytes));
-    c.header('X-Band-Output-Bytes', String(outputBytes));
-    c.header('X-Band-Duration-Ms', String(durationMs));
-    return c.json(result);
-  }
-
-  // --- Operation payload (actual execution with insist tracking) ---
-  if (isOperationPayload(payload)) {
-    const tracker = { cli: [] as string[], read: [] as string[], write: [] as string[], net: [] as string[] };
-    const operations: any = {};
-    let permissionDenied: any = null;
-
-    // Process CLI commands — Lima CAN execute these
-    if (payload.runCli) {
-      operations.cli = [];
-      for (const cmd of payload.runCli) {
-        tracker.cli.push(cmd);
-        const allowed = checkPermission(cmd, band.allow?.cli, band.deny?.cli);
-        if (!allowed) { permissionDenied = { type: 'cli', value: cmd }; break; }
-        try {
-          const proc = Bun.spawnSync(['bash', '-c', cmd], { timeout: 10000 });
-          operations.cli.push({ command: cmd, allowed, output: proc.stdout.toString().trim() });
-        } catch (err: any) {
-          operations.cli.push({ command: cmd, allowed, error: err.message });
-        }
-      }
-    }
-
-    // Process file reads — Lima CAN read files
-    if (!permissionDenied && payload.readFiles) {
-      operations.read = [];
-      for (const path of payload.readFiles) {
-        tracker.read.push(path);
-        const allowed = checkPermission(path, band.allow?.read, band.deny?.read);
-        if (!allowed) { permissionDenied = { type: 'read', value: path }; break; }
-        try {
-          const content = await Bun.file(path).text();
-          operations.read.push({ path, allowed, content });
-        } catch (err: any) {
-          operations.read.push({ path, allowed, error: err.message });
-        }
-      }
-    }
-
-    // Process file writes — Lima CAN write files
-    if (!permissionDenied && payload.writeFiles) {
-      operations.write = [];
-      for (const item of payload.writeFiles) {
-        tracker.write.push(item.path);
-        const allowed = checkPermission(item.path, band.allow?.write, band.deny?.write);
-        if (!allowed) { permissionDenied = { type: 'write', value: item.path }; break; }
-        try {
-          await Bun.write(item.path, item.content || '');
-          operations.write.push({ path: item.path, allowed, written: true });
-        } catch (err: any) {
-          operations.write.push({ path: item.path, allowed, error: err.message });
-        }
-      }
-    }
-
-    // Process network fetches — Lima CAN fetch
-    if (!permissionDenied && payload.fetchUrls) {
-      operations.net = [];
-      for (const url of payload.fetchUrls) {
-        let host: string;
-        try { host = new URL(url).hostname; } catch { host = url; }
-        tracker.net.push(host);
-        const allowed = checkPermission(host, band.allow?.net, band.deny?.net);
-        if (!allowed) { permissionDenied = { type: 'net', value: url }; break; }
-        try {
-          const resp = await fetch(url);
-          operations.net.push({ url, allowed, status: resp.status });
-        } catch (err: any) {
-          operations.net.push({ url, allowed, error: err.message });
-        }
-      }
-    }
-
-    // Permission denied
-    if (permissionDenied) {
-      const durationMs = Date.now() - startTime;
-      c.header('X-Band-Duration-Ms', String(durationMs));
-      return c.json({
-        error: {
-          code: 'PERMISSION_DENIED',
-          message: permissionDenied.type + ' access denied: ' + permissionDenied.value,
-        },
-        operations,
-        tracker,
-        enforced: true,
-      }, 403);
-    }
-
-    // Insist check
-    const insistCheck = checkInsistSatisfied(band, tracker);
-    if (!insistCheck.satisfied) {
-      const durationMs = Date.now() - startTime;
-      c.header('X-Band-Duration-Ms', String(durationMs));
-      return c.json({
-        error: {
-          code: 'INSIST_NOT_SATISFIED',
-          message: 'Required operations not performed: ' + insistCheck.missing.map((m: any) => m.category + ':' + m.pattern).join(', '),
-        },
-        operations,
-        tracker,
-        insist: { satisfied: false, missing: insistCheck.missing, enforced: true },
-        enforced: true,
-      }, 400);
-    }
-
-    // Success
-    const result = {
-      success: true,
-      band: band.band,
-      version: band.version,
-      operations,
-      tracker,
-      insist: { satisfied: true, missing: [], enforced: true },
-      enforced: true,
-      timestamp: new Date().toISOString(),
-    };
-    const outputStr = JSON.stringify(result);
-    const durationMs = Date.now() - startTime;
-    c.header('X-Band-Input-Bytes', String(inputBytes));
-    c.header('X-Band-Output-Bytes', String(outputStr.length));
-    c.header('X-Band-Duration-Ms', String(durationMs));
-    return c.json(result);
-  }
-
-  // --- Regular payload (basic execution tests) ---
-  const result = {
-    success: true,
-    band: band.band,
-    version: band.version,
-    input: payload,
-    timestamp: new Date().toISOString(),
-    executedOn: 'lima',
-  };
-  const outputStr = JSON.stringify(result);
-  const durationMs = Date.now() - startTime;
-  c.header('X-Band-Input-Bytes', String(inputBytes));
-  c.header('X-Band-Output-Bytes', String(outputStr.length));
-  c.header('X-Band-Duration-Ms', String(durationMs));
-  return c.json(result);
-});
-
-export default { port: 9000, fetch: app.fetch };
-`;
 
 const SYSTEMD_UNIT = `\
 [Unit]
@@ -374,7 +104,7 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
 
   if (!bunInstalled) {
     log("      ", "Installing prerequisites...");
-    limaShell("sudo apt-get update -qq && sudo apt-get install -y -qq unzip curl");
+    limaShell("sudo apt-get update -qq && sudo apt-get install -y -qq unzip curl iptables bubblewrap");
     log("      ", "Installing bun...");
     limaShell("curl -fsSL https://bun.sh/install | bash");
   }
@@ -389,12 +119,23 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
     process.exit(1);
   }
 
-  // [4/6] Deploy band server
-  log("[4/6]", "Deploying band server...");
+  // [4/7] Create band-runner user
+  log("[4/7]", "Creating band-runner user...");
+  try {
+    limaShell("id band-runner");
+    log("      ", "band-runner user already exists");
+  } catch {
+    limaShell("sudo useradd --system --no-create-home --shell /usr/sbin/nologin band-runner");
+    log("      ", "band-runner user created");
+  }
+
+  // [5/7] Deploy band server
+  log("[5/7]", "Deploying band server...");
   limaShell("mkdir -p ~/bands-server");
 
-  // Write server.ts via stdin pipe to avoid shell escaping issues
-  const serverB64 = Buffer.from(SERVER_SOURCE).toString("base64");
+  // Read server source from band-server.ts and deploy to VM
+  const serverSource = getServerSource();
+  const serverB64 = Buffer.from(serverSource).toString("base64");
   limaShell(`echo '${serverB64}' | base64 -d > ~/bands-server/server.ts`);
 
   log("      ", "Installing dependencies...");
@@ -409,8 +150,8 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
   }
   log("      ", "Server code deployed");
 
-  // [5/6] Create and start systemd service
-  log("[5/6]", "Creating systemd service...");
+  // [6/7] Create and start systemd service
+  log("[6/7]", "Creating systemd service...");
   limaShell("mkdir -p ~/.config/systemd/user");
 
   const unitB64 = Buffer.from(SYSTEMD_UNIT).toString("base64");
@@ -422,8 +163,25 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
   limaShell("loginctl enable-linger $USER");
   log("      ", "Service enabled and started");
 
-  // [6/6] Verify health endpoint
-  log("[6/6]", "Verifying health endpoint...");
+  // [7/7] Set up default firewall (locked down) and verify health
+  log("[7/7]", "Setting up default firewall and verifying...");
+
+  // Default iptables: DROP all outbound from band-runner.
+  // Only band-runner's traffic is restricted — the server process and SSH
+  // tunnel (which run as the host user) need unrestricted outbound.
+  const bandRunnerUid = limaShell("id -u band-runner").trim();
+  limaShell(`sudo iptables -F OUTPUT 2>/dev/null || true`);
+  limaShell(`sudo iptables -P OUTPUT ACCEPT`);
+  // Create a persistent chain for band-runner traffic
+  limaShell(`sudo iptables -N BAND-DEFAULT 2>/dev/null || sudo iptables -F BAND-DEFAULT`);
+  limaShell(`sudo iptables -A BAND-DEFAULT -o lo -j ACCEPT`);
+  limaShell(`sudo iptables -A BAND-DEFAULT -m state --state ESTABLISHED,RELATED -j ACCEPT`);
+  limaShell(`sudo iptables -A BAND-DEFAULT -p udp --dport 53 -j ACCEPT`);
+  limaShell(`sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT`);
+  limaShell(`sudo iptables -A BAND-DEFAULT -j REJECT`);
+  // Route band-runner's outbound traffic through the restrictive chain
+  limaShell(`sudo iptables -A OUTPUT -m owner --uid-owner ${bandRunnerUid} -j BAND-DEFAULT`);
+  log("      ", `Default firewall: REJECT all outbound from band-runner (uid ${bandRunnerUid})`);
   const healthy = await pollHealth(`http://localhost:${PORT}`, 15_000);
 
   if (healthy) {

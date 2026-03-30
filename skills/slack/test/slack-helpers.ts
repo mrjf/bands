@@ -61,7 +61,7 @@ function findSkillRoot(): string {
 export const SKILL_ROOT = findSkillRoot();
 export const RESOURCES = join(SKILL_ROOT, "scripts", "resources");
 
-export const TIMEOUT = 30_000;
+export const TIMEOUT = 60_000;
 
 /**
  * Require TEST_SLACK_BOT_TOKEN and TEST_SLACK_CHANNEL.

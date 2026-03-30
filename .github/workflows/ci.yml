@@ -25,9 +25,6 @@ jobs:
       - name: Editor package tests
         run: bun test --cwd packages/editor
 
-      - name: Server package tests
-        run: bun test --cwd packages/server
-
       - name: Runtime unit tests
         run: bun test test/unit/ test/executors/
         working-directory: packages/runtime
@@ -65,6 +62,56 @@ jobs:
         run: |
           limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
+          # Set up SSH port forwarding for band server (--plain mode doesn't auto-forward)
+          SSH_CONFIG=~/.lima/bands-executor/ssh.config
+          if [ -f "$SSH_CONFIG" ]; then
+            ssh -F "$SSH_CONFIG" -fNL 9000:localhost:9000 lima-bands-executor
+            echo "Port 9000 forwarded"
+          fi
+
+      - name: Set up band server in VM
+        run: |
+          # Get the VM home directory path (Lima may append .linux to username)
+          VM_HOME=$(limactl shell bands-executor -- bash -c 'echo $HOME')
+          echo "VM home: $VM_HOME"
+          # Install prerequisites
+          limactl shell bands-executor -- sudo apt-get update -qq
+          limactl shell bands-executor -- sudo apt-get install -y -qq unzip curl iptables bubblewrap jq
+          # Install bun
+          limactl shell bands-executor -- bash -c 'curl -fsSL https://bun.sh/install | bash'
+          # Create band-runner user
+          limactl shell bands-executor -- sudo useradd --system --no-create-home --shell /usr/sbin/nologin band-runner 2>/dev/null || true
+          # Deploy band server using limactl copy (avoids pipe issues with --plain)
+          limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
+          limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
+          limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
+          # Create systemd user service for the band server
+          limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
+          limactl shell bands-executor -- bash -c "printf '[Unit]\nDescription=Band execution server\n[Service]\nExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts\nRestart=always\nWorkingDirectory=$VM_HOME/bands-server\n[Install]\nWantedBy=default.target\n' > $VM_HOME/.config/systemd/user/band-server.service"
+          limactl shell bands-executor -- systemctl --user daemon-reload
+          limactl shell bands-executor -- systemctl --user enable band-server
+          limactl shell bands-executor -- systemctl --user start band-server
+          limactl shell bands-executor -- loginctl enable-linger $(limactl shell bands-executor -- whoami | tr -d '\n\r')
+          # Wait for server to start (poll health endpoint from inside VM)
+          for i in $(seq 1 15); do
+            if limactl shell bands-executor -- curl -sf --max-time 2 http://localhost:9000/health 2>/dev/null; then
+              echo "Server healthy after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          # Verify health from inside VM (port forward may not work with --plain/QEMU)
+          limactl shell bands-executor -- curl -sf --max-time 5 http://localhost:9000/health || {
+            echo "=== Server status ==="
+            limactl shell bands-executor -- systemctl --user status band-server 2>&1 || true
+            echo "=== Server log ==="
+            limactl shell bands-executor -- journalctl --user -u band-server --no-pager -n 30 2>&1 || true
+            exit 1
+          }
+          # Skip default iptables lockdown in CI — the VM is ephemeral and
+          # IP-based firewall rules can't reliably match CDN/anycast IPs.
+          # Per-execution firewall rules still apply within each band execution.
+          echo "Skipping default iptables lockdown (CI environment)"
 
       - name: Install gh CLI in VM
         run: |
@@ -132,6 +179,56 @@ jobs:
         run: |
           limactl start --name=bands-executor template://ubuntu-lts --vm-type=qemu --cpus=2 --memory=4 --plain
           limactl shell bands-executor -- uname -a
+          # Set up SSH port forwarding for band server (--plain mode doesn't auto-forward)
+          SSH_CONFIG=~/.lima/bands-executor/ssh.config
+          if [ -f "$SSH_CONFIG" ]; then
+            ssh -F "$SSH_CONFIG" -fNL 9000:localhost:9000 lima-bands-executor
+            echo "Port 9000 forwarded"
+          fi
+
+      - name: Set up band server in VM
+        run: |
+          # Get the VM home directory path (Lima may append .linux to username)
+          VM_HOME=$(limactl shell bands-executor -- bash -c 'echo $HOME')
+          echo "VM home: $VM_HOME"
+          # Install prerequisites
+          limactl shell bands-executor -- sudo apt-get update -qq
+          limactl shell bands-executor -- sudo apt-get install -y -qq unzip curl iptables bubblewrap jq
+          # Install bun
+          limactl shell bands-executor -- bash -c 'curl -fsSL https://bun.sh/install | bash'
+          # Create band-runner user
+          limactl shell bands-executor -- sudo useradd --system --no-create-home --shell /usr/sbin/nologin band-runner 2>/dev/null || true
+          # Deploy band server using limactl copy (avoids pipe issues with --plain)
+          limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
+          limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
+          limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
+          # Create systemd user service for the band server
+          limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
+          limactl shell bands-executor -- bash -c "printf '[Unit]\nDescription=Band execution server\n[Service]\nExecStart=$VM_HOME/.bun/bin/bun run $VM_HOME/bands-server/server.ts\nRestart=always\nWorkingDirectory=$VM_HOME/bands-server\n[Install]\nWantedBy=default.target\n' > $VM_HOME/.config/systemd/user/band-server.service"
+          limactl shell bands-executor -- systemctl --user daemon-reload
+          limactl shell bands-executor -- systemctl --user enable band-server
+          limactl shell bands-executor -- systemctl --user start band-server
+          limactl shell bands-executor -- loginctl enable-linger $(limactl shell bands-executor -- whoami | tr -d '\n\r')
+          # Wait for server to start (poll health endpoint from inside VM)
+          for i in $(seq 1 15); do
+            if limactl shell bands-executor -- curl -sf --max-time 2 http://localhost:9000/health 2>/dev/null; then
+              echo "Server healthy after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          # Verify health from inside VM (port forward may not work with --plain/QEMU)
+          limactl shell bands-executor -- curl -sf --max-time 5 http://localhost:9000/health || {
+            echo "=== Server status ==="
+            limactl shell bands-executor -- systemctl --user status band-server 2>&1 || true
+            echo "=== Server log ==="
+            limactl shell bands-executor -- journalctl --user -u band-server --no-pager -n 30 2>&1 || true
+            exit 1
+          }
+          # Skip default iptables lockdown in CI — the VM is ephemeral and
+          # IP-based firewall rules can't reliably match CDN/anycast IPs.
+          # Per-execution firewall rules still apply within each band execution.
+          echo "Skipping default iptables lockdown (CI environment)"
 
       - name: Install gh CLI in VM
         run: |

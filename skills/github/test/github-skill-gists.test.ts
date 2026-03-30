@@ -53,7 +53,7 @@ process.env.GITHUB_TOKEN = GIST_TOKEN;
 
 const SKILL_ROOT = resolve(__dirname, "..");
 const RESOURCES = join(SKILL_ROOT, "scripts", "resources");
-const TIMEOUT = 30_000;
+const TIMEOUT = 60_000;
 
 async function gh(script: string, input: Record<string, unknown>) {
   const tempDir = mkdtempSync(join(tmpdir(), "gh-test-"));

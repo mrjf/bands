@@ -7,16 +7,14 @@
  * - local-dangerously: Always available (no isolation)
  * - lima: Requires Lima VM running
  * - cloudflare: Requires wrangler + CLOUDFLARE_API_TOKEN
- * - lima: Requires Lima VM (macOS)
  *
  * Run with: bun test test/integration/
  */
 
-import { afterAll } from "bun:test";
-import { runAllExecutorSuites, runAllPermissionSuites, printSkippedSummary } from "./executor-suite";
-import { runAllFirewallSuites, printFirewallSkippedSummary } from "./firewall.test";
-import { runAllInsistSuites, printInsistSkippedSummary } from "./insist.test";
-import { runAllFileIOSuites, printFileIOSkippedSummary } from "./fileio.test";
+import { runAllExecutorSuites, runAllPermissionSuites } from "./executor-suite";
+import { runAllFirewallSuites } from "./firewall.test";
+import { runAllInsistSuites } from "./insist.test";
+import { runAllFileIOSuites } from "./fileio.test";
 
 console.log(`
 ================================================================================
@@ -54,10 +52,5 @@ runAllInsistSuites();
 // Run actual file I/O tests across all executors
 runAllFileIOSuites();
 
-// Print summary of skipped tests at the end
-afterAll(() => {
-  printSkippedSummary();
-  printFirewallSkippedSummary();
-  printInsistSkippedSummary();
-  printFileIOSkippedSummary();
-});
+// Skip summary is printed by print-skip-summary.ts AFTER bun test exits.
+// See test:all and test:integration scripts in package.json.

@@ -14,7 +14,7 @@ describe("agent: gists", () => {
         await gh("gist-delete", { id: gistId });
       } catch {}
     }
-  });
+  }, AGENT_TIMEOUT);
 
   test(
     "gist-create",

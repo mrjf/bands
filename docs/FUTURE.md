@@ -76,7 +76,7 @@ For long-running bands that exceed HTTP timeout limits:
 
 ### Fly.io Executor
 
-Similar to Lima/Cloudflare - deploy `@bands/server` to Fly.io Machines:
+Similar to Lima - deploy `band-server.ts` to Fly.io Machines:
 
 - Persistent VMs with HTTP endpoint
 - Geographic distribution

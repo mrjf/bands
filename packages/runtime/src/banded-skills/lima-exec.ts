@@ -1,26 +1,30 @@
 /**
  * Lima-specific execution for banded skills.
  *
- * Uses limactl copy (files in/out) + limactl shell (run script)
- * instead of the HTTP-based Lima executor. This avoids needing
- * the band-server running in the VM for simple script execution.
+ * Sends execution requests to the band server running inside the Lima VM
+ * at http://localhost:9000. The server handles all isolation:
+ * - iptables firewall (per-execution, kernel-level)
+ * - bubblewrap sandbox (mount namespace, user namespace)
+ * - Single-use mutex (rejects concurrent requests)
+ *
+ * The VM boots locked down (iptables DROP all outbound). Each execution
+ * opens exactly what the band declares, runs in bwrap, then resets.
  */
 
 import { execSync } from "child_process";
-import { randomUUID } from "crypto";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join, basename } from "path";
 import { tmpdir } from "os";
 import type { BandExecResult } from "./types";
 
 const DEFAULT_VM_NAME = "bands-executor";
+const SERVER_URL = "http://localhost:9000";
 
 /**
- * Execute a script in a Lima VM.
+ * Execute a script in the Lima VM via the band server.
  *
- * 1. limactl copy staging dir into VM
- * 2. limactl shell to run run.sh with args
- * 3. limactl copy output back to host
+ * Reads run.sh, packages it with input/config/secrets/rules,
+ * and POSTs to the server. One HTTP call replaces 5+ SSH calls.
  */
 export async function limaExec(
   runShPath: string,
@@ -30,19 +34,11 @@ export async function limaExec(
   vmName: string = DEFAULT_VM_NAME,
   envSecrets: Record<string, string> = {},
   skillRoot?: string,
-  configPath?: string
+  configPath?: string,
+  networkRules?: { allowNet: string[]; denyNet: string[] },
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
 ): Promise<BandExecResult> {
   const startTime = Date.now();
-
-  // Check limactl is available
-  try {
-    execSync("limactl --version", { stdio: "pipe" });
-  } catch {
-    return {
-      success: false,
-      error: "limactl is not installed or not on PATH",
-    };
-  }
 
   // Run skill-level setup.sh if present and not already done
   if (skillRoot) {
@@ -52,186 +48,101 @@ export async function limaExec(
     }
   }
 
-  // Create a staging directory with everything needed
-  const stagingDir = mkdtempSync(join(tmpdir(), "lima-band-exec-"));
-
+  // Read script and input
+  const script = readFileSync(runShPath, "utf-8");
+  const inputContent = readFileSync(inputPath, "utf-8");
+  let input: unknown;
   try {
-    const vmWorkdir = `/tmp/band-exec-${randomUUID()}`;
-    const vmInputPath = `${vmWorkdir}/input.json`;
-    const vmOutputPath = `${vmWorkdir}/output.json`;
-
-    // Copy resource directory contents to staging
-    const resourceName = basename(resourceDir);
-
-    // Copy input to staging
-    const stagingInputPath = join(stagingDir, "input.json");
-    const inputContent = readFileSync(inputPath, "utf-8");
-    writeFileSync(stagingInputPath, inputContent);
-
-    // Copy run.sh to staging
-    const runShContent = readFileSync(runShPath, "utf-8");
-    writeFileSync(join(stagingDir, "run.sh"), runShContent);
-
-    // Stage config.json if present
-    if (configPath) {
-      const configContent = readFileSync(configPath, "utf-8");
-      writeFileSync(join(stagingDir, "config.json"), configContent);
-    }
-
-    // Write env file with secrets and standard vars
-    const vmConfigPath = `${vmWorkdir}/config.json`;
-    const envLines = [
-      `export INPUT_PATH=${vmInputPath}`,
-      `export OUTPUT_PATH=${vmOutputPath}`,
-    ];
-    if (configPath) {
-      envLines.push(`export CONFIG_PATH=${vmConfigPath}`);
-    }
-    for (const [key, value] of Object.entries(envSecrets)) {
-      // Base64-encode to avoid any shell quoting issues
-      const b64 = Buffer.from(value).toString("base64");
-      envLines.push(`export ${key}=$(echo '${b64}' | base64 -d)`);
-    }
-    writeFileSync(join(stagingDir, "env.sh"), envLines.join("\n") + "\n");
-
-    // Copy staging dir into VM
-    try {
-      execSync(`limactl shell ${vmName} -- mkdir -p ${vmWorkdir}`, {
-        stdio: "pipe",
-      });
-      execSync(
-        `limactl copy ${stagingDir}/run.sh ${vmName}:${vmWorkdir}/run.sh`,
-        { stdio: "pipe" }
-      );
-      execSync(
-        `limactl copy ${stagingDir}/env.sh ${vmName}:${vmWorkdir}/env.sh`,
-        { stdio: "pipe" }
-      );
-      execSync(
-        `limactl copy ${stagingInputPath} ${vmName}:${vmInputPath}`,
-        { stdio: "pipe" }
-      );
-      if (configPath) {
-        execSync(
-          `limactl copy ${join(stagingDir, "config.json")} ${vmName}:${vmConfigPath}`,
-          { stdio: "pipe" }
-        );
-      }
-    } catch (e) {
-      return {
-        success: false,
-        error: `Failed to copy files to VM: ${e instanceof Error ? e.message : e}`,
-      };
-    }
-
-    // Run the script in the VM (source env.sh for secrets + paths, then run)
-    let stdout: string;
-    let stderr: string;
-    try {
-      const result = execSync(
-        `limactl shell ${vmName} -- bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
-        { stdio: "pipe", timeout: 60000 }
-      );
-      stdout = result.toString();
-      stderr = "";
-    } catch (e: any) {
-      stderr = e.stderr?.toString() || "";
-      stdout = e.stdout?.toString() || "";
-
-      if (e.status !== 0) {
-        // Try to read error from output file in VM
-        let errorMessage = stderr || stdout;
-        try {
-          const localErrPath = join(stagingDir, "error-output.json");
-          execSync(
-            `limactl copy ${vmName}:${vmOutputPath} ${localErrPath}`,
-            { stdio: "pipe" }
-          );
-          const errContent = readFileSync(localErrPath, "utf-8").trim();
-          if (errContent) {
-            try {
-              const parsed = JSON.parse(errContent);
-              if (parsed.error) errorMessage = parsed.error;
-            } catch {
-              const match = errContent.match(/"error"\s*:\s*"(.+)/s);
-              errorMessage = match ? match[1].replace(/"\s*}\s*$/, "") : errContent;
-            }
-          }
-        } catch {
-          // Output file doesn't exist in VM
-        }
-        return {
-          success: false,
-          error: errorMessage || `Script exited with code ${e.status}`,
-        };
-      }
-    }
-
-    // Copy output back from VM
-    let outputData: unknown;
-    try {
-      const localOutputPath = join(stagingDir, "output.json");
-      execSync(
-        `limactl copy ${vmName}:${vmOutputPath} ${localOutputPath}`,
-        { stdio: "pipe" }
-      );
-
-      if (existsSync(localOutputPath)) {
-        const content = readFileSync(localOutputPath, "utf-8");
-        try {
-          outputData = JSON.parse(content);
-        } catch {
-          outputData = content;
-        }
-      }
-    } catch {
-      // Output file may not exist if script wrote to stdout
-      if (stdout.trim()) {
-        try {
-          outputData = JSON.parse(stdout.trim());
-        } catch {
-          outputData = stdout.trim();
-        }
-      }
-    }
-
-    // Write output to host output path
-    if (outputData !== undefined) {
-      writeFileSync(
-        outputPath,
-        typeof outputData === "string"
-          ? outputData
-          : JSON.stringify(outputData, null, 2)
-      );
-    }
-
-    // Cleanup in VM
-    try {
-      execSync(`limactl shell ${vmName} -- rm -rf ${vmWorkdir}`, {
-        stdio: "pipe",
-      });
-    } catch {
-      // Best effort cleanup
-    }
-
-    const durationMs = Date.now() - startTime;
-    return {
-      success: true,
-      data: outputData,
-      metrics: {
-        durationMs,
-        inputBytes: inputContent.length,
-        outputBytes: outputData ? JSON.stringify(outputData).length : 0,
-      },
-    };
-  } finally {
-    rmSync(stagingDir, { recursive: true, force: true });
+    input = JSON.parse(inputContent);
+  } catch {
+    input = {};
   }
+
+  // Read config if present
+  let config: unknown | undefined;
+  if (configPath) {
+    try {
+      config = JSON.parse(readFileSync(configPath, "utf-8"));
+    } catch { /* skip */ }
+  }
+
+  // Build the execution request
+  const execReq = {
+    script,
+    input,
+    config,
+    secrets: envSecrets,
+    allowNet: networkRules?.allowNet ?? [],
+    denyNet: networkRules?.denyNet ?? [],
+    allowCli: fileRules?.allowCli ?? [],
+    denyCli: fileRules?.denyCli ?? [],
+    allowRead: fileRules?.allowRead ?? [],
+    allowWrite: fileRules?.allowWrite ?? [],
+    insist: fileRules?.insist,
+  };
+
+  // POST to the band server
+  let resp: Response;
+  try {
+    resp = await fetch(`${SERVER_URL}/exec`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(execReq),
+      signal: AbortSignal.timeout(65000), // slightly longer than server's 60s timeout
+    });
+  } catch (e: any) {
+    return {
+      success: false,
+      error: `Failed to reach band server at ${SERVER_URL}: ${e.message}. Is the Lima VM running?`,
+    };
+  }
+
+  let result: {
+    success: boolean;
+    data?: unknown;
+    error?: string;
+    metrics?: { durationMs: number; inputBytes: number; outputBytes: number };
+  };
+  try {
+    result = await resp.json();
+  } catch {
+    const text = await resp.text().catch(() => "");
+    return {
+      success: false,
+      error: `Band server returned invalid JSON (HTTP ${resp.status}). Response: ${text.slice(0, 200)}. Is the band server up to date?`,
+    };
+  }
+
+  // Write output to host output path
+  if (result.data !== undefined) {
+    writeFileSync(
+      outputPath,
+      typeof result.data === "string"
+        ? result.data
+        : JSON.stringify(result.data, null, 2)
+    );
+  }
+
+  return {
+    success: result.success,
+    data: result.data,
+    error: result.error,
+    metrics: result.metrics ?? {
+      durationMs: Date.now() - startTime,
+      inputBytes: inputContent.length,
+      outputBytes: result.data ? JSON.stringify(result.data).length : 0,
+    },
+  };
 }
+
+// ── Skill setup ───────────────────────────────────────────────────────
 
 /**
  * Run a skill's setup.sh in the VM if it hasn't been run yet.
  * Uses a marker file in the VM to track completion.
+ *
+ * Note: setup.sh runs OUTSIDE the sandbox (as the host user via limactl)
+ * because it needs to install system packages, configure tools, etc.
  */
 function runSkillSetup(
   skillRoot: string,
@@ -242,7 +153,6 @@ function runSkillSetup(
     return { success: true };
   }
 
-  // Use a hash of the skill root as the marker name
   const skillName = basename(skillRoot);
   const markerPath = `/tmp/.band-setup-done-${skillName}`;
 
@@ -251,12 +161,11 @@ function runSkillSetup(
     execSync(`limactl shell ${vmName} -- test -f ${markerPath}`, {
       stdio: "pipe",
     });
-    return { success: true }; // Already set up
+    return { success: true };
   } catch {
     // Marker doesn't exist — need to run setup
   }
 
-  // Copy and run setup.sh
   const stagingDir = mkdtempSync(join(tmpdir(), "lima-band-setup-"));
   try {
     const setupContent = readFileSync(setupPath, "utf-8");
@@ -264,28 +173,15 @@ function runSkillSetup(
     writeFileSync(stagingSetupPath, setupContent);
 
     const vmSetupDir = `/tmp/band-setup-${skillName}`;
-    execSync(`limactl shell ${vmName} -- mkdir -p ${vmSetupDir}`, {
+    execSync(`limactl shell ${vmName} -- mkdir -p ${vmSetupDir}`, { stdio: "pipe" });
+    execSync(`limactl copy ${stagingSetupPath} ${vmName}:${vmSetupDir}/setup.sh`, { stdio: "pipe" });
+    execSync(`limactl shell ${vmName} -- bash ${vmSetupDir}/setup.sh`, {
       stdio: "pipe",
-    });
-    execSync(
-      `limactl copy ${stagingSetupPath} ${vmName}:${vmSetupDir}/setup.sh`,
-      { stdio: "pipe" }
-    );
-
-    execSync(
-      `limactl shell ${vmName} -- bash ${vmSetupDir}/setup.sh`,
-      { stdio: "pipe", timeout: 300000 } // 5 min timeout for installs
-    );
-
-    // Mark as done
-    execSync(`limactl shell ${vmName} -- touch ${markerPath}`, {
-      stdio: "pipe",
+      timeout: 300000,
     });
 
-    // Cleanup setup dir
-    execSync(`limactl shell ${vmName} -- rm -rf ${vmSetupDir}`, {
-      stdio: "pipe",
-    });
+    execSync(`limactl shell ${vmName} -- touch ${markerPath}`, { stdio: "pipe" });
+    execSync(`limactl shell ${vmName} -- rm -rf ${vmSetupDir}`, { stdio: "pipe" });
 
     return { success: true };
   } catch (e: any) {
@@ -299,3 +195,10 @@ function runSkillSetup(
     rmSync(stagingDir, { recursive: true, force: true });
   }
 }
+
+// ── Exports for testing ───────────────────────────────────────────────
+
+// These are now in band-server.ts (runs inside VM), but we re-export
+// the builder functions for unit testing.
+
+export { buildBwrapCommand, extractMountPath, buildFirewallScript } from "./lima-exec-utils";

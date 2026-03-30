@@ -1,6 +1,0 @@
-[run.watch]
-# Watch all source files and workspace dependencies
-include = [
-  "src/**/*",
-  "../format/src/**/*",
-]

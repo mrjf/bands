@@ -257,6 +257,13 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   let executionTarget = "local-dangerously";
   let envSecrets: Record<string, string> = {};
   let bandConfig: Record<string, unknown> | undefined;
+  let allowNet: string[] = [];
+  let denyNet: string[] = [];
+  let allowCli: string[] = [];
+  let denyCli: string[] = [];
+  let allowRead: string[] = [];
+  let allowWrite: string[] = [];
+  let insist: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } | undefined;
   if (skillRoot) {
     const discovery = discoverBandForScript(skillRoot, scriptName);
     if (discovery?.band?.execution?.target) {
@@ -264,6 +271,32 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     }
     if (discovery?.band?.bandConfig) {
       bandConfig = discovery.band.bandConfig;
+    }
+    if (discovery?.band?.allow?.net) {
+      allowNet = discovery.band.allow.net;
+    }
+    if (discovery?.band?.deny?.net) {
+      denyNet = discovery.band.deny.net;
+    }
+    if (discovery?.band?.allow?.cli) {
+      allowCli = discovery.band.allow.cli;
+    }
+    if (discovery?.band?.deny?.cli) {
+      denyCli = discovery.band.deny.cli;
+    }
+    if (discovery?.band?.allow?.read) {
+      allowRead = discovery.band.allow.read;
+    }
+    if (discovery?.band?.allow?.write) {
+      allowWrite = discovery.band.allow.write;
+    }
+    if (discovery?.band?.insist) {
+      insist = {
+        cli: discovery.band.insist.cli,
+        read: discovery.band.insist.read,
+        write: discovery.band.insist.write,
+        net: discovery.band.insist.net,
+      };
     }
     // Check required secrets are present
     const requiredSecrets = discovery?.band?.requires?.secrets || [];
@@ -329,7 +362,9 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       executionTarget,
       envSecrets,
       skillRoot,
-      configPath
+      configPath,
+      { allowNet, denyNet },
+      { allowCli, denyCli, allowRead, allowWrite, insist }
     );
 
     if (!result.success) {
@@ -403,12 +438,14 @@ async function executeScript(
   executionTarget: string,
   envSecrets: Record<string, string> = {},
   skillRoot?: string,
-  configPath?: string
+  configPath?: string,
+  networkRules?: { allowNet: string[]; denyNet: string[] },
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
 ): Promise<BandExecResult> {
   if (executionTarget === "local-lima") {
     // Delegate to lima-exec
     const { limaExec } = await import("./lima-exec");
-    return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot, configPath);
+    return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot, configPath, networkRules, fileRules);
   }
 
   // Default: local-dangerously — run directly

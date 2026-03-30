@@ -15,11 +15,9 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { IntegrationTestHarness } from "./runner";
 import type { ExecutionTarget } from "@bands/format";
 import { join } from "path";
+import { trackSkip } from "./skip-tracker";
 
 const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
-
-// Track skipped targets
-const skippedTargets = new Set<string>();
 
 /**
  * Run insist tests for a given executor.
@@ -34,6 +32,7 @@ export function runInsistSuite(
     const skipIf = (condition: boolean, msg: string) => {
       if (condition) {
         console.log(`  ⏭  Skipping: ${msg}`);
+        trackSkip(target, "Insist");
         return true;
       }
       return false;
@@ -54,9 +53,7 @@ export function runInsistSuite(
         if (!available && !skipIfUnavailable) {
           throw new Error(`${target} executor is not available`);
         }
-        if (!available) {
-          skippedTargets.add(target);
-        }
+        // Skip tracking happens per-test via skipIf
         if (available) {
           await harness.init();
         }
@@ -286,22 +283,6 @@ export function runInsistSuite(
       }, timeout);
     });
   });
-}
-
-/**
- * Print summary of skipped targets.
- */
-export function printInsistSkippedSummary() {
-  if (skippedTargets.size > 0) {
-    console.log("\n" + "=".repeat(80));
-    console.log("                    SKIPPED INSIST TESTS");
-    console.log("=".repeat(80));
-    console.log("\nThe following executors were not available:\n");
-    for (const target of skippedTargets) {
-      console.log(`  • ${target}`);
-    }
-    console.log("\n" + "=".repeat(80) + "\n");
-  }
 }
 
 /**

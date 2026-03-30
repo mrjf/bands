@@ -17,37 +17,7 @@ import {
   getExampleBandPath,
 } from "./runner";
 import type { ExecutionTarget } from "@bands/format";
-
-// Track skipped targets for summary
-const skippedTargets = new Set<string>();
-
-/**
- * Print summary of skipped executors.
- * Call this at the end of your test file.
- */
-export function printSkippedSummary() {
-  if (skippedTargets.size > 0) {
-    console.log("\n" + "=".repeat(80));
-    console.log("                        SKIPPED EXECUTORS");
-    console.log("=".repeat(80));
-    console.log("\nThe following executors were not available and their tests were skipped:\n");
-    for (const target of skippedTargets) {
-      let reason = "";
-      switch (target) {
-        case "local-lima":
-          reason = "Lima VM not running (limactl start bands-executor)";
-          break;
-        case "cloudflare":
-          reason = "Wrangler not installed or no network/credentials";
-          break;
-        default:
-          reason = "Executor not available";
-      }
-      console.log(`  • ${target}: ${reason}`);
-    }
-    console.log("\n" + "=".repeat(80) + "\n");
-  }
-}
+import { trackSkip } from "./skip-tracker";
 
 /**
  * Run the full integration test suite for a given execution target.
@@ -73,9 +43,7 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
       if (!available && !skipIfUnavailable) {
         throw new Error(`${target} executor is not available`);
       }
-      if (!available) {
-        skippedTargets.add(target);
-      }
+      // Skip tracking happens per-test via skipIf
       if (available) {
         await harness.init();
       }
@@ -91,6 +59,7 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
     const skipIf = (condition: boolean, msg: string) => {
       if (condition) {
         console.log(`  ⏭  Skipping: ${msg}`);
+        trackSkip(target, "Executor");
         return true;
       }
       return false;
@@ -228,6 +197,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
     const skipIf = (condition: boolean, msg: string) => {
       if (condition) {
         console.log(`  ⏭  Skipping: ${msg}`);
+        trackSkip(target, "Permission");
         return true;
       }
       return false;

@@ -61,21 +61,18 @@ describe("github skill: api & search", () => {
 
   describe("api advanced", () => {
     test(
-      "list repo branches",
+      "get main branch via ref endpoint",
       async () => {
         const [owner, repo] = requireGitHubEnv().repo.split("/");
         const result = await gh("api", {
-          endpoint: `repos/${owner}/${repo}/branches?per_page=100`,
+          endpoint: `repos/${owner}/${repo}/branches/main`,
           method: "GET",
         });
 
-        if (!result.success) throw new Error(`api GET branches failed: ${result.error}`);
-        const data = result.data as any[];
-        expect(data).toBeInstanceOf(Array);
-        expect(data.length).toBeGreaterThanOrEqual(1);
-        const main = data.find((b: any) => b.name === "main");
-        expect(main).toBeDefined();
-        expect(main.commit.sha).toBeDefined();
+        if (!result.success) throw new Error(`api GET branch failed: ${result.error}`);
+        const data = result.data as any;
+        expect(data.name).toBe("main");
+        expect(data.commit.sha).toBeDefined();
       },
       TIMEOUT
     );

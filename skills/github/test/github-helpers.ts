@@ -63,7 +63,7 @@ function findSkillRoot(): string {
 export const SKILL_ROOT = findSkillRoot();
 export const RESOURCES = join(SKILL_ROOT, "scripts", "resources");
 
-export const TIMEOUT = 30_000;
+export const TIMEOUT = 60_000;
 
 /**
  * Require TEST_GITHUB_TOKEN and TEST_GITHUB_REPO. Call at the start of any

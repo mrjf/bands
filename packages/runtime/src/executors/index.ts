@@ -21,6 +21,8 @@ executorRegistry.register("local-lima", createLimaExecutor);
 import type { BandDocument, ExecutionTarget } from "@bands/format";
 import { validateContractSchema } from "@bands/format";
 import type { ExecutorInput, ExecutorResult, ExecutorOptions } from "./types";
+import { existsSync, readFileSync } from "fs";
+import { resolve } from "path";
 
 /**
  * Execute a band on its configured target (or override).
@@ -48,9 +50,9 @@ export async function executeBand(
 ): Promise<ExecutorResult> {
   const target = options.target || band.execution?.target || "local-dangerously";
 
-  // Validate input against contract schema (skip string refs — resolution is separate)
-  const inputSchema = band.contract?.input;
-  if (inputSchema && typeof inputSchema === "object") {
+  // Validate input against contract schema (resolve string refs to JSON)
+  const inputSchema = resolveContractSchema(band.contract?.input, options.workdir);
+  if (inputSchema) {
     const err = await validateContractSchema(payload, inputSchema, "contract.input");
     if (err) {
       return {
@@ -74,10 +76,10 @@ export async function executeBand(
 
   const result = await executor.execute(input);
 
-  // Validate output against contract schema (skip string refs)
+  // Validate output against contract schema (resolve string refs to JSON)
   if (result.success) {
-    const outputSchema = band.contract?.output;
-    if (outputSchema && typeof outputSchema === "object") {
+    const outputSchema = resolveContractSchema(band.contract?.output, options.workdir);
+    if (outputSchema) {
       const err = await validateContractSchema(result.data, outputSchema, "contract.output");
       if (err) {
         return {
@@ -107,4 +109,36 @@ export async function isTargetAvailable(target: ExecutionTarget): Promise<boolea
   const executor = executorRegistry.create(target);
   if (!executor) return false;
   return executor.isAvailable();
+}
+
+/**
+ * Resolve a contract schema field to a JSON Schema object.
+ *
+ * - If it's already an object, return it directly.
+ * - If it's a relative file path (e.g., "./schemas/input.json"), resolve
+ *   against workdir and read the file.
+ * - If it's a URL (http/https), return null (not yet supported).
+ * - Otherwise return null.
+ */
+function resolveContractSchema(
+  schema: string | Record<string, unknown> | undefined,
+  workdir?: string
+): Record<string, unknown> | null {
+  if (!schema) return null;
+
+  // Already an object — use directly
+  if (typeof schema === "object") return schema;
+
+  // URL — not supported yet
+  if (schema.startsWith("http://") || schema.startsWith("https://")) return null;
+
+  // File path — resolve relative to workdir
+  const filePath = workdir ? resolve(workdir, schema) : resolve(schema);
+  if (!existsSync(filePath)) return null;
+
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
 }

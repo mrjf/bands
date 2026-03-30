@@ -2,7 +2,7 @@
  * Lima Executor
  *
  * Runs bands in a persistent Lima VM on macOS.
- * The VM runs the @bands/server which enforces band restrictions.
+ * The VM runs band-server.ts which enforces restrictions via iptables + bwrap.
  *
  * Benefits:
  * - VM boot cost paid once, not per-request

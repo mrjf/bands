@@ -5,7 +5,11 @@ description: GitHub operations via gh CLI with structured JSON I/O
 allow:
   cli:
     - "gh *"
+    - "git *"
     - "jq *"
+  net:
+    - "*.github.com"
+    - "*.githubusercontent.com"
 env:
   secrets:
     - GITHUB_TOKEN

@@ -4,22 +4,38 @@
  * Requires TEST_SLACK_BOT_TOKEN and TEST_SLACK_CHANNEL to be set.
  * These tests make real API calls to Slack.
  *
- * Happy-path tests use slack() which reads the real BAND.md (allow: [bands-test]).
- * Allow-list enforcement tests use slackWithPerms() with an explicit config.
+ * Happy-path tests use slackWithPerms() to allow the test channel.
+ * BAND.md has a restrictive default (allow: [only-this]) so tests
+ * must explicitly permit the test channel.
+ * Allow-list enforcement tests also use slackWithPerms() with a different config.
  */
 
 import { describe, expect, test } from "bun:test";
 import { slack, slackWithPerms, requireSlackEnv, TIMEOUT } from "./slack-helpers";
+
+/** Build a perms YAML that allows the test channel with all features enabled. */
+function testPerms(channelName: string): string {
+  return `channels:
+  allow: [${channelName}]
+  deny: []
+dm: false
+threads: true
+reactions: true
+files: false
+search: true
+`;
+}
 
 describe("slack skill: messages", () => {
   test(
     "sends a message to a channel",
     async () => {
       const { channel } = requireSlackEnv();
-      const result = await slack("message-send", {
+      const channelName = channel.replace(/^#/, "");
+      const result = await slackWithPerms("message-send", {
         channel,
         text: `bands test message ${Date.now()}`,
-      });
+      }, testPerms(channelName));
       if (!result.success) throw new Error(`message-send failed: ${result.error}`);
       const data = result.data as any;
       expect(data.ok).toBe(true);
@@ -34,10 +50,11 @@ describe("slack skill: messages", () => {
     "lists messages in a channel",
     async () => {
       const { channel } = requireSlackEnv();
-      const result = await slack("message-list", {
+      const channelName = channel.replace(/^#/, "");
+      const result = await slackWithPerms("message-list", {
         channel,
         limit: 5,
-      });
+      }, testPerms(channelName));
       if (!result.success) throw new Error(`message-list failed: ${result.error}`);
       const data = result.data as any[];
       expect(data).toBeInstanceOf(Array);
@@ -67,7 +84,8 @@ describe("slack skill: messages", () => {
     "gets channel info",
     async () => {
       const { channel } = requireSlackEnv();
-      const result = await slack("channel-info", { channel });
+      const channelName = channel.replace(/^#/, "");
+      const result = await slackWithPerms("channel-info", { channel }, testPerms(channelName));
       if (!result.success) throw new Error(`channel-info failed: ${result.error}`);
       const data = result.data as any;
       expect(data.id).toBeDefined();

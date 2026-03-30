@@ -120,25 +120,20 @@ if (result.success) {
 }
 ```
 
-### @bands/server
+### Band Server (Lima VM)
 
-HTTP server that enforces band permissions. Deployed to Lima VM or Cloudflare Workers.
+Execution server deployed inside the Lima VM. Enforces restrictions via iptables + bubblewrap.
 
 ```
-POST /init
-  Body: BandDocument
-  Returns: { ok: true, band: "name", version: 1 }
-
-POST /
-  Body: payload (any)
-  Returns: result | { error: {...} }
+POST /exec
+  Body: { script, input, secrets, allowNet, allowRead, allowWrite }
+  Returns: { success, data, metrics }
 
 GET /health
-  Returns: { ready: true, band: "name", version: 1 }
-
-GET /band
-  Returns: BandDocument (debug)
+  Returns: { ready, busy, version }
 ```
+
+See `packages/runtime/src/band-server.ts` and `SECURITY.md`.
 
 ## Permission Model
 
