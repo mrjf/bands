@@ -57,9 +57,10 @@ See also: `SECURITY.md` for the current threat model.
 - deny.read/deny.write: TODO (needs file-command wrappers to check paths against deny patterns).
 
 ### 11. limit.maxInputBytes / limit.maxOutputBytes
-- **Status: TODO**
-- Parsed but not checked in the band server path.
-- **Implementation:** Band server checks input size before execution, output size after. Reject if exceeded.
+- **Status: DONE**
+- Band server checks input size before execution, output size after.
+- Exceeding either limit fails with descriptive error.
+- Tested: output exceeds, output within, input within.
 
 ### 12. Cost limit enforcement (maxCostDollars)
 - **Status: TODO**
