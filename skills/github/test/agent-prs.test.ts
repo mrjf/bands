@@ -27,7 +27,7 @@ describe("agent: pull requests", () => {
         await gh("pr-close", { repo: GITHUB_REPO!, number: prNumber, delete_branch: true });
       } catch {}
     }
-  });
+  }, AGENT_TIMEOUT);
 
   test(
     "setup: create branches",

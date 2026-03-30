@@ -15,7 +15,7 @@ describe("agent: issues", () => {
     if (issueNumber) {
       await gh("issue-close", { repo: GITHUB_REPO!, number: issueNumber });
     }
-  });
+  }, AGENT_TIMEOUT);
 
   test(
     "issue-create",

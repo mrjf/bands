@@ -14,7 +14,7 @@ describe("agent: labels", () => {
     try {
       await gh("label-delete", { repo: GITHUB_REPO!, name: labelName });
     } catch {}
-  });
+  }, AGENT_TIMEOUT);
 
   test(
     "label-create",
