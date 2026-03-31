@@ -262,7 +262,9 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   let allowCli: string[] = [];
   let denyCli: string[] = [];
   let allowRead: string[] = [];
+  let denyRead: string[] = [];
   let allowWrite: string[] = [];
+  let denyWrite: string[] = [];
   let insist: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } | undefined;
   let maxInputBytes: number | undefined;
   let maxOutputBytes: number | undefined;
@@ -291,6 +293,12 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     }
     if (discovery?.band?.allow?.write) {
       allowWrite = discovery.band.allow.write;
+    }
+    if (discovery?.band?.deny?.read) {
+      denyRead = discovery.band.deny.read;
+    }
+    if (discovery?.band?.deny?.write) {
+      denyWrite = discovery.band.deny.write;
     }
     if (discovery?.band?.insist) {
       insist = {
@@ -376,7 +384,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       skillRoot,
       configPath,
       { allowNet, denyNet },
-      { allowCli, denyCli, allowRead, allowWrite, insist, maxInputBytes, maxOutputBytes }
+      { allowCli, denyCli, allowRead, denyRead, allowWrite, denyWrite, insist, maxInputBytes, maxOutputBytes }
     );
 
     if (!result.success) {
@@ -452,7 +460,7 @@ async function executeScript(
   skillRoot?: string,
   configPath?: string,
   networkRules?: { allowNet: string[]; denyNet: string[] },
-  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; denyRead: string[]; allowWrite: string[]; denyWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
 ): Promise<BandExecResult> {
   if (executionTarget === "local-lima") {
     // Delegate to lima-exec

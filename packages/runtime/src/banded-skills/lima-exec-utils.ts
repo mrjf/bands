@@ -7,6 +7,42 @@
  */
 
 /**
+ * Check if a path matches a glob pattern.
+ */
+export function matchGlob(path: string, pattern: string): boolean {
+  const regex = "^" + pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*\*/g, "DOUBLESTAR")
+    .replace(/\*/g, "[^/]*")
+    .replace(/DOUBLESTAR/g, ".*")
+    .replace(/\?/g, ".")
+    + "$";
+  try {
+    return new RegExp(regex).test(path);
+  } catch {
+    return path === pattern;
+  }
+}
+
+/**
+ * Check if a path is allowed by allow patterns and not denied by deny patterns.
+ * Default deny: path must match at least one allow pattern and zero deny patterns.
+ */
+export function isPathAllowed(
+  path: string,
+  allowPatterns: string[],
+  denyPatterns: string[]
+): boolean {
+  // Must match at least one allow pattern
+  const allowed = allowPatterns.some(p => matchGlob(path, p));
+  if (!allowed) return false;
+
+  // Must not match any deny pattern
+  const denied = denyPatterns.some(p => matchGlob(path, p));
+  return !denied;
+}
+
+/**
  * Build a bubblewrap (bwrap) command that runs a script inside a
  * mount namespace with only system binaries and the workdir visible.
  */

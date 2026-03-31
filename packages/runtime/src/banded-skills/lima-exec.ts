@@ -12,10 +12,11 @@
  */
 
 import { execSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
-import { join, basename } from "path";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, statSync, mkdirSync } from "fs";
+import { join, basename, relative, dirname } from "path";
 import { tmpdir } from "os";
 import type { BandExecResult } from "./types";
+import { isPathAllowed } from "./lima-exec-utils";
 
 const DEFAULT_VM_NAME = "bands-executor";
 const SERVER_URL = "http://localhost:9000";
@@ -36,7 +37,7 @@ export async function limaExec(
   skillRoot?: string,
   configPath?: string,
   networkRules?: { allowNet: string[]; denyNet: string[] },
-  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; denyRead: string[]; allowWrite: string[]; denyWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
 ): Promise<BandExecResult> {
   const startTime = Date.now();
 
@@ -66,18 +67,32 @@ export async function limaExec(
     } catch { /* skip */ }
   }
 
+  // Stage allowed read files (copy-in): resolve allow.read patterns,
+  // exclude deny.read matches, read file contents
+  const allowRead = fileRules?.allowRead ?? [];
+  const denyRead = fileRules?.denyRead ?? [];
+  const allowWrite = fileRules?.allowWrite ?? [];
+  const denyWrite = fileRules?.denyWrite ?? [];
+  let files: Record<string, string> | undefined;
+  if (allowRead.length > 0) {
+    files = resolveFiles(allowRead, denyRead);
+  } else if (allowWrite.length > 0) {
+    files = {}; // Empty files map — triggers files dir creation + output collection
+  }
+
   // Build the execution request
   const execReq = {
     script,
     input,
     config,
     secrets: envSecrets,
+    files,
     allowNet: networkRules?.allowNet ?? [],
     denyNet: networkRules?.denyNet ?? [],
     allowCli: fileRules?.allowCli ?? [],
     denyCli: fileRules?.denyCli ?? [],
-    allowRead: fileRules?.allowRead ?? [],
-    allowWrite: fileRules?.allowWrite ?? [],
+    allowRead,
+    allowWrite,
     insist: fileRules?.insist,
     maxInputBytes: fileRules?.maxInputBytes,
     maxOutputBytes: fileRules?.maxOutputBytes,
@@ -103,6 +118,7 @@ export async function limaExec(
     success: boolean;
     data?: unknown;
     error?: string;
+    outputFiles?: Record<string, string>;
     metrics?: { durationMs: number; inputBytes: number; outputBytes: number };
   };
   try {
@@ -113,6 +129,23 @@ export async function limaExec(
       success: false,
       error: `Band server returned invalid JSON (HTTP ${resp.status}). Response: ${text.slice(0, 200)}. Is the band server up to date?`,
     };
+  }
+
+  // Write back output files (copy-out): only files matching allow.write
+  // and not matching deny.write are written to the host filesystem.
+  // Output file keys are relative paths from the files dir — prepend /
+  // to reconstruct the absolute host path for pattern matching.
+  if (result.outputFiles && allowWrite.length > 0) {
+    for (const [relPath, content] of Object.entries(result.outputFiles)) {
+      const absPath = relPath.startsWith("/") ? relPath : `/${relPath}`;
+      if (isPathAllowed(absPath, allowWrite, denyWrite)) {
+        const dir = dirname(absPath);
+        if (dir && dir !== "/" && dir !== ".") {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(absPath, content);
+      }
+    }
   }
 
   // Write output to host output path
@@ -196,6 +229,66 @@ function runSkillSetup(
   } finally {
     rmSync(stagingDir, { recursive: true, force: true });
   }
+}
+
+// ── File resolution ───────────────────────────────────────────────────
+
+/**
+ * Resolve allow.read glob patterns to actual files on the host filesystem.
+ * Excludes files matching any deny.read pattern.
+ * Returns a map of relative path → file content.
+ */
+function resolveFiles(
+  allowPatterns: string[],
+  denyPatterns: string[]
+): Record<string, string> {
+  const files: Record<string, string> = {};
+
+  for (const pattern of allowPatterns) {
+    // Extract the concrete directory prefix from the glob
+    const globIdx = pattern.search(/[*?{[]/);
+    const dir = globIdx === -1 ? dirname(pattern) : pattern.slice(0, pattern.lastIndexOf("/", globIdx));
+
+    if (!dir || !existsSync(dir)) continue;
+
+    if (globIdx === -1) {
+      // Exact file path
+      if (existsSync(pattern) && statSync(pattern).isFile()) {
+        if (isPathAllowed(pattern, allowPatterns, denyPatterns)) {
+          try {
+            files[pattern] = readFileSync(pattern, "utf-8");
+          } catch { /* skip binary/unreadable files */ }
+        }
+      }
+    } else {
+      // Glob — walk the directory
+      walkDir(dir, (filePath) => {
+        if (isPathAllowed(filePath, allowPatterns, denyPatterns)) {
+          try {
+            files[filePath] = readFileSync(filePath, "utf-8");
+          } catch { /* skip binary/unreadable files */ }
+        }
+      });
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Recursively walk a directory, calling fn for each file.
+ */
+function walkDir(dir: string, fn: (path: string) => void): void {
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walkDir(fullPath, fn);
+      } else if (entry.isFile()) {
+        fn(fullPath);
+      }
+    }
+  } catch { /* permission denied, etc */ }
 }
 
 // ── Exports for testing ───────────────────────────────────────────────

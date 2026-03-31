@@ -10,7 +10,7 @@
 
 import { describe, test, expect, beforeAll } from "bun:test";
 import { execSync } from "child_process";
-import { writeFileSync, mkdtempSync, rmSync, existsSync } from "fs";
+import { writeFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { limaExec } from "../../src/banded-skills/lima-exec";
@@ -43,7 +43,7 @@ async function runScriptFull(
   script: string,
   allowNet: string[],
   denyNet: string[],
-  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
+  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; denyRead?: string[]; allowWrite: string[]; denyWrite?: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const dir = mkdtempSync(join(tmpdir(), "lima-fw-test-"));
   const runSh = join(dir, "run.sh");
@@ -64,7 +64,7 @@ async function runScriptFull(
       undefined,
       undefined,
       { allowNet, denyNet },
-      { allowCli: fileRules.allowCli ?? [], denyCli: fileRules.denyCli ?? [], allowRead: fileRules.allowRead, allowWrite: fileRules.allowWrite, insist: fileRules.insist, maxInputBytes: fileRules.maxInputBytes, maxOutputBytes: fileRules.maxOutputBytes }
+      { allowCli: fileRules.allowCli ?? [], denyCli: fileRules.denyCli ?? [], allowRead: fileRules.allowRead, denyRead: fileRules.denyRead ?? [], allowWrite: fileRules.allowWrite, denyWrite: fileRules.denyWrite ?? [], insist: fileRules.insist, maxInputBytes: fileRules.maxInputBytes, maxOutputBytes: fileRules.maxOutputBytes }
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -75,7 +75,7 @@ async function runScriptFull(
 async function runScriptWithFiles(
   script: string,
   allowNet: string[],
-  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
+  fileRules: { allowCli?: string[]; denyCli?: string[]; allowRead: string[]; denyRead?: string[]; allowWrite: string[]; denyWrite?: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] }; maxInputBytes?: number; maxOutputBytes?: number }
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   return runScriptFull(script, allowNet, [], fileRules);
 }
@@ -200,6 +200,102 @@ describe("Lima user separation", () => {
         expect("workdir exists").toBe("workdir should be cleaned up");
       } catch {
         // Expected — dir should not exist
+      }
+    },
+    TIMEOUT
+  );
+});
+
+describe("Lima file copy-in/copy-out with deny", () => {
+  test(
+    "copies allowed read files into VM, script can access them",
+    async () => {
+      if (skip()) return;
+      // Create a temp file on the host
+      const tmpDir = mkdtempSync(join(tmpdir(), "lima-file-test-"));
+      writeFileSync(join(tmpDir, "data.txt"), "hello from host");
+
+      try {
+        const result = await runScriptFull(
+          [
+            "#!/bin/bash",
+            '# Read the copied-in file from FILES_DIR',
+            'CONTENT=$(cat "$FILES_DIR/'+ tmpDir.slice(1) + '/data.txt" 2>/dev/null || echo "NOT FOUND")',
+            'echo "{\\"content\\": \\"$CONTENT\\"}" > "$OUTPUT_PATH"',
+          ].join("\n"),
+          [], [],
+          { allowRead: [`${tmpDir}/**`], allowWrite: [] }
+        );
+        expect(result.success).toBe(true);
+        expect((result.data as any).content).toBe("hello from host");
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+    TIMEOUT
+  );
+
+  test(
+    "deny.read prevents file from being copied in",
+    async () => {
+      if (skip()) return;
+      const tmpDir = mkdtempSync(join(tmpdir(), "lima-file-test-"));
+      mkdirSync(join(tmpDir, "secrets"), { recursive: true });
+      writeFileSync(join(tmpDir, "public.txt"), "public data");
+      writeFileSync(join(tmpDir, "secrets", "key.pem"), "secret key");
+
+      try {
+        const result = await runScriptFull(
+          [
+            "#!/bin/bash",
+            '# Try to read both files',
+            'PUBLIC=$(cat "$FILES_DIR/' + tmpDir.slice(1) + '/public.txt" 2>/dev/null || echo "NOT FOUND")',
+            'SECRET=$(cat "$FILES_DIR/' + tmpDir.slice(1) + '/secrets/key.pem" 2>/dev/null || echo "NOT FOUND")',
+            'echo "{\\"public\\": \\"$PUBLIC\\", \\"secret\\": \\"$SECRET\\"}" > "$OUTPUT_PATH"',
+          ].join("\n"),
+          [], [],
+          { allowRead: [`${tmpDir}/**`], denyRead: [`${tmpDir}/secrets/**`], allowWrite: [] }
+        );
+        expect(result.success).toBe(true);
+        expect((result.data as any).public).toBe("public data");
+        expect((result.data as any).secret).toBe("NOT FOUND");
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+    TIMEOUT
+  );
+
+  test(
+    "deny.write prevents file from being copied back",
+    async () => {
+      if (skip()) return;
+      const tmpDir = mkdtempSync(join(tmpdir(), "lima-file-test-"));
+
+      try {
+        const result = await runScriptFull(
+          [
+            "#!/bin/bash",
+            '# Write files to FILES_DIR',
+            'mkdir -p "$FILES_DIR/' + tmpDir.slice(1) + '"',
+            'echo "allowed output" > "$FILES_DIR/' + tmpDir.slice(1) + '/output.txt"',
+            'mkdir -p "$FILES_DIR/' + tmpDir.slice(1) + '/secrets"',
+            'echo "secret output" > "$FILES_DIR/' + tmpDir.slice(1) + '/secrets/leaked.txt"',
+            'echo \'{"ok": true}\' > "$OUTPUT_PATH"',
+          ].join("\n"),
+          [], [],
+          { allowRead: [], allowWrite: [`${tmpDir}/**`], denyWrite: [`${tmpDir}/secrets/**`] }
+        );
+        expect(result.success).toBe(true);
+
+        // output.txt should be written back to host
+        expect(existsSync(join(tmpDir, "output.txt"))).toBe(true);
+        expect(readFileSync(join(tmpDir, "output.txt"), "utf-8").trim()).toBe("allowed output");
+
+        // secrets/leaked.txt should NOT be written back
+        expect(existsSync(join(tmpDir, "secrets", "leaked.txt"))).toBe(false);
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
       }
     },
     TIMEOUT

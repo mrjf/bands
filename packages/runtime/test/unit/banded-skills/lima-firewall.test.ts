@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildFirewallScript, buildBwrapCommand, extractMountPath } from "../../../src/banded-skills/lima-exec-utils";
+import { buildFirewallScript, buildBwrapCommand, extractMountPath, matchGlob, isPathAllowed } from "../../../src/banded-skills/lima-exec-utils";
 
 describe("buildFirewallScript", () => {
   test("returns null when no rules provided", () => {
@@ -217,5 +217,47 @@ describe("extractMountPath", () => {
 
   test("returns file path for no-glob absolute path", () => {
     expect(extractMountPath("/data/input.json")).toBe("/data");
+  });
+});
+
+describe("matchGlob", () => {
+  test("exact match", () => {
+    expect(matchGlob("/data/file.txt", "/data/file.txt")).toBe(true);
+  });
+
+  test("* matches single path segment", () => {
+    expect(matchGlob("/data/file.txt", "/data/*.txt")).toBe(true);
+    expect(matchGlob("/data/sub/file.txt", "/data/*.txt")).toBe(false);
+  });
+
+  test("** matches multiple segments", () => {
+    expect(matchGlob("/data/sub/file.txt", "/data/**")).toBe(true);
+    expect(matchGlob("/data/a/b/c.txt", "/data/**")).toBe(true);
+  });
+
+  test("no match", () => {
+    expect(matchGlob("/other/file.txt", "/data/**")).toBe(false);
+  });
+});
+
+describe("isPathAllowed", () => {
+  test("allowed and not denied", () => {
+    expect(isPathAllowed("/data/file.txt", ["/data/**"], [])).toBe(true);
+  });
+
+  test("not in allow list", () => {
+    expect(isPathAllowed("/other/file.txt", ["/data/**"], [])).toBe(false);
+  });
+
+  test("allowed but denied", () => {
+    expect(isPathAllowed("/data/secrets/key.pem", ["/data/**"], ["/data/secrets/**"])).toBe(false);
+  });
+
+  test("allowed and deny doesn't match", () => {
+    expect(isPathAllowed("/data/public.txt", ["/data/**"], ["/data/secrets/**"])).toBe(true);
+  });
+
+  test("empty allow = nothing allowed", () => {
+    expect(isPathAllowed("/data/file.txt", [], [])).toBe(false);
   });
 });

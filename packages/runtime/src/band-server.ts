@@ -406,6 +406,7 @@ interface ExecRequest {
     write?: string[];    // Files that must be written
     net?: string[];      // Hosts that must be contacted
   };
+  files?: Record<string, string>;  // Files to stage: relative path → content
   maxInputBytes?: number;
   maxOutputBytes?: number;
   timeoutMs?: number;
@@ -415,6 +416,7 @@ interface ExecResponse {
   success: boolean;
   data?: unknown;
   error?: string;
+  outputFiles?: Record<string, string>;  // Files created/modified: relative path → content
   metrics?: {
     durationMs: number;
     inputBytes: number;
@@ -452,10 +454,22 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       writeFile(`${workdir}/config.json`, JSON.stringify(req.config));
     }
 
+    // Stage files into workdir (allow.read files copied in by the caller)
+    if (req.files) {
+      const filesDir = `${workdir}/files`;
+      shell(`mkdir -p ${filesDir}`);
+      for (const [relPath, content] of Object.entries(req.files)) {
+        const dir = relPath.includes("/") ? `${filesDir}/${relPath.substring(0, relPath.lastIndexOf("/"))}` : filesDir;
+        shell(`mkdir -p ${dir}`);
+        writeFile(`${filesDir}/${relPath}`, content);
+      }
+    }
+
     // Write env.sh with secrets and standard vars
     const envLines = [
       `export INPUT_PATH=${workdir}/input.json`,
       `export OUTPUT_PATH=${workdir}/output.json`,
+      `export FILES_DIR=${workdir}/files`,
     ];
     if (req.config) {
       envLines.push(`export CONFIG_PATH=${workdir}/config.json`);
@@ -584,9 +598,29 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       }
     }
 
+    // Collect output files from the files directory
+    let outputFiles: Record<string, string> | undefined;
+    if (req.files || (req.allowWrite && req.allowWrite.length > 0)) {
+      try {
+        const filesList = shell(`find ${workdir}/files -type f 2>/dev/null || true`).trim();
+        if (filesList) {
+          outputFiles = {};
+          const filesDir = `${workdir}/files`;
+          for (const absPath of filesList.split("\n")) {
+            if (!absPath) continue;
+            const relPath = absPath.slice(filesDir.length + 1);
+            try {
+              outputFiles[relPath] = shell(`cat ${absPath}`);
+            } catch { /* skip unreadable files */ }
+          }
+        }
+      } catch { /* no files dir */ }
+    }
+
     return {
       success: true,
       data,
+      outputFiles,
       metrics: {
         durationMs: Date.now() - startTime,
         inputBytes: inputStr.length,
