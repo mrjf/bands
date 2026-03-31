@@ -54,7 +54,7 @@ See also: `SECURITY.md` for the current threat model.
 - Supports: allow wildcard + deny specific (e.g., allow `*.github.com` deny `api.github.com`).
 - Supports: allow `*` + deny specific (allow everything except denied hosts).
 - deny.cli: DONE (via wrapper pattern matching).
-- deny.read/deny.write: TODO (needs file-command wrappers to check paths against deny patterns).
+- deny.read/deny.write: DONE (enforcement at file copy boundary, not in sandbox).
 
 ### 11. limit.maxInputBytes / limit.maxOutputBytes
 - **Status: DONE**
