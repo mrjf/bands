@@ -139,11 +139,12 @@ jobs:
         working-directory: packages/runtime
 
       - name: Run direct skill tests
-        run: bun scripts/test-skills.ts github --direct
+        run: bun scripts/test-skills.ts github elevenlabs --direct
         env:
           TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
           TEST_GITHUB_REPO: ${{ secrets.TEST_GITHUB_REPO }}
           TEST_GIST_GITHUB_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          TEST_ELEVEN_LABS_TOKEN: ${{ secrets.TEST_ELEVEN_LABS_TOKEN }}
         timeout-minutes: 10
 
       - name: Cleanup Lima VM
@@ -254,11 +255,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Run agent skill tests
-        run: bun scripts/test-skills.ts github --agent
+        run: bun scripts/test-skills.ts github elevenlabs --agent
         env:
           TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
           TEST_GITHUB_REPO: ${{ secrets.TEST_GITHUB_REPO }}
           TEST_GIST_GITHUB_TOKEN: ${{ secrets.TEST_GIST_GITHUB_TOKEN }}
+          TEST_ELEVEN_LABS_TOKEN: ${{ secrets.TEST_ELEVEN_LABS_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         timeout-minutes: 10
 

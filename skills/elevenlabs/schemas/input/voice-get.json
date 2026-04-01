@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "voice_id": {
+      "type": "string",
+      "description": "The voice ID to retrieve"
+    }
+  },
+  "required": ["voice_id"]
+}

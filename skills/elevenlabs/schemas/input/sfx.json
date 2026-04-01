@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "description": "Description of the sound effect to generate"
+    },
+    "duration_seconds": {
+      "type": "number",
+      "description": "Duration in seconds (0.5-22.0, default: 5.0)"
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Output file path (default: /tmp/sfx-output.mp3)"
+    }
+  },
+  "required": ["text"]
+}

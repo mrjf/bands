@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "voice_id": {
+      "type": "string",
+      "description": "Target voice ID"
+    },
+    "text": {
+      "type": "string",
+      "description": "Text to synthesize (max 5000 chars)"
+    },
+    "model_id": {
+      "type": "string",
+      "description": "Model to use (default: eleven_multilingual_v2)"
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Output file path (default: /tmp/tts-output.mp3)"
+    },
+    "stability": {
+      "type": "number",
+      "description": "Voice stability (0.0-1.0, default: 0.5)"
+    },
+    "similarity_boost": {
+      "type": "number",
+      "description": "Similarity boost (0.0-1.0, default: 0.75)"
+    }
+  },
+  "required": ["voice_id", "text"]
+}
