@@ -14,7 +14,8 @@ if [ -z "${ELEVENLABS_API_KEY:-}" ]; then
   exit 1
 fi
 
-HTTP_CODE=$(curl -sf -w "%{http_code}" \
+STDERR_FILE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" \
   -X POST "https://api.elevenlabs.io/v1/text-to-speech/$VOICE_ID" \
   -H "xi-api-key: $ELEVENLABS_API_KEY" \
   -H "Content-Type: application/json" \
@@ -26,10 +27,16 @@ HTTP_CODE=$(curl -sf -w "%{http_code}" \
       \"similarity_boost\": $SIMILARITY
     }
   }" \
-  --output "$OUT_PATH" 2>&1) || {
-  echo "{\"error\": \"TTS request failed\"}" > "${OUTPUT_PATH:-/dev/stdout}"
+  --output "$OUT_PATH" 2>"$STDERR_FILE") || true
+
+rm -f "$STDERR_FILE"
+
+if [ "$HTTP_CODE" != "200" ]; then
+  # The output file contains the error JSON
+  ERROR=$(cat "$OUT_PATH" 2>/dev/null | jq -r '.detail.message // .detail // "Unknown error"' 2>/dev/null || echo "HTTP $HTTP_CODE")
+  echo "{\"error\": \"TTS failed (HTTP $HTTP_CODE): $ERROR\"}" > "${OUTPUT_PATH:-/dev/stdout}"
   exit 1
-}
+fi
 
 SIZE=$(stat -c%s "$OUT_PATH" 2>/dev/null || stat -f%z "$OUT_PATH" 2>/dev/null || echo 0)
 echo "{\"success\": true, \"output_path\": \"$OUT_PATH\", \"size_bytes\": $SIZE}" > "${OUTPUT_PATH:-/dev/stdout}"
