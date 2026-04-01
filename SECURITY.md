@@ -60,10 +60,11 @@ inside the VM. The VM boundary is the hard security line. Everything
 inside the VM is defense-in-depth.
 
 **Defense in depth:**
-- CLI enforcement is PATH-based. A script could invoke a binary via absolute
-  path (`/usr/bin/curl`), but the network firewall blocks connections to
-  undeclared hosts regardless of how the connection is initiated.
+- CLI enforcement uses PATH wrappers + bash `extdebug` trap. The trap blocks
+  absolute path execution (`/usr/bin/curl`), forcing everything through PATH.
+  Scripts are sourced (not subprocess'd) so the trap applies to all commands.
 - File deny enforcement is at the copy boundary. Inside the sandbox, the
   script has full access to its workdir — but the workdir only contains
   files that passed the allow/deny check on copy-in.
-- These layers overlap: even if one is bypassed, the others still enforce.
+- Network firewall is the backstop: even if a command somehow executes,
+  it can't reach undeclared hosts.
