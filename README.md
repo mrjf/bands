@@ -1,79 +1,95 @@
 # Bands
 
-**Permission and isolation system for AI agent execution.**
+**Sandboxed execution for AI agent skills.**
 
-Bands provides a declarative way to define what an AI agent can and cannot do, then enforces those permissions at runtime across multiple execution targets.
+Bands runs untrusted scripts inside isolated Linux VMs with kernel-level enforcement of network, filesystem, and CLI restrictions. Every skill declares what it needs. Everything else is denied.
 
-## What is a Band?
+## Security First
 
-A **band** is a YAML configuration file (`.band.md`) that defines:
+Scripts execute inside a Lima VM with multiple isolation layers:
 
-- **Identity**: Name, icon, description
-- **Permissions**: What the agent is allowed/denied/required to do
-- **Limits**: Resource constraints (time, bytes, cost)
-- **Execution target**: Where to run (local, VM, edge)
+| Layer | Mechanism | What it prevents |
+|-------|-----------|------------------|
+| **VM boundary** | Full Linux kernel (KVM / Virtualization.framework) | Host system access |
+| **Network** | Per-execution iptables chains | Connections to undeclared hosts |
+| **Filesystem** | Bubblewrap mount namespace | Reading files outside the workdir |
+| **CLI** | PATH-only wrapper directory | Running undeclared commands |
+| **User** | Unprivileged `band-runner` via sudo | Privilege escalation |
+| **Secrets** | Workdir-scoped env vars, cleaned after execution | Secret leakage between executions |
+
+Default deny. A script that declares `allow.net: ["api.github.com"]` can reach GitHub and nothing else. A script that declares `allow.cli: ["gh *", "jq *"]` can run `gh` and `jq` and nothing else. Everything not declared is blocked at the kernel level.
+
+## How It Works
+
+A **band** is a YAML config that declares permissions. A **skill** is a directory with a band config, scripts, and schemas.
 
 ```yaml
+# skills/github/BAND.md
 ---
-band: code-runner
-icon: 🏃
-description: Runs code in a sandboxed environment
-
+band: github
 allow:
   cli:
-    - "node *"
-    - "python *"
-    - "echo *"
-  read:
-    - "./src/**"
-    - "./package.json"
-  write:
-    - "./output/**"
-
-deny:
-  cli:
-    - "rm *"
-    - "sudo *"
-  read:
-    - "**/.env*"
-    - "**/secrets/**"
+    - "gh *"
+    - "git *"
+    - "jq *"
   net:
-    - "*.internal.corp"
-
-limit:
-  maxRuntimeMs: 30000
-  maxOutputBytes: 10mb
+    - "*.github.com"
+    - "*.githubusercontent.com"
+env:
+  secrets:
+    - GITHUB_TOKEN
+execution:
+  target: local-lima
 ---
 ```
 
-## Execution Targets
+When a skill runs:
 
-Bands can run on three execution targets:
+1. Host sends script + input + rules to the band server in the VM (`POST /exec`)
+2. Server sets up per-execution iptables firewall (kernel-level network restriction)
+3. Server creates bubblewrap sandbox (mount namespace, user separation)
+4. Server creates CLI wrappers (only declared commands exist in PATH)
+5. Script runs inside the sandbox as `band-runner`
+6. Server tears down firewall, cleans up workdir, returns output
+7. Host writes back allowed output files (deny patterns enforced at copy boundary)
 
-| Target | Isolation | Use Case |
-|--------|-----------|----------|
-| `local-dangerously` | None | Development, testing |
-| `lima` | Full (Linux VM) | Production on macOS |
-| `cloudflare` | Full (V8 isolates) | Production at edge |
+## Permission Model
 
-All sandboxed targets (lima, cloudflare) **enforce** permissions - denied operations fail with `PERMISSION_DENIED`. The `local-dangerously` target only **reports** what would be allowed.
+**Default deny.** Every operation must be explicitly allowed.
 
-## Quick Start
+```yaml
+allow:
+  cli: ["gh *", "jq *"]      # Only these commands exist
+  net: ["api.github.com"]     # Only this host is reachable
+  read: ["./data/**"]         # Only these files are copied in
+  write: ["./output/**"]      # Only these files are copied back
 
-```bash
-# Install dependencies
-bun install
+deny:
+  cli: ["rm -rf *"]           # Punch holes in allow (argument-level)
+  net: ["evil.github.com"]    # Punch holes in allow wildcards
+  read: ["./data/secrets/**"] # Excluded from copy-in
+  write: ["./output/.env*"]   # Excluded from copy-back
 
-# Run a band locally (no isolation)
-bun run packages/runtime/src/cli.ts run ./examples/minimal.band.md \
-  --input '{"message": "hello"}'
-
-# Check available execution targets
-bun run packages/runtime/src/cli.ts targets
-
-# Run tests
-bun test packages/runtime/test/integration/
+insist:
+  cli: ["gh issue-create *"]  # Must be executed or run fails
 ```
+
+## Skills
+
+Skills live in `skills/<name>/` with:
+
+- **`BAND.md`** — Permissions, secrets, execution target
+- **`SKILL.md`** — Instructions for the AI agent
+- **`scripts/`** — Executable scripts with `run.sh` in each resource dir
+- **`schemas/`** — JSON Schema for input/output validation
+
+### Included skills
+
+| Skill | Scripts | Description |
+|-------|---------|-------------|
+| `github` | 31 | Issues, PRs, releases, labels, gists, search, raw API |
+| `slack` | 9 | Messages, channels, threads, reactions, files |
+| `elevenlabs` | 5 | Text-to-speech, voices, sound effects |
 
 ## Project Structure
 
@@ -81,168 +97,69 @@ bun test packages/runtime/test/integration/
 bands/
 ├── packages/
 │   ├── format/          # Parse, validate, export BAND.md files
-│   ├── runtime/         # Execute bands on different targets
-│   ├── server/          # HTTP server for sandboxed execution
-│   └── editor/          # Visual band editor (Web Components)
-├── examples/            # Example band files
-├── docs/                # Documentation
-└── schemas/             # JSON schemas
+│   ├── runtime/         # Execute bands (Lima VM, band server)
+│   └── editor/          # Visual band editor
+├── skills/              # Banded skills (github, slack, elevenlabs)
+├── docs/                # Architecture, TODO, future plans
+├── SECURITY.md          # Threat model and enforcement status
+├── VERSIONING.md        # Lobster Scale versioning
+└── VERSION              # Current version (0.1.0-berry)
 ```
-
-## Packages
-
-### @bands/format
-
-Parse and validate BAND.md files:
-
-```typescript
-import { parseBandMd, exportBandMd } from "@bands/format";
-
-const { document, errors } = parseBandMd(yamlContent);
-const yaml = exportBandMd(document);
-```
-
-### @bands/runtime
-
-Execute bands on different targets:
-
-```typescript
-import { executeBand } from "@bands/runtime";
-
-const result = await executeBand(band, payload, {
-  target: "local-lima",  // or "cloudflare", "local-dangerously"
-});
-
-if (result.success) {
-  console.log(result.data);
-} else {
-  console.error(result.error);
-}
-```
-
-### Band Server (Lima VM)
-
-Execution server deployed inside the Lima VM. Enforces restrictions via iptables + bubblewrap.
-
-```
-POST /exec
-  Body: { script, input, secrets, allowNet, allowRead, allowWrite }
-  Returns: { success, data, metrics }
-
-GET /health
-  Returns: { ready, busy, version }
-```
-
-See `packages/runtime/src/band-server.ts` and `SECURITY.md`.
-
-## Permission Model
-
-Bands use a **deny-by-default** permission model:
-
-1. If not in `allow`, it's denied
-2. `deny` punches holes in `allow` (explicit denials)
-3. `insist` requires operations to be performed (or execution fails)
-
-### Permission Categories
-
-| Category | Description | Example Patterns |
-|----------|-------------|------------------|
-| `cli` | Shell commands | `"node *"`, `"python scripts/*.py"` |
-| `read` | File read access | `"./src/**"`, `"/tmp/**"` |
-| `write` | File write access | `"./output/**"` |
-| `net` | Network egress | `"api.github.com"`, `"*.npmjs.org"` |
-| `tools` | MCP tools | GitHub URLs |
-| `skills` | Agent skills | GitHub URLs |
-| `mcps` | MCP servers | GitHub URLs |
-| `apis` | API adapters | GitHub URLs |
-
-### Glob Patterns
-
-- `*` - matches any characters within a segment
-- `**` - matches across segments (for paths)
-- `?` - matches exactly one character
-
-## Insist (Required Operations)
-
-The `insist` section defines operations that **must** be performed:
-
-```yaml
-insist:
-  cli:
-    - "echo *"  # Must run at least one echo command
-  read:
-    - "/tmp/config.json"  # Must read this file
-```
-
-If insist requirements aren't satisfied, sandboxed executors return:
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INSIST_NOT_SATISFIED",
-    "message": "Required operations not performed: cli:echo *"
-  }
-}
-```
-
-## Limits
-
-```yaml
-limit:
-  maxInputBytes: 1mb      # Max request size
-  maxOutputBytes: 10mb    # Max response size
-  maxRuntimeMs: 30s       # Max execution time
-  maxCostDollars: 1.00    # Max API cost
-```
-
-Supports human-readable units: `1kb`, `5mb`, `1gb`, `100ms`, `30s`, `5m`.
 
 ## Development
 
 ```bash
-# Run all tests
-bun test
+bun install
 
-# Run specific test suites
-bun test packages/format/test/
-bun test packages/runtime/test/executors/
-bun test packages/runtime/test/integration/
+# Run all unit tests
+bun test:all
 
-# Type check
-bun run typecheck
+# Run skill tests (needs API keys in .env)
+bun test:skills
+
+# Run specific skill tests
+bun test:skills:direct    # Direct execution
+bun test:skills:agent     # Agent mode (needs ANTHROPIC_API_KEY)
 ```
 
-## Lima VM Setup (macOS)
+## Lima VM Setup
 
 ```bash
-# Install Lima
 brew install lima
-
-# Create the bands-executor VM
-limactl create --name=bands-executor template://ubuntu
-
-# Start the VM
-limactl start bands-executor
-
-# The runtime will automatically deploy the server to the VM
+bun run band setup        # Creates VM, deploys band server, configures firewall
 ```
 
-## Cloudflare Setup
+The setup creates a `bands-executor` VM with:
+- Bun runtime
+- iptables (network enforcement)
+- bubblewrap (filesystem isolation)
+- `band-runner` user (privilege separation)
+- Band server v3.0 (systemd service on port 9000)
+- Default iptables policy: REJECT all outbound from `band-runner`
 
-```bash
-# Install wrangler
-bun add -g wrangler
+## What's Implemented vs Planned
 
-# Login to Cloudflare
-wrangler login
+### Implemented and tested
 
-# Set environment variables
-export CLOUDFLARE_API_TOKEN="your-token"
-export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+- Network egress enforcement (iptables, kernel-level)
+- Filesystem isolation (bubblewrap mount namespace)
+- CLI allow/deny (PATH wrappers + argument pattern matching)
+- File copy-in/copy-out with deny enforcement
+- User privilege separation
+- Insist enforcement (required operations)
+- Input/output size limits
+- Secrets isolation
+- Contract schema validation (inline + file path refs)
+- Band server v3.0 (HTTP, single-use mutex, per-execution teardown)
 
-# Deploy a band
-bun run packages/runtime/src/cli.ts run ./my-band.md --target cloudflare
-```
+### Planned
+
+- `maxCostDollars` enforcement (for skills calling Claude API internally)
+- Cloudflare Workers executor (V8 isolates)
+- `deny.read`/`deny.write` at OS level (currently enforced at copy boundary)
+- seccomp profiles
+
+See `docs/TODO.md` for details and `SECURITY.md` for the threat model.
 
 ## License
 
