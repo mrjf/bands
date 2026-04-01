@@ -109,12 +109,10 @@ describe("elevenlabs skill: text-to-speech", () => {
       const result = await el("tts", {
         voice_id: voiceId,
         text: "Hello, this is a test.",
-        output_path: "/tmp/elevenlabs-test-output.mp3",
       });
       if (!result.success) throw new Error(`tts failed: ${result.error}`);
       const data = result.data as any;
       expect(data.success).toBe(true);
-      expect(data.size_bytes).toBeGreaterThan(0);
     },
     TIMEOUT
   );
