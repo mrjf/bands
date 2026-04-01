@@ -108,7 +108,7 @@ describe("elevenlabs skill: text-to-speech", () => {
 
       const result = await el("tts", {
         voice_id: voiceId,
-        text: "Hello, this is a test.",
+        text: "Hi",
       });
       if (!result.success) throw new Error(`tts failed: ${result.error}`);
       const data = result.data as any;

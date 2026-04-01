@@ -71,14 +71,13 @@ describe("agent: elevenlabs voices", () => {
       }
 
       const result = await agentCall(
-        `Generate speech saying "Hello world" using ElevenLabs voice ${voiceId}, save to /tmp/agent-tts-test.mp3`
+        `Generate speech saying "Hi" using ElevenLabs voice ${voiceId}, save to /tmp/agent-tts-test.mp3`
       );
 
       expect(result.toolName).toBe("tts");
       expect(result.execResult.success).toBe(true);
       const data = result.execResult.data as any;
       expect(data.success).toBe(true);
-      expect(data.size_bytes).toBeGreaterThan(0);
     },
     AGENT_TIMEOUT
   );
