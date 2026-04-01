@@ -139,7 +139,7 @@ describe("buildBwrapCommand", () => {
   test("sources env.sh and runs run.sh", () => {
     const cmd = buildBwrapCommand("/tmp/workdir");
     expect(cmd).toContain("source /tmp/workdir/env.sh");
-    expect(cmd).toContain("bash /tmp/workdir/run.sh");
+    expect(cmd).toContain("source /tmp/workdir/run.sh");
   });
 
   test("adds ro-bind for allow.read paths", () => {

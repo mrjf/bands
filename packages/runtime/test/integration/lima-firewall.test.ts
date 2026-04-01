@@ -496,6 +496,30 @@ describe("Lima CLI enforcement (allow/deny)", () => {
     },
     TIMEOUT
   );
+
+  test(
+    "absolute path execution is blocked by extdebug trap",
+    async () => {
+      if (skip()) return;
+      const result = await runScriptWithFiles(
+        [
+          "#!/bin/bash",
+          '# Direct absolute path should be blocked',
+          'RESULT=$(/usr/bin/id 2>&1 || true)',
+          'if [ -z "$RESULT" ]; then',
+          '  echo \'{"blocked": true}\' > "$OUTPUT_PATH"',
+          "else",
+          '  echo \'{"blocked": false}\' > "$OUTPUT_PATH"',
+          "fi",
+        ].join("\n"),
+        [],
+        { allowCli: ["jq *"], allowRead: [], allowWrite: [] }
+      );
+      expect(result.success).toBe(true);
+      expect((result.data as any).blocked).toBe(true);
+    },
+    TIMEOUT
+  );
 });
 
 describe("Lima deny.net (holes in allow)", () => {

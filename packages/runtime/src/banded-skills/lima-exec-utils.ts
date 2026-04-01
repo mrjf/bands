@@ -66,7 +66,7 @@ export function buildBwrapCommand(
     // DNS resolver (systemd-resolved socket)
     "--ro-bind-try /run/systemd/resolve /run/systemd/resolve",
     "--die-with-parent",
-    `-- /usr/bin/sudo -u band-runner /bin/bash -c 'source ${vmWorkdir}/env.sh && bash ${vmWorkdir}/run.sh'`,
+    `-- /usr/bin/sudo -u band-runner /bin/bash -c 'source ${vmWorkdir}/env.sh && source ${vmWorkdir}/run.sh'`,
   );
   return parts.join(" ");
 }

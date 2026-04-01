@@ -191,8 +191,10 @@ function buildBwrapArgs(
 
   // Run as band-runner via sudo inside the sandbox.
   // This preserves the real UID for iptables --uid-owner matching.
+  // Source env.sh and run.sh in the same bash process so the extdebug
+  // trap (which blocks absolute path bypass) applies to the script.
   args.push("--", "/usr/bin/sudo", "-u", BAND_RUNNER_USER, "/bin/bash", "-c",
-    `source ${workdir}/env.sh && bash ${workdir}/run.sh`
+    `source ${workdir}/env.sh && source ${workdir}/run.sh`
   );
   return args;
 }
@@ -463,6 +465,12 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       setupCliWrappers(wrapperDir, allowCli, denyCli);
       // PATH is ONLY the wrapper dir — commands not here don't exist
       envLines.unshift(`export PATH="${wrapperDir}"`);
+      // Block absolute path bypass using extdebug trap.
+      // With shopt -s extdebug, DEBUG trap returning 1 prevents execution.
+      // This catches /usr/bin/curl, /bin/rm, etc. that bypass PATH wrappers.
+      envLines.push(`shopt -s extdebug`);
+      envLines.push(`_band_check() { local c="\${BASH_COMMAND%% *}"; [[ "$c" == /* ]] && { echo "DENIED: \$BASH_COMMAND (absolute paths blocked)" >&2; return 1; }; return 0; }`);
+      envLines.push(`trap _band_check DEBUG`);
     }
 
     // Set up ops tracker for insist enforcement
