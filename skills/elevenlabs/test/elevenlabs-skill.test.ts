@@ -1,98 +1,50 @@
 /**
- * ElevenLabs Skill — Integration tests
+ * ElevenLabs Skill — Direct integration tests
  *
- * Requires ELEVENLABS_API_KEY to be set.
+ * Requires TEST_ELEVEN_LABS_TOKEN to be set.
  * These tests make real API calls to ElevenLabs.
  */
 
 import { describe, expect, test } from "bun:test";
-import { join, resolve } from "path";
-import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { bandExec } from "../../../packages/runtime/src/banded-skills/exec";
+import { join } from "path";
+import { existsSync } from "fs";
+import { el, requireElevenLabsEnv, SKILL_ROOT, RESOURCES, TIMEOUT } from "./elevenlabs-helpers";
 
-// ── Load .env ──────────────────────────────────────────────────────────
+// ── Structure tests (no API key needed) ────────────────────────────────
 
-function loadEnv() {
-  const possiblePaths = [
-    join(process.cwd(), ".env"),
-    join(process.cwd(), "packages", "runtime", ".env"),
-    resolve(__dirname, "..", "..", "..", "packages", "runtime", ".env"),
-    resolve(__dirname, "..", "..", "..", ".env"),
-  ];
-  for (const p of possiblePaths) {
-    if (existsSync(p)) {
-      for (const line of readFileSync(p, "utf-8").split("\n")) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith("#")) {
-          const eq = trimmed.indexOf("=");
-          if (eq > 0) {
-            const key = trimmed.slice(0, eq);
-            const val = trimmed.slice(eq + 1);
-            if (!process.env[key]) process.env[key] = val;
-          }
-        }
-      }
-      break;
+describe("elevenlabs skill: structure", () => {
+  test("SKILL.md exists", () => {
+    expect(existsSync(join(SKILL_ROOT, "SKILL.md"))).toBe(true);
+  });
+
+  test("BAND.md exists", () => {
+    expect(existsSync(join(SKILL_ROOT, "BAND.md"))).toBe(true);
+  });
+
+  test("all scripts have resource dirs with run.sh", () => {
+    const scripts = ["tts", "voice-list", "voice-get", "sfx", "user-info"];
+    for (const script of scripts) {
+      expect(existsSync(join(RESOURCES, script, "run.sh"))).toBe(true);
     }
-  }
-}
+  });
 
-loadEnv();
+  test("all scripts have input schemas", () => {
+    const scripts = ["tts", "voice-list", "voice-get", "sfx", "user-info"];
+    for (const script of scripts) {
+      expect(existsSync(join(SKILL_ROOT, "schemas", "input", `${script}.json`))).toBe(true);
+    }
+  });
+});
 
-// ── Config ─────────────────────────────────────────────────────────────
-
-const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
-if (ELEVENLABS_KEY) {
-  process.env.ELEVENLABS_API_KEY = ELEVENLABS_KEY;
-}
-
-function findSkillRoot(): string {
-  const candidates = [
-    resolve(__dirname, ".."),
-    resolve(process.cwd(), "skills", "elevenlabs"),
-  ];
-  for (const c of candidates) {
-    if (existsSync(join(c, "SKILL.md"))) return c;
-  }
-  throw new Error(`Cannot find skills/elevenlabs`);
-}
-
-const SKILL_ROOT = findSkillRoot();
-const RESOURCES = join(SKILL_ROOT, "scripts", "resources");
-const TIMEOUT = 30_000;
-
-function requireApiKey(): string {
-  if (!ELEVENLABS_KEY) {
-    throw new Error("Missing required env var: ELEVENLABS_API_KEY");
-  }
-  return ELEVENLABS_KEY;
-}
-
-async function el(script: string, input: Record<string, unknown> = {}) {
-  requireApiKey();
-  const tempDir = mkdtempSync(join(tmpdir(), "el-test-"));
-  const inputPath = join(tempDir, "input.json");
-  writeFileSync(inputPath, JSON.stringify(input));
-
-  try {
-    return await bandExec({
-      resourceDir: join(RESOURCES, script),
-      args: {},
-      inputPath,
-      skillRoot: SKILL_ROOT,
-    });
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────
+// ── Voice tests ────────────────────────────────────────────────────────
 
 describe("elevenlabs skill: voices", () => {
+  let firstVoiceId: string;
+
   test(
-    "lists available voices",
+    "voice-list returns available voices",
     async () => {
+      requireElevenLabsEnv();
       const result = await el("voice-list");
       if (!result.success) throw new Error(`voice-list failed: ${result.error}`);
       const data = result.data as any[];
@@ -100,33 +52,38 @@ describe("elevenlabs skill: voices", () => {
       expect(data.length).toBeGreaterThan(0);
       expect(data[0].voice_id).toBeDefined();
       expect(data[0].name).toBeDefined();
+      firstVoiceId = data[0].voice_id;
     },
     TIMEOUT
   );
 
   test(
-    "gets voice details",
+    "voice-get returns voice details",
     async () => {
-      // First get a voice ID
-      const listResult = await el("voice-list");
-      if (!listResult.success) throw new Error(`voice-list failed: ${listResult.error}`);
-      const voices = listResult.data as any[];
-      const voiceId = voices[0].voice_id;
+      requireElevenLabsEnv();
+      if (!firstVoiceId) {
+        const listResult = await el("voice-list");
+        if (!listResult.success) throw new Error(`voice-list failed: ${listResult.error}`);
+        firstVoiceId = (listResult.data as any[])[0].voice_id;
+      }
 
-      const result = await el("voice-get", { voice_id: voiceId });
+      const result = await el("voice-get", { voice_id: firstVoiceId });
       if (!result.success) throw new Error(`voice-get failed: ${result.error}`);
       const data = result.data as any;
-      expect(data.voice_id).toBe(voiceId);
+      expect(data.voice_id).toBe(firstVoiceId);
       expect(data.name).toBeDefined();
     },
     TIMEOUT
   );
 });
 
+// ── Account tests ──────────────────────────────────────────────────────
+
 describe("elevenlabs skill: account", () => {
   test(
-    "gets user info",
+    "user-info returns subscription details",
     async () => {
+      requireElevenLabsEnv();
       const result = await el("user-info");
       if (!result.success) throw new Error(`user-info failed: ${result.error}`);
       const data = result.data as any;
@@ -138,26 +95,27 @@ describe("elevenlabs skill: account", () => {
   );
 });
 
-describe("elevenlabs skill: structure", () => {
-  test("SKILL.md exists", () => {
-    expect(existsSync(join(SKILL_ROOT, "SKILL.md"))).toBe(true);
-  });
+// ── TTS tests ──────────────────────────────────────────────────────────
 
-  test("BAND.md exists", () => {
-    expect(existsSync(join(SKILL_ROOT, "BAND.md"))).toBe(true);
-  });
+describe("elevenlabs skill: text-to-speech", () => {
+  test(
+    "tts generates audio from text",
+    async () => {
+      requireElevenLabsEnv();
+      const listResult = await el("voice-list");
+      if (!listResult.success) throw new Error(`voice-list failed: ${listResult.error}`);
+      const voiceId = (listResult.data as any[])[0].voice_id;
 
-  test("all documented scripts have resource dirs", () => {
-    const scripts = ["tts", "voice-list", "voice-get", "sfx", "user-info"];
-    for (const script of scripts) {
-      expect(existsSync(join(RESOURCES, script, "run.sh"))).toBe(true);
-    }
-  });
-
-  test("all documented scripts have input schemas", () => {
-    const scripts = ["tts", "voice-list", "voice-get", "sfx", "user-info"];
-    for (const script of scripts) {
-      expect(existsSync(join(SKILL_ROOT, "schemas", "input", `${script}.json`))).toBe(true);
-    }
-  });
+      const result = await el("tts", {
+        voice_id: voiceId,
+        text: "Hello, this is a test.",
+        output_path: "/tmp/elevenlabs-test-output.mp3",
+      });
+      if (!result.success) throw new Error(`tts failed: ${result.error}`);
+      const data = result.data as any;
+      expect(data.success).toBe(true);
+      expect(data.size_bytes).toBeGreaterThan(0);
+    },
+    TIMEOUT
+  );
 });
