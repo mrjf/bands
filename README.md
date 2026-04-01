@@ -45,13 +45,51 @@ execution:
 
 When a skill runs:
 
-1. Host sends script + input + rules to the band server in the VM (`POST /exec`)
-2. Server sets up per-execution iptables firewall (kernel-level network restriction)
-3. Server creates bubblewrap sandbox (mount namespace, user separation)
-4. Server creates CLI wrappers (only declared commands exist in PATH)
-5. Script runs inside the sandbox as `band-runner`
-6. Server tears down firewall, cleans up workdir, returns output
-7. Host writes back allowed output files (deny patterns enforced at copy boundary)
+1. Host validates input against the script's JSON Schema
+2. Host sends script + input + rules to the band server in the VM (`POST /exec`)
+3. Server sets up per-execution iptables firewall (kernel-level network restriction)
+4. Server creates bubblewrap sandbox (mount namespace, user separation)
+5. Server creates CLI wrappers (only declared commands exist in PATH)
+6. Script runs inside the sandbox as `band-runner`
+7. Server validates output against the output schema
+8. Server tears down firewall, cleans up workdir, returns output
+9. Host writes back allowed output files (deny patterns enforced at copy boundary)
+
+## Typed Contracts
+
+Every script has a typed contract — JSON Schema for input and output. The runtime validates both before and after execution. No untyped data crosses the boundary.
+
+```
+skills/github/
+├── schemas/
+│   ├── input/           # One schema per script
+│   │   ├── issue-create.json
+│   │   ├── pr-list.json
+│   │   └── ...
+│   ├── output/          # Return type per script
+│   │   ├── issue-create.json
+│   │   └── ...
+│   └── defs/            # Shared types ($ref)
+│       ├── repo.json    # "owner/name" string
+│       ├── limit.json   # integer, minimum: 1
+│       └── ...
+```
+
+Input schemas define required fields, types, and descriptions. The runtime uses Ajv with `$ref` resolution and type coercion (CLI string args like `--limit=5` are coerced to integers).
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "repo": { "$ref": "repo.json" },
+    "title": { "type": "string" },
+    "labels": { "$ref": "labels-input.json" }
+  },
+  "required": ["repo", "title"]
+}
+```
+
+Shared definitions in `schemas/defs/` are reusable across scripts — define `repo.json` once, `$ref` it everywhere. The type system catches invalid input before the script runs and invalid output before the caller receives it.
 
 ## Permission Model
 

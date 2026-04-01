@@ -59,10 +59,11 @@ network abuse, and cross-skill interference.
 inside the VM. The VM boundary is the hard security line. Everything
 inside the VM is defense-in-depth.
 
-**Known limitations:**
-- CLI enforcement is PATH-based. Full-path binary execution (`/usr/bin/curl`)
-  bypasses PATH wrappers, but network firewall still blocks undeclared hosts.
-- File deny enforcement is at the copy boundary, not OS-level. Inside the
-  sandbox, the script has full access to everything in the workdir.
-- `deny.read`/`deny.write` patterns are checked during copy-in/copy-out,
-  not enforced inside the VM filesystem.
+**Defense in depth:**
+- CLI enforcement is PATH-based. A script could invoke a binary via absolute
+  path (`/usr/bin/curl`), but the network firewall blocks connections to
+  undeclared hosts regardless of how the connection is initiated.
+- File deny enforcement is at the copy boundary. Inside the sandbox, the
+  script has full access to its workdir — but the workdir only contains
+  files that passed the allow/deny check on copy-in.
+- These layers overlap: even if one is bypassed, the others still enforce.
