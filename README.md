@@ -1,6 +1,6 @@
 # Bands
 
-> **Pre-alpha. Experimental. 0.1.0-berry.** This is a research release. APIs will change. Versioned on the [Lobster Scale](VERSIONING.md) — berry is the earliest lifestage.
+> **Pre-alpha. Experimental.** [0.1.0-berry](VERSIONING.md) — lobster life-stage versioning.
 
 **Sandboxed execution for AI agent skills.**
 
