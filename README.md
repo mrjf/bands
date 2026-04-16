@@ -1,5 +1,7 @@
 # Bands
 
+> **Pre-alpha. Experimental. 0.1.0-berry.** This is a research release. APIs will change. See [VERSIONING.md](VERSIONING.md) for the roadmap.
+
 **Sandboxed execution for AI agent skills.**
 
 Bands runs untrusted scripts inside isolated Linux VMs with kernel-level enforcement of network, filesystem, and CLI restrictions. Every skill declares what it needs. Everything else is denied.
