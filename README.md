@@ -1,6 +1,6 @@
 # Bands
 
-> **Pre-alpha. Experimental. 0.1.0-berry.** This is a research release. APIs will change. See [VERSIONING.md](VERSIONING.md) for the roadmap.
+> **Pre-alpha. Experimental. 0.1.0-berry.** This is a research release. APIs will change. Versioned on the [Lobster Scale](VERSIONING.md) — berry is the earliest lifestage.
 
 **Sandboxed execution for AI agent skills.**
 
