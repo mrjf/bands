@@ -130,6 +130,7 @@ Skills live in `skills/<name>/` with:
 | `github` | 31 | Issues, PRs, releases, labels, gists, search, raw API |
 | `slack` | 9 | Messages, channels, threads, reactions, files |
 | `elevenlabs` | 5 | Text-to-speech, voices, sound effects |
+| `summarize` | 1 | Summarize documents using Claude Code CLI |
 
 ## Project Structure
 
