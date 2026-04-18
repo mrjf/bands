@@ -1,22 +1,26 @@
 /**
  * Band Execution Server — runs inside the Lima VM.
  *
- * Single-use per request. The VM boots locked down (iptables DROP all outbound).
- * Each execution:
- * 1. Receives script, input, secrets, and allow rules via POST /exec
- * 2. Opens iptables for allowed hosts
- * 3. Runs script inside bubblewrap sandbox
- * 4. Captures output
- * 5. Tears down iptables rules, cleans up workdir
- * 6. Returns output
+ * Cooked sandbox model:
+ * - First request with a set of permissions "cooks" the sandbox:
+ *   iptables chain, CLI wrappers, bwrap mount list.
+ * - Subsequent requests with the same permissions reuse the cook (ms, not 100s of ms).
+ * - Different permissions auto-recook (teardown old, setup new).
+ * - POST /flush tears down the current cook manually.
  *
- * Rejects concurrent requests — one execution at a time, full reset between.
+ * Per-request (whether cooked or not):
+ * 1. Write script + input + secrets to a fresh workdir
+ * 2. Run inside bwrap sandbox using the cooked CLI wrappers and mount list
+ * 3. Read output, check insist rules, cleanup workdir
+ *
+ * Rejects concurrent requests — one execution at a time.
  *
  * This file is deployed to the VM as ~/bands-server/server.ts
  * and run via systemd as a long-lived service.
  */
 
 import { Hono } from "hono";
+import { createHash } from "crypto";
 
 const BAND_RUNNER_USER = "band-runner";
 let executing = false;
@@ -38,6 +42,104 @@ function getBandRunnerIds(): { uid: number; gid: number } {
 
 const bandRunnerIds = getBandRunnerIds();
 
+// ── Cook state ───────────────────────────────────────────────────────
+
+interface Cook {
+  id: string;
+  chainName: string;
+  wrapperDir: string;
+  allowNet: string[];
+  denyNet: string[];
+  allowCli: string[];
+  denyCli: string[];
+  allowRead: string[];
+  allowWrite: string[];
+}
+
+let currentCook: Cook | null = null;
+
+/**
+ * Hash the sandbox-relevant permissions to produce a cook ID.
+ * Only fields that affect iptables, CLI wrappers, or bwrap mounts matter.
+ */
+function computeCookId(req: ExecRequest): string {
+  const key = JSON.stringify({
+    net: (req.allowNet ?? []).slice().sort(),
+    dnet: (req.denyNet ?? []).slice().sort(),
+    cli: (req.allowCli ?? []).slice().sort(),
+    dcli: (req.denyCli ?? []).slice().sort(),
+    read: (req.allowRead ?? []).slice().sort(),
+    write: (req.allowWrite ?? []).slice().sort(),
+  });
+  return createHash("sha256").update(key).digest("hex").slice(0, 12);
+}
+
+/**
+ * Ensure the sandbox is cooked for the given permissions.
+ * Returns the current cook, setting up or recooking as needed.
+ */
+function ensureCooked(req: ExecRequest): Cook {
+  const id = computeCookId(req);
+
+  if (currentCook && currentCook.id === id) {
+    return currentCook;
+  }
+
+  // Teardown old cook if present
+  if (currentCook) {
+    flushCook();
+  }
+
+  // Setup new cook
+  const chainName = `BAND-${id}`;
+  const cookDir = `/var/band-cook-${id}`;
+  const wrapperDir = `${cookDir}/.band-cli`;
+
+  shell(`mkdir -p ${wrapperDir}`);
+
+  // Setup iptables
+  const allowNet = req.allowNet ?? [];
+  const denyNet = req.denyNet ?? [];
+  if (allowNet.length > 0 || denyNet.length > 0) {
+    setupFirewall(chainName, allowNet, denyNet);
+  }
+
+  // Setup CLI wrappers
+  const allowCli = req.allowCli ?? [];
+  const denyCli = req.denyCli ?? [];
+  if (allowCli.length > 0 || denyCli.length > 0) {
+    setupCliWrappers(wrapperDir, allowCli, denyCli);
+  }
+
+  currentCook = {
+    id,
+    chainName,
+    wrapperDir,
+    allowNet,
+    denyNet,
+    allowCli,
+    denyCli,
+    allowRead: req.allowRead ?? [],
+    allowWrite: req.allowWrite ?? [],
+  };
+
+  return currentCook;
+}
+
+/**
+ * Tear down the current cook: iptables chain, CLI wrapper dir.
+ */
+function flushCook(): void {
+  if (!currentCook) return;
+
+  const { chainName, allowNet, denyNet } = currentCook;
+  if (allowNet.length > 0 || denyNet.length > 0) {
+    teardownFirewall(chainName);
+  }
+  shellIgnoreError(`rm -rf /var/band-cook-${currentCook.id}`);
+  currentCook = null;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function shell(cmd: string): string {
@@ -57,7 +159,6 @@ function randomId(): string {
 }
 
 function writeFile(path: string, content: string): void {
-  // Base64-encode to avoid shell escaping issues with arbitrary content
   const b64 = Buffer.from(content).toString("base64");
   shell(`echo '${b64}' | base64 -d > ${path}`);
 }
@@ -73,13 +174,10 @@ function setupFirewall(
   if (allowNet.includes("*") && denyNet.length === 0) return;
 
   // Check if iptables is available and BAND-DEFAULT chain exists.
-  // If not (e.g., CI), skip firewall setup — the default iptables
-  // policy is ACCEPT and per-execution rules won't work reliably
-  // with CDN/anycast IPs anyway.
   try {
     shell("iptables -L BAND-DEFAULT -n >/dev/null 2>&1");
   } catch {
-    return; // No default chain = no firewall enforcement
+    return;
   }
 
   const cmds: string[] = [
@@ -100,7 +198,7 @@ function setupFirewall(
 
   // Allow rules
   for (const host of allowNet) {
-    if (host === "*") continue; // handled by not adding final REJECT
+    if (host === "*") continue;
     if (host.startsWith("*.")) {
       const base = host.slice(2);
       cmds.push(
@@ -115,7 +213,6 @@ function setupFirewall(
     }
   }
 
-  // Default REJECT (unless allow: ["*"] which means allow everything not denied)
   if (!allowNet.includes("*")) {
     cmds.push(`iptables -A ${chainName} -j REJECT`);
   }
@@ -137,51 +234,43 @@ function teardownFirewall(chainName: string): void {
 
 function buildBwrapArgs(
   workdir: string,
-  allowRead: string[],
-  allowWrite: string[]
+  cook: Cook
 ): string[] {
   const args = ["bwrap"];
 
-  // If allowCli is specified, mount system dirs selectively:
-  // - /usr/lib, /usr/share, /usr/libexec (libraries/data, read-only)
-  // - /usr/bin as empty tmpfs, then bind-mount only allowed + essential binaries
-  // - /bin as empty tmpfs with only sh
-  // This is kernel-level CLI enforcement — unlisted binaries don't exist.
-  // Mount system binaries (always full — CLI restrictions are enforced
-  // via deny wrappers in PATH, not by hiding binaries)
   args.push(
     "--ro-bind", "/usr", "/usr",
     "--ro-bind", "/lib", "/lib",
     "--ro-bind", "/bin", "/bin",
-  );
-
-  args.push(
     "--ro-bind", "/sbin", "/sbin",
     "--ro-bind", "/lib", "/lib",
     "--symlink", "usr/lib64", "/lib64",
     "--ro-bind", "/etc", "/etc",
-    // Runtime state (DNS resolver sockets, sudo, dbus)
     "--bind-try", "/run", "/run",
     "--proc", "/proc",
     "--dev", "/dev",
-    // Isolated /tmp and /home (1777 = world-writable like normal /tmp)
     "--perms", "1777", "--tmpfs", "/tmp",
     "--perms", "1777", "--tmpfs", "/home",
-    // Workdir (only writable persistent mount)
     "--bind", workdir, workdir,
     "--die-with-parent",
   );
 
-  // File access mounts from allow.read / allow.write
+  // Mount the cooked CLI wrapper dir into the sandbox.
+  // Mount it at a fixed path inside the workdir so PATH in env.sh can find it.
+  if (cook.allowCli.length > 0 || cook.denyCli.length > 0) {
+    args.push("--ro-bind", cook.wrapperDir, `${workdir}/.band-cli`);
+  }
+
+  // File access mounts from the cook
   const mounted = new Set<string>();
-  for (const pattern of allowRead) {
+  for (const pattern of cook.allowRead) {
     const dir = extractMountDir(pattern);
     if (dir && !mounted.has(dir)) {
       args.push("--ro-bind-try", dir, dir);
       mounted.add(dir);
     }
   }
-  for (const pattern of allowWrite) {
+  for (const pattern of cook.allowWrite) {
     const dir = extractMountDir(pattern);
     if (dir && !mounted.has(dir)) {
       args.push("--bind-try", dir, dir);
@@ -189,10 +278,6 @@ function buildBwrapArgs(
     }
   }
 
-  // Run as band-runner via sudo inside the sandbox.
-  // This preserves the real UID for iptables --uid-owner matching.
-  // Source env.sh and run.sh in the same bash process so the extdebug
-  // trap (which blocks absolute path bypass) applies to the script.
   args.push("--", "/usr/bin/sudo", "-u", BAND_RUNNER_USER, "/bin/bash", "-c",
     `source ${workdir}/env.sh && source ${workdir}/run.sh`
   );
@@ -215,7 +300,6 @@ function extractMountDir(pattern: string): string | null {
 
 // ── CLI deny wrappers ─────────────────────────────────────────────────
 
-// Essential commands always available regardless of allow.cli.
 const ESSENTIAL_COMMANDS = [
   "bash", "sh", "env",
   "cat", "echo", "printf", "test", "true", "false",
@@ -228,24 +312,11 @@ const ESSENTIAL_COMMANDS = [
   "sudo", "su",
 ];
 
-/**
- * Set up CLI enforcement via wrapper scripts.
- *
- * Default deny: PATH is set to ONLY the wrapper directory.
- * Commands not in allow.cli (or essentials) → "command not found".
- * Commands matching deny.cli patterns → exit 126 with DENIED message.
- *
- * Each allowed command gets a wrapper that:
- * 1. Checks full command line against deny.cli patterns (if any)
- * 2. If denied: prints error, exits 126
- * 3. If allowed: exec's the real binary via absolute path
- */
 function setupCliWrappers(
   wrapperDir: string,
   allowPatterns: string[],
   denyPatterns: string[]
 ): void {
-  // Collect allowed command names
   const allowedCommands = new Set(ESSENTIAL_COMMANDS);
   for (const pattern of allowPatterns) {
     const cmd = pattern.split(/\s+/)[0];
@@ -254,7 +325,6 @@ function setupCliWrappers(
     }
   }
 
-  // Group deny patterns by command name
   const denyByCmd = new Map<string, string[]>();
   for (const pattern of denyPatterns) {
     const cmd = pattern.split(/\s+/)[0];
@@ -264,7 +334,6 @@ function setupCliWrappers(
     denyByCmd.set(cmd, existing);
   }
 
-  // Create wrapper for each allowed command
   for (const cmd of allowedCommands) {
     let realPath: string;
     try {
@@ -273,9 +342,6 @@ function setupCliWrappers(
     if (!realPath) continue;
 
     const denyPats = denyByCmd.get(cmd) || [];
-
-    // All wrappers log the command to the ops tracker file for insist checking.
-    // BAND_OPS_FILE is set in env.sh when insist rules exist.
     const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
 
     let wrapper: string;
@@ -307,9 +373,6 @@ exec ${realPath} "$@"
 
 // ── Insist checking ───────────────────────────────────────────────────
 
-/**
- * Glob match using bash-style patterns.
- */
 function matchGlob(str: string, pattern: string): boolean {
   const regex = "^" + pattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -323,14 +386,6 @@ function matchGlob(str: string, pattern: string): boolean {
   }
 }
 
-/**
- * Check insist requirements after script execution.
- *
- * - cli: checks logged commands in ops file against insist.cli patterns
- * - write: checks if files matching insist.write patterns exist in workdir or bind mounts
- * - read: checks if files matching insist.read patterns were accessed (via ops log)
- * - net: checks if connections to insist.net hosts were made (via iptables counters)
- */
 function checkInsist(
   insist: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] },
   workdir: string,
@@ -338,23 +393,19 @@ function checkInsist(
 ): { satisfied: boolean; missing: string[] } {
   const missing: string[] = [];
 
-  // Read ops log (commands logged by CLI wrappers)
   let ops: string[] = [];
   try {
     const content = shell(`cat ${opsFile} 2>/dev/null || true`).trim();
     if (content) ops = content.split("\n").filter(Boolean);
   } catch { /* empty */ }
 
-  // Check insist.cli — each pattern must match at least one logged command
   for (const pattern of insist.cli ?? []) {
     const matched = ops.some(op => matchGlob(op, pattern));
     if (!matched) missing.push(`cli: ${pattern}`);
   }
 
-  // Check insist.write — each pattern must match a file that exists
   for (const pattern of insist.write ?? []) {
     try {
-      // Use find with the pattern to check if any matching file exists
       const found = shell(`find / -path '${pattern}' -type f 2>/dev/null | head -1`).trim();
       if (!found) missing.push(`write: ${pattern}`);
     } catch {
@@ -362,20 +413,15 @@ function checkInsist(
     }
   }
 
-  // Check insist.read — look for read operations in ops log
-  // (Commands like "cat /path" are logged; we check if any match)
   for (const pattern of insist.read ?? []) {
     const matched = ops.some(op => {
-      // Check if any logged command references this path
       return op.includes(pattern.replace(/\*/g, ""));
     });
     if (!matched) missing.push(`read: ${pattern}`);
   }
 
-  // Check insist.net — check iptables packet counters for allowed hosts
   for (const pattern of insist.net ?? []) {
     try {
-      // Check if any packets were sent to the host
       const host = pattern.replace(/^\*\./, "");
       const packets = shell(
         `iptables -L OUTPUT -n -v 2>/dev/null | grep -c '${host}' || echo 0`
@@ -392,21 +438,21 @@ function checkInsist(
 // ── Execution ─────────────────────────────────────────────────────────
 
 interface ExecRequest {
-  script: string;      // run.sh content
-  input: unknown;      // input JSON
-  config?: unknown;    // band config JSON (optional)
-  secrets?: Record<string, string>; // env secrets
+  script: string;
+  input: unknown;
+  config?: unknown;
+  secrets?: Record<string, string>;
   allowNet?: string[];
-  denyNet?: string[];    // Network hosts denied (punches holes in allowNet)
-  allowCli?: string[];   // CLI commands allowed (e.g., "gh *", "jq *")
-  denyCli?: string[];    // CLI patterns denied (e.g., "rm -rf *", "curl *")
+  denyNet?: string[];
+  allowCli?: string[];
+  denyCli?: string[];
   allowRead?: string[];
   allowWrite?: string[];
-  insist?: {             // Operations that MUST be performed
-    cli?: string[];      // CLI commands that must be run
-    read?: string[];     // Files that must be read
-    write?: string[];    // Files that must be written
-    net?: string[];      // Hosts that must be contacted
+  insist?: {
+    cli?: string[];
+    read?: string[];
+    write?: string[];
+    net?: string[];
   };
   timeoutMs?: number;
 }
@@ -415,6 +461,8 @@ interface ExecResponse {
   success: boolean;
   data?: unknown;
   error?: string;
+  cooked?: boolean;
+  cookId?: string;
   metrics?: {
     durationMs: number;
     inputBytes: number;
@@ -425,17 +473,18 @@ interface ExecResponse {
 async function executeScript(req: ExecRequest): Promise<ExecResponse> {
   const startTime = Date.now();
   const execId = randomId();
-  const chainName = `BAND-${execId}`;
   const workdir = `/tmp/band-exec-${execId}`;
 
   const inputStr = JSON.stringify(req.input);
 
+  // Ensure sandbox is cooked (reuses if permissions match)
+  const cook = ensureCooked(req);
+  const wasCooked = currentCook?.id === cook.id;
+
   try {
-    // Create workdir and write all files via shell (server process may
-    // not have direct write access to /tmp depending on permissions)
+    // Per-request: create workdir with script, input, env
     shell(`mkdir -p ${workdir} && chmod 755 ${workdir}`);
 
-    // Write script files using heredocs to avoid quoting issues
     writeFile(`${workdir}/run.sh`, req.script);
     writeFile(`${workdir}/input.json`, inputStr);
 
@@ -443,7 +492,7 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       writeFile(`${workdir}/config.json`, JSON.stringify(req.config));
     }
 
-    // Write env.sh with secrets and standard vars
+    // Build env.sh pointing to the cooked CLI wrappers
     const envLines = [
       `export INPUT_PATH=${workdir}/input.json`,
       `export OUTPUT_PATH=${workdir}/output.json`,
@@ -455,25 +504,16 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       const b64 = Buffer.from(value).toString("base64");
       envLines.push(`export ${key}=$(echo '${b64}' | base64 -d)`);
     }
-    // Set up CLI enforcement if allow.cli or deny.cli is specified.
-    // PATH is set to ONLY the wrapper directory — default deny.
-    const allowCli = req.allowCli ?? [];
-    const denyCli = req.denyCli ?? [];
-    if (allowCli.length > 0 || denyCli.length > 0) {
-      const wrapperDir = `${workdir}/.band-cli`;
-      shell(`mkdir -p ${wrapperDir}`);
-      setupCliWrappers(wrapperDir, allowCli, denyCli);
-      // PATH is ONLY the wrapper dir — commands not here don't exist
-      envLines.unshift(`export PATH="${wrapperDir}"`);
-      // Block absolute path bypass using extdebug trap.
-      // With shopt -s extdebug, DEBUG trap returning 1 prevents execution.
-      // This catches /usr/bin/curl, /bin/rm, etc. that bypass PATH wrappers.
+
+    // Point PATH to the cooked CLI wrapper dir (mounted at workdir/.band-cli inside bwrap)
+    if (cook.allowCli.length > 0 || cook.denyCli.length > 0) {
+      envLines.unshift(`export PATH="${workdir}/.band-cli"`);
       envLines.push(`shopt -s extdebug`);
       envLines.push(`_band_check() { local c="\${BASH_COMMAND%% *}"; [[ "$c" == /* ]] && { echo "DENIED: \$BASH_COMMAND (absolute paths blocked)" >&2; return 1; }; return 0; }`);
       envLines.push(`trap _band_check DEBUG`);
     }
 
-    // Set up ops tracker for insist enforcement
+    // Ops tracker for insist enforcement
     const hasInsist = req.insist && (
       (req.insist.cli?.length ?? 0) > 0 ||
       (req.insist.read?.length ?? 0) > 0 ||
@@ -482,29 +522,16 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     );
     const opsFile = `${workdir}/.band-ops`;
     if (hasInsist) {
-      // CLI wrappers log to this file (via BAND_OPS_FILE env var)
       envLines.push(`export BAND_OPS_FILE="${opsFile}"`);
-      writeFile(opsFile, ""); // create empty
+      writeFile(opsFile, "");
     }
 
     writeFile(`${workdir}/env.sh`, envLines.join("\n") + "\n");
 
-    // Make workdir readable/writable by band-runner
     shell(`chown -R ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${workdir}`);
 
-    // Set up iptables firewall
-    const allowNet = req.allowNet ?? [];
-    const denyNet = req.denyNet ?? [];
-    if (allowNet.length > 0 || denyNet.length > 0) {
-      setupFirewall(chainName, allowNet, denyNet);
-    }
-
-    // Run script inside bubblewrap (sudo needed for namespace setup)
-    const bwrapArgs = ["sudo", ...buildBwrapArgs(
-      workdir,
-      req.allowRead ?? [],
-      req.allowWrite ?? []
-    )];
+    // Run script inside bwrap using cooked mount list
+    const bwrapArgs = ["sudo", ...buildBwrapArgs(workdir, cook)];
 
     const timeout = req.timeoutMs ?? 60_000;
     const proc = Bun.spawnSync(bwrapArgs, { timeout });
@@ -514,7 +541,6 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     const stdout = proc.stdout.toString();
 
     if (exitCode !== 0) {
-      // Try to read error from output file (use sudo since sandbox owns it)
       let errorMessage = stderr || stdout;
       try {
         const content = shell(`cat ${workdir}/output.json 2>/dev/null || true`).trim();
@@ -531,6 +557,8 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       return {
         success: false,
         error: errorMessage || `Script exited with code ${exitCode}`,
+        cooked: wasCooked,
+        cookId: cook.id,
         metrics: {
           durationMs: Date.now() - startTime,
           inputBytes: inputStr.length,
@@ -539,7 +567,7 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       };
     }
 
-    // Read output (may be owned by sandbox user, use sudo)
+    // Read output
     let data: unknown;
     try {
       const content = shell(`cat ${workdir}/output.json 2>/dev/null || true`).trim();
@@ -548,7 +576,6 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       }
     } catch { /* no output file */ }
 
-    // Fall back to stdout
     if (data === undefined && stdout.trim()) {
       try { data = JSON.parse(stdout.trim()); } catch { data = stdout.trim(); }
     }
@@ -560,6 +587,8 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
         return {
           success: false,
           error: `Insist not satisfied: ${insistResult.missing.join(", ")}`,
+          cooked: wasCooked,
+          cookId: cook.id,
           metrics: {
             durationMs: Date.now() - startTime,
             inputBytes: inputStr.length,
@@ -572,6 +601,8 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     return {
       success: true,
       data,
+      cooked: wasCooked,
+      cookId: cook.id,
       metrics: {
         durationMs: Date.now() - startTime,
         inputBytes: inputStr.length,
@@ -579,10 +610,7 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       },
     };
   } finally {
-    // Always clean up: firewall + workdir
-    if (req.allowNet && req.allowNet.length > 0) {
-      teardownFirewall(chainName);
-    }
+    // Cleanup workdir only — cook state persists
     shellIgnoreError(`rm -rf ${workdir}`);
   }
 }
@@ -592,11 +620,15 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
 const app = new Hono();
 
 app.get("/health", (c) => {
-  return c.json({ ready: true, busy: executing, version: "3.0" });
+  return c.json({
+    ready: true,
+    busy: executing,
+    version: "4.0",
+    cook: currentCook ? { id: currentCook.id } : null,
+  });
 });
 
 app.post("/exec", async (c) => {
-  // Single-use: reject if already executing
   if (executing) {
     return c.json(
       { error: "Server is busy — one execution at a time" },
@@ -624,6 +656,11 @@ app.post("/exec", async (c) => {
   } finally {
     executing = false;
   }
+});
+
+app.post("/flush", (c) => {
+  flushCook();
+  return c.json({ ok: true, message: "Cook flushed" });
 });
 
 export default { port: 9000, fetch: app.fetch };
