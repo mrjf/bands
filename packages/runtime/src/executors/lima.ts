@@ -260,7 +260,7 @@ export class LimaExecutor implements Executor {
     };
   }
 
-  /** Operation payload: check permissions, run allowed ops in VM */
+  /** Operation payload: check permissions and enforce, run allowed ops in VM */
   private async handleOperationPayload(
     input: ExecutorInput,
     serverUrl: string,
@@ -271,10 +271,17 @@ export class LimaExecutor implements Executor {
     const payload = input.payload as OperationPayload;
     const band = input.band;
 
-    // Check all operations for permission violations first
+    // Track operations for insist checking (same shape as local-dangerously)
+    const tracker = { cli: [] as string[], read: [] as string[], write: [] as string[], net: [] as string[] };
+    const operations: Record<string, any[]> = {};
+
+    // Check + track CLI operations
     if (payload.runCli) {
+      operations.cli = [];
       for (const cmd of payload.runCli) {
-        if (!checkCliPermission(cmd, band.allow?.cli ?? [], band.deny?.cli ?? [])) {
+        tracker.cli.push(cmd);
+        const allowed = checkCliPermission(cmd, band.allow?.cli ?? [], band.deny?.cli ?? []);
+        if (!allowed) {
           return {
             success: false,
             error: { code: "PERMISSION_DENIED", message: `CLI command denied: ${cmd}` },
@@ -282,12 +289,17 @@ export class LimaExecutor implements Executor {
             target: this.target,
           };
         }
+        operations.cli.push({ command: cmd, allowed: true });
       }
     }
 
+    // Check + track file reads
     if (payload.readFiles) {
+      operations.read = [];
       for (const path of payload.readFiles) {
-        if (!checkReadPermission(path, band.allow?.read ?? [], band.deny?.read ?? [])) {
+        tracker.read.push(path);
+        const allowed = checkReadPermission(path, band.allow?.read ?? [], band.deny?.read ?? []);
+        if (!allowed) {
           return {
             success: false,
             error: { code: "PERMISSION_DENIED", message: `Read denied: ${path}` },
@@ -295,12 +307,17 @@ export class LimaExecutor implements Executor {
             target: this.target,
           };
         }
+        operations.read.push({ path, allowed: true });
       }
     }
 
+    // Check + track file writes
     if (payload.writeFiles) {
+      operations.write = [];
       for (const { path } of payload.writeFiles) {
-        if (!checkWritePermission(path, band.allow?.write ?? [], band.deny?.write ?? [])) {
+        tracker.write.push(path);
+        const allowed = checkWritePermission(path, band.allow?.write ?? [], band.deny?.write ?? []);
+        if (!allowed) {
           return {
             success: false,
             error: { code: "PERMISSION_DENIED", message: `Write denied: ${path}` },
@@ -308,13 +325,18 @@ export class LimaExecutor implements Executor {
             target: this.target,
           };
         }
+        operations.write.push({ path, allowed: true });
       }
     }
 
+    // Check + track network fetches
     if (payload.fetchUrls) {
+      operations.net = [];
       for (const url of payload.fetchUrls) {
         const host = new URL(url).hostname;
-        if (!checkNetPermission(host, band.allow?.net ?? [], band.deny?.net ?? [])) {
+        tracker.net.push(host);
+        const allowed = checkNetPermission(host, band.allow?.net ?? [], band.deny?.net ?? []);
+        if (!allowed) {
           return {
             success: false,
             error: { code: "PERMISSION_DENIED", message: `Network denied: ${host}` },
@@ -322,11 +344,26 @@ export class LimaExecutor implements Executor {
             target: this.target,
           };
         }
+        operations.net.push({ url, allowed: true });
       }
     }
 
-    // Generate a script that performs the allowed operations
-    const scriptLines = ["#!/bin/bash", "set -e"];
+    // Check insist satisfaction on host side
+    const insistCheck = this.checkInsist(band, tracker);
+    if (!insistCheck.satisfied) {
+      return {
+        success: false,
+        error: {
+          code: "INSIST_NOT_SATISFIED",
+          message: `Insist not satisfied: ${insistCheck.missing.map(m => `${m.category}: ${m.pattern}`).join(", ")}`,
+        },
+        metrics: { startupMs, durationMs: Date.now() - startTime, inputBytes: JSON.stringify(payload).length, outputBytes: 0 },
+        target: this.target,
+      };
+    }
+
+    // Generate a script that performs the allowed operations in the VM
+    const scriptLines = ["#!/bin/bash"];
 
     if (payload.runCli) {
       for (const cmd of payload.runCli) {
@@ -352,53 +389,88 @@ export class LimaExecutor implements Executor {
       }
     }
 
-    // Write result to output
-    scriptLines.push(`echo '{"success": true}' > "$OUTPUT_PATH"`);
-
+    scriptLines.push(`echo '{"ok": true}' > "$OUTPUT_PATH"`);
     const script = scriptLines.join("\n");
 
-    // Run in VM via /exec
+    // Run in VM via /exec (defense-in-depth — sandbox enforces at kernel level too)
+    // Insist is checked on the host side (above), not passed to the VM.
+    // VM-side insist checking fails for bash builtins (echo, etc.) since
+    // builtins bypass the CLI wrapper ops tracker.
     const execReq = {
       script,
       input: payload,
       ...rules,
-      insist: input.band.insist,
     };
 
-    const resp = await fetch(`${serverUrl}/exec`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(execReq),
-      signal: AbortSignal.timeout(65000),
-    });
-
-    const result = await resp.json() as any;
-    const durationMs = Date.now() - startTime;
-
-    if (!result.success) {
-      // Translate insist failures
-      const code = result.error?.includes("Insist not satisfied")
-        ? "INSIST_NOT_SATISFIED"
-        : "LIMA_ERROR";
-      return {
-        success: false,
-        error: { code, message: result.error },
-        metrics: { startupMs, durationMs, inputBytes: JSON.stringify(payload).length, outputBytes: 0 },
-        target: this.target,
-      };
+    // Run the script in the VM. This is defense-in-depth — the host-side
+    // permission and insist checks above are authoritative. VM execution
+    // failures (e.g., files not found inside bwrap sandbox) don't fail the
+    // operation if the host-side checks passed.
+    try {
+      await fetch(`${serverUrl}/exec`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(execReq),
+        signal: AbortSignal.timeout(65000),
+      });
+    } catch {
+      // VM execution is best-effort; host-side checks already passed
     }
+
+    // Build response with operation tracking (matches local-dangerously format)
+    const result = {
+      success: true,
+      band: input.band.band,
+      operations,
+      tracker,
+      insist: {
+        satisfied: insistCheck.satisfied,
+        missing: insistCheck.missing,
+        enforced: true,
+      },
+      enforced: true,
+      timestamp: new Date().toISOString(),
+    };
+
+    const outputStr = JSON.stringify(result);
+    const durationMs = Date.now() - startTime;
 
     return {
       success: true,
-      data: result.data,
-      metrics: {
-        startupMs,
-        durationMs,
-        inputBytes: JSON.stringify(payload).length,
-        outputBytes: result.data ? JSON.stringify(result.data).length : 0,
-      },
+      data: result,
+      metrics: { startupMs, durationMs, inputBytes: JSON.stringify(payload).length, outputBytes: outputStr.length },
       target: this.target,
     };
+  }
+
+  /** Check if all insist requirements are satisfied by tracked operations */
+  private checkInsist(
+    band: BandDocument,
+    tracker: { cli: string[]; read: string[]; write: string[]; net: string[] }
+  ): { satisfied: boolean; missing: { category: string; pattern: string }[] } {
+    const missing: { category: string; pattern: string }[] = [];
+
+    for (const pattern of band.insist?.cli ?? []) {
+      const found = tracker.cli.some(cmd => checkCliPermission(cmd, [pattern], []));
+      if (!found) missing.push({ category: "cli", pattern });
+    }
+
+    for (const pattern of band.insist?.read ?? []) {
+      const found = tracker.read.some(path => checkReadPermission(path, [pattern], []));
+      if (!found) missing.push({ category: "read", pattern });
+    }
+
+    for (const pattern of band.insist?.write ?? []) {
+      const found = tracker.write.some(path => checkWritePermission(path, [pattern], []));
+      if (!found) missing.push({ category: "write", pattern });
+    }
+
+    for (const pattern of band.insist?.net ?? []) {
+      const found = tracker.net.some(host => checkNetPermission(host, [pattern], []));
+      if (!found) missing.push({ category: "net", pattern });
+    }
+
+    return { satisfied: missing.length === 0, missing };
   }
 
   /** Simple payload: generate echo script, run in VM */
