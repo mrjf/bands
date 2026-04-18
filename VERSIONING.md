@@ -29,15 +29,11 @@ Pre-release stages live under `0.x`. The first stable release is Chicken (`1.0.0
 | **Large** | `3.x.y` | 1 1/2 - 2 1/2 lbs. |
 | **Jumbo** | `4.x.y` | Over 2 1/2 lbs. |
 
-## Current Stage
-
-**Berry** (`0.1.y`)
-
 ## Rules
 
 1. Stage transitions are one-way. You cannot un-boil a lobster.
 2. Breaking changes are free during pre-release (`0.x`).
-3. Short (`0.9`) is beta. Keeping shorts is called *shorts-on* and it's risky.
+3. Short (`0.9`) is beta. Using shorts is called *shorts-on* and it's risky.
 4. Chicken (`1.0.0`) is the first stable release. Semver applies from here.
 5. Stage tags go on git tags: `v0.1.0-berry`, `v1.0.0-chicken`.
 
