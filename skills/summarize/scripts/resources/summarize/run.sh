@@ -31,13 +31,18 @@ ${DOCUMENT}"
 # --print: non-interactive, output to stdout
 # --no-session-persistence: don't save session to disk
 # --max-budget-usd: cost guard (band also enforces maxCostDollars)
-RESULT=$(claude --bare --print --no-session-persistence --max-budget-usd 0.25 "$PROMPT" 2>/dev/null)
+STDERR_FILE=$(mktemp)
+RESULT=$(claude --bare --print --no-session-persistence --max-budget-usd 0.25 "$PROMPT" 2>"$STDERR_FILE")
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ] || [ -z "$RESULT" ]; then
-  echo '{"error": "claude CLI failed"}' > "$OUTPUT_PATH"
+  STDERR=$(cat "$STDERR_FILE" 2>/dev/null | head -5 | tr '\n' ' ')
+  rm -f "$STDERR_FILE"
+  ESCAPED_ERR=$(echo "$STDERR" | jq -Rs .)
+  echo "{\"error\": ${ESCAPED_ERR}}" > "$OUTPUT_PATH"
   exit 1
 fi
+rm -f "$STDERR_FILE"
 
 # Escape the result for JSON output
 ESCAPED=$(echo "$RESULT" | jq -Rs .)
