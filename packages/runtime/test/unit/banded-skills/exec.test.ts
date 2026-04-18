@@ -179,7 +179,7 @@ describe("bandExec", () => {
       expect(result.error).toMatch(/lima|limactl|VM|bwrap|band-runner|band server|localhost|9000|JSON/i);
     }
     // If it succeeds, that's fine too — lima is available
-  });
+  }, 30_000);
 
   // ---- CLI arg type coercion tests ----
 

@@ -898,6 +898,27 @@ describe("Lima iptables firewall", () => {
     async () => {
       if (skip()) return;
 
+      // Clean up any orphaned chains from prior runs (e.g., server restarts
+      // that lost in-memory cook state but left kernel iptables chains)
+      const before = execSync(
+        `limactl shell ${VM_NAME} -- sudo iptables -L -n 2>&1`,
+        { encoding: "utf-8" }
+      );
+      const orphaned = before.match(/BAND-[a-z0-9]{6,}/g) || [];
+      for (const chain of new Set(orphaned)) {
+        execSync(
+          `limactl shell ${VM_NAME} -- sudo bash -c "iptables -D OUTPUT -j ${chain} 2>/dev/null; iptables -F ${chain} 2>/dev/null; iptables -X ${chain} 2>/dev/null"`,
+          { encoding: "utf-8" }
+        );
+      }
+
+      // Run a script to create a fresh cook
+      await runScript(
+        `#!/bin/bash
+        echo '{"ok": true}' > "$OUTPUT_PATH"`,
+        ["example.com"]
+      );
+
       // Flush the cook
       const resp = await fetch("http://localhost:9000/flush", { method: "POST" });
       expect(resp.ok).toBe(true);
