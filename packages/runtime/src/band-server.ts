@@ -46,10 +46,7 @@ const bandRunnerIds = getBandRunnerIds();
 
 interface Cook {
   id: string;
-  chainName: string;
   wrapperDir: string;
-  allowNet: string[];
-  denyNet: string[];
   allowCli: string[];
   denyCli: string[];
   allowRead: string[];
@@ -60,12 +57,12 @@ let currentCook: Cook | null = null;
 
 /**
  * Hash the sandbox-relevant permissions to produce a cook ID.
- * Only fields that affect iptables, CLI wrappers, or bwrap mounts matter.
+ * Only CLI wrappers and bwrap mounts are cooked (stable, expensive to set up).
+ * Network rules (iptables) are set up per-request because DNS→IP resolution
+ * goes stale as CDNs rotate IPs.
  */
 function computeCookId(req: ExecRequest): string {
   const key = JSON.stringify({
-    net: (req.allowNet ?? []).slice().sort(),
-    dnet: (req.denyNet ?? []).slice().sort(),
     cli: (req.allowCli ?? []).slice().sort(),
     dcli: (req.denyCli ?? []).slice().sort(),
     read: (req.allowRead ?? []).slice().sort(),
@@ -90,21 +87,13 @@ function ensureCooked(req: ExecRequest): Cook {
     flushCook();
   }
 
-  // Setup new cook
-  const chainName = `BAND-${id}`;
+  // Setup new cook (CLI wrappers + bwrap mounts only, not iptables)
   const cookDir = `/var/band-cook-${id}`;
   const wrapperDir = `${cookDir}/.band-cli`;
 
   shell(`mkdir -p ${wrapperDir}`);
 
-  // Setup iptables
-  const allowNet = req.allowNet ?? [];
-  const denyNet = req.denyNet ?? [];
-  if (allowNet.length > 0 || denyNet.length > 0) {
-    setupFirewall(chainName, allowNet, denyNet);
-  }
-
-  // Setup CLI wrappers
+  // Setup CLI wrappers (cooked — stable across requests)
   const allowCli = req.allowCli ?? [];
   const denyCli = req.denyCli ?? [];
   if (allowCli.length > 0 || denyCli.length > 0) {
@@ -113,10 +102,7 @@ function ensureCooked(req: ExecRequest): Cook {
 
   currentCook = {
     id,
-    chainName,
     wrapperDir,
-    allowNet,
-    denyNet,
     allowCli,
     denyCli,
     allowRead: req.allowRead ?? [],
@@ -127,15 +113,11 @@ function ensureCooked(req: ExecRequest): Cook {
 }
 
 /**
- * Tear down the current cook: iptables chain, CLI wrapper dir.
+ * Tear down the current cook: CLI wrapper dir.
+ * (Iptables chains are per-request and cleaned up in executeScript.)
  */
 function flushCook(): void {
   if (!currentCook) return;
-
-  const { chainName, allowNet, denyNet } = currentCook;
-  if (allowNet.length > 0 || denyNet.length > 0) {
-    teardownFirewall(chainName);
-  }
   shellIgnoreError(`rm -rf /var/band-cook-${currentCook.id}`);
   currentCook = null;
 }
@@ -530,6 +512,14 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
 
     shell(`chown -R ${BAND_RUNNER_USER}:${BAND_RUNNER_USER} ${workdir}`);
 
+    // Setup iptables per-request (DNS→IP resolution goes stale with CDN rotation)
+    const allowNet = req.allowNet ?? [];
+    const denyNet = req.denyNet ?? [];
+    const chainName = `BAND-${execId}`;
+    if (allowNet.length > 0 || denyNet.length > 0) {
+      setupFirewall(chainName, allowNet, denyNet);
+    }
+
     // Run script inside bwrap using cooked mount list
     const bwrapArgs = ["sudo", ...buildBwrapArgs(workdir, cook)];
 
@@ -610,7 +600,10 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       },
     };
   } finally {
-    // Cleanup workdir only — cook state persists
+    // Teardown per-request iptables + workdir. Cook state persists.
+    if ((req.allowNet ?? []).length > 0 || (req.denyNet ?? []).length > 0) {
+      teardownFirewall(`BAND-${execId}`);
+    }
     shellIgnoreError(`rm -rf ${workdir}`);
   }
 }
