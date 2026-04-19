@@ -216,7 +216,9 @@ function teardownFirewall(chainName: string): void {
 
 function buildBwrapArgs(
   workdir: string,
-  cook: Cook
+  cook: Cook,
+  denyRead: string[] = [],
+  denyWrite: string[] = []
 ): string[] {
   const args = ["bwrap"];
 
@@ -243,18 +245,19 @@ function buildBwrapArgs(
     args.push("--ro-bind", cook.wrapperDir, `${workdir}/.band-cli`);
   }
 
-  // File access mounts from the cook
+  // File access mounts from the cook, excluding deny patterns.
+  // A dir is excluded if any deny pattern matches it or its children.
   const mounted = new Set<string>();
   for (const pattern of cook.allowRead) {
     const dir = extractMountDir(pattern);
-    if (dir && !mounted.has(dir)) {
+    if (dir && !mounted.has(dir) && !isDenied(dir, denyRead)) {
       args.push("--ro-bind-try", dir, dir);
       mounted.add(dir);
     }
   }
   for (const pattern of cook.allowWrite) {
     const dir = extractMountDir(pattern);
-    if (dir && !mounted.has(dir)) {
+    if (dir && !mounted.has(dir) && !isDenied(dir, denyWrite)) {
       args.push("--bind-try", dir, dir);
       mounted.add(dir);
     }
@@ -278,6 +281,25 @@ function extractMountDir(pattern: string): string | null {
   }
   if (dir === "/") return null;
   return dir;
+}
+
+/**
+ * Check if a directory path matches any deny pattern.
+ * A dir is denied if any deny pattern targets it or a parent of it.
+ */
+function isDenied(dir: string, denyPatterns: string[]): boolean {
+  for (const pattern of denyPatterns) {
+    const denyDir = extractMountDir(pattern);
+    if (denyDir && (dir === denyDir || dir.startsWith(denyDir + "/"))) {
+      return true;
+    }
+    // Also check exact pattern match (e.g., deny "/tmp/secrets/**" denies "/tmp/secrets")
+    const concrete = pattern.replace(/[*?{[\]]/g, "");
+    if (dir === concrete || concrete.startsWith(dir + "/")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ── CLI deny wrappers ─────────────────────────────────────────────────
@@ -429,7 +451,9 @@ interface ExecRequest {
   allowCli?: string[];
   denyCli?: string[];
   allowRead?: string[];
+  denyRead?: string[];
   allowWrite?: string[];
+  denyWrite?: string[];
   insist?: {
     cli?: string[];
     read?: string[];
@@ -520,8 +544,8 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       setupFirewall(chainName, allowNet, denyNet);
     }
 
-    // Run script inside bwrap using cooked mount list
-    const bwrapArgs = ["sudo", ...buildBwrapArgs(workdir, cook)];
+    // Run script inside bwrap using cooked mount list, excluding deny patterns
+    const bwrapArgs = ["sudo", ...buildBwrapArgs(workdir, cook, req.denyRead ?? [], req.denyWrite ?? [])];
 
     const timeout = req.timeoutMs ?? 60_000;
     const proc = Bun.spawnSync(bwrapArgs, { timeout });

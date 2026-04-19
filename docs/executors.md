@@ -8,7 +8,7 @@ Bands can run on different execution targets, each providing different levels of
 |--------|-----------|-------------|----------|
 | `local-dangerously` | None | Reports only | Development, testing |
 | `local-lima` | Full (VM) | Enforces | Production on macOS |
-| `cloudflare` | Full (V8) | Enforces | Production at edge |
+| `cloudflare` | Coming soon | — | Not yet available |
 
 ## local-dangerously
 
@@ -88,64 +88,14 @@ execution:
 
 **How it works:**
 1. Executor checks if VM is running via `limactl list`
-2. Sends HTTP request to `http://localhost:9000/execute`
-3. Server inside VM enforces permissions and returns result
+2. Sends HTTP request to `http://localhost:9000/exec`
+3. Band server inside VM sets up iptables firewall, creates bwrap sandbox
+4. Script runs as `band-runner` inside sandbox
+5. Server checks insist requirements, returns result, tears down firewall
 
 ## cloudflare
 
-Runs the band on **Cloudflare Workers** using V8 isolates.
-
-```typescript
-const result = await executeBand(band, payload, {
-  target: "cloudflare"
-});
-```
-
-**Requirements:**
-- Wrangler CLI installed (`bun add -g wrangler`)
-- Cloudflare account with API token
-- Environment variables set:
-  - `CLOUDFLARE_API_TOKEN`
-  - `CLOUDFLARE_ACCOUNT_ID`
-
-**Behavior:**
-- V8 isolate isolation (same as web browsers)
-- Permissions are **enforced**
-- Insist requirements are **enforced**
-- Worker deployed on-demand, reused for subsequent requests
-
-**Setup:**
-```bash
-# Install wrangler
-bun add -g wrangler
-
-# Login to Cloudflare
-wrangler login
-
-# Set environment variables
-export CLOUDFLARE_API_TOKEN="your-token"
-export CLOUDFLARE_ACCOUNT_ID="your-account-id"
-```
-
-**Configuration:**
-```yaml
-execution:
-  target: cloudflare
-  cloudflare:
-    workerName: my-band     # Worker name (default: band-{name})
-    accountId: abc123       # Can also use env var
-```
-
-**How it works:**
-1. Executor checks if worker exists via health endpoint
-2. If not, deploys worker via `wrangler deploy`
-3. Sends HTTP request to `https://band-{name}.{account}.workers.dev/execute`
-4. Worker enforces permissions and returns result
-
-**Worker URL pattern:**
-```
-https://band-{band-name}.cf-{account-prefix}.workers.dev
-```
+> **Coming soon.** The Cloudflare executor is not yet available for production use.
 
 ## Executor Interface
 
@@ -224,12 +174,12 @@ bun run packages/runtime/src/cli.ts run ./my-band.md \
 
 ## Enforcement Differences
 
-| Behavior | local-dangerously | local-lima | cloudflare |
-|----------|-------------------|------|------------|
-| Permission denied | Returns `allowed: false`, continues | Returns error, fails | Returns error, fails |
-| Insist not met | Reports missing, succeeds | Returns error, fails | Returns error, fails |
-| Network blocked | Reports, allows anyway | Actually blocks | Actually blocks |
-| File access denied | Reports, allows anyway | Actually blocks | N/A (no filesystem) |
+| Behavior | local-dangerously | local-lima |
+|----------|-------------------|------|
+| Permission denied | Returns `allowed: false`, continues | Returns error, fails |
+| Insist not met | Reports missing, succeeds | Returns error, fails |
+| Network blocked | Reports, allows anyway | Actually blocks (iptables) |
+| File access denied | Reports, allows anyway | Actually blocks (bwrap) |
 
 ## Metrics
 
@@ -258,4 +208,3 @@ console.log(result.metrics);
 | `TIMEOUT` | Execution exceeded `maxRuntimeMs` |
 | `NOT_INITIALIZED` | Server not ready (internal) |
 | `LIMA_ERROR` | Lima VM error |
-| `CLOUDFLARE_ERROR` | Cloudflare Worker error |

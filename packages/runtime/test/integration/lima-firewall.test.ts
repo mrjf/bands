@@ -868,68 +868,28 @@ describe("Lima iptables firewall", () => {
     TIMEOUT
   );
 
-  // ── Cook lifecycle ────────────────────────────────────────────────
+  // ── Per-request cleanup ──────────────────────────────────────────
 
   test(
-    "cooked iptables chain persists between executions",
+    "iptables chains are cleaned up after each execution",
     async () => {
       if (skip()) return;
 
-      // Run a script with firewall — this cooks the sandbox
+      // Run a script with firewall
       await runScript(
         `#!/bin/bash
         echo '{"ok": true}' > "$OUTPUT_PATH"`,
         ["example.com"]
       );
 
-      // Chain should persist (cooking keeps it around)
+      // Per-request chains should be cleaned up after execution
       const chains = execSync(
         `limactl shell ${VM_NAME} -- sudo iptables -L -n 2>&1`,
         { encoding: "utf-8" }
       );
-      const cookChains = chains.match(/BAND-[a-z0-9]{6,}/g) || [];
-      expect(cookChains.length).toBeGreaterThan(0);
-    },
-    TIMEOUT
-  );
-
-  test(
-    "flush cleans up cooked iptables chains",
-    async () => {
-      if (skip()) return;
-
-      // Clean up any orphaned chains from prior runs (e.g., server restarts
-      // that lost in-memory cook state but left kernel iptables chains)
-      const before = execSync(
-        `limactl shell ${VM_NAME} -- sudo iptables -L -n 2>&1`,
-        { encoding: "utf-8" }
-      );
-      const orphaned = before.match(/BAND-[a-z0-9]{6,}/g) || [];
-      for (const chain of new Set(orphaned)) {
-        execSync(
-          `limactl shell ${VM_NAME} -- sudo bash -c "iptables -D OUTPUT -j ${chain} 2>/dev/null; iptables -F ${chain} 2>/dev/null; iptables -X ${chain} 2>/dev/null"`,
-          { encoding: "utf-8" }
-        );
-      }
-
-      // Run a script to create a fresh cook
-      await runScript(
-        `#!/bin/bash
-        echo '{"ok": true}' > "$OUTPUT_PATH"`,
-        ["example.com"]
-      );
-
-      // Flush the cook
-      const resp = await fetch("http://localhost:9000/flush", { method: "POST" });
-      expect(resp.ok).toBe(true);
-
-      // No cook chains should remain
-      const chains = execSync(
-        `limactl shell ${VM_NAME} -- sudo iptables -L -n 2>&1`,
-        { encoding: "utf-8" }
-      );
-      const cookChains = chains.match(/BAND-[a-z0-9]{6,}/g) || [];
-      expect(cookChains.length).toBe(0);
+      // Only BAND-DEFAULT should remain, no per-execution BAND-<id> chains
+      const perExecChains = chains.match(/BAND-[a-z0-9]{6,}/g) || [];
+      expect(perExecChains.length).toBe(0);
     },
     TIMEOUT
   );

@@ -59,8 +59,8 @@ function limaShell(cmd: string, opts?: { stdio?: "pipe" | "inherit" }): string {
 }
 
 export async function setupLima(options: { force?: boolean } = {}): Promise<void> {
-  // [1/6] Check prerequisites
-  log("[1/6]", "Checking prerequisites...");
+  // [1/8] Check prerequisites
+  log("[1/8]", "Checking prerequisites...");
   try {
     const version = execSync("limactl --version", { stdio: "pipe", encoding: "utf-8" }).trim();
     log("      ", `limactl found: ${version}`);
@@ -73,8 +73,8 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
     process.exit(1);
   }
 
-  // [2/6] Create Lima VM
-  log("[2/6]", "Creating Lima VM...");
+  // [2/8] Create Lima VM
+  log("[2/8]", "Creating Lima VM...");
   const vmExists = checkVmExists();
 
   if (vmExists && options.force) {
@@ -94,8 +94,8 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
     await createMinimalVm();
   }
 
-  // [3/6] Install bun in VM
-  log("[3/6]", "Installing bun in VM...");
+  // [3/8] Install bun in VM
+  log("[3/8]", "Installing bun in VM...");
   let bunInstalled = false;
   try {
     limaShell("which bun || ~/.bun/bin/bun --version");

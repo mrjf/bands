@@ -7,7 +7,6 @@ allow:
     - "curl *"
     - "jq *"
   net:
-    - "*.slack.com"
     - "slack.com"
 env:
   secrets:
@@ -20,11 +19,11 @@ execution:
   target: local-dangerously
 slack:
   channels:
-    allow: []
-    deny: []
+    allow: [engineering, executive]
+    deny: [executive]
   dm: false
-  threads: false
-  reactions: false
+  threads: true
+  reactions: true
   files: false
-  search: false
+  search: true
 ---

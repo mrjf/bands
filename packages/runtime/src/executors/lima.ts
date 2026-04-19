@@ -402,19 +402,21 @@ export class LimaExecutor implements Executor {
       ...rules,
     };
 
-    // Run the script in the VM. This is defense-in-depth — the host-side
-    // permission and insist checks above are authoritative. VM execution
-    // failures (e.g., files not found inside bwrap sandbox) don't fail the
-    // operation if the host-side checks passed.
+    // Run the script in the VM (defense-in-depth — sandbox enforces at kernel level too).
+    let vmError: string | undefined;
     try {
-      await fetch(`${serverUrl}/exec`, {
+      const resp = await fetch(`${serverUrl}/exec`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(execReq),
         signal: AbortSignal.timeout(65000),
       });
-    } catch {
-      // VM execution is best-effort; host-side checks already passed
+      const vmResult = await resp.json() as any;
+      if (!vmResult.success) {
+        vmError = typeof vmResult.error === "string" ? vmResult.error : JSON.stringify(vmResult.error);
+      }
+    } catch (err) {
+      vmError = err instanceof Error ? err.message : String(err);
     }
 
     // Build response with operation tracking (matches local-dangerously format)
@@ -429,6 +431,7 @@ export class LimaExecutor implements Executor {
         enforced: true,
       },
       enforced: true,
+      ...(vmError ? { vmError } : {}),
       timestamp: new Date().toISOString(),
     };
 
