@@ -21,7 +21,7 @@
     "build": "bun run build:format && bun run build:editor",
     "build:format": "bun run --cwd packages/format build",
     "build:editor": "bun run --cwd packages/editor build",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "runtime:dev": "bun run --cwd packages/runtime dev",
     "runtime:deploy": "bun run packages/runtime/src/cli.ts deploy"
   },

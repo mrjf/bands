@@ -1,5 +1,7 @@
 # Bands
 
+> **Pre-alpha. Experimental.** [0.1.0-berry](VERSIONING.md) — lobster life-stage versioning.
+
 **Sandboxed execution for AI agent skills.**
 
 Bands runs untrusted scripts inside isolated Linux VMs with kernel-level enforcement of network, filesystem, and CLI restrictions. Every skill declares what it needs. Everything else is denied.
@@ -128,6 +130,7 @@ Skills live in `skills/<name>/` with:
 | `github` | 31 | Issues, PRs, releases, labels, gists, search, raw API |
 | `slack` | 9 | Messages, channels, threads, reactions, files |
 | `elevenlabs` | 5 | Text-to-speech, voices, sound effects |
+| `summarize` | 1 | Summarize documents using Claude Code CLI |
 
 ## Project Structure
 

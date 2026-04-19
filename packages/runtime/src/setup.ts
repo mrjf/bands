@@ -119,8 +119,21 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
     process.exit(1);
   }
 
-  // [4/7] Create band-runner user
-  log("[4/7]", "Creating band-runner user...");
+  // [4/8] Install Claude Code CLI
+  log("[4/8]", "Installing Claude Code CLI...");
+  try {
+    limaShell("sudo which claude");
+    log("      ", "Claude CLI already installed");
+  } catch {
+    limaShell("~/.bun/bin/bun add -g @anthropic-ai/claude-code && ~/.bun/bin/bun pm -g trust @anthropic-ai/claude-code");
+    // Copy binary to system PATH (not symlink — bwrap tmpfs on /home hides symlink targets)
+    limaShell("sudo cp $(readlink -f ~/.bun/bin/claude) /usr/local/bin/claude && sudo chmod +x /usr/local/bin/claude");
+    const claudeVersion = limaShell("claude --version").trim();
+    log("      ", `Claude Code ${claudeVersion} ready`);
+  }
+
+  // [5/8] Create band-runner user
+  log("[5/8]", "Creating band-runner user...");
   try {
     limaShell("id band-runner");
     log("      ", "band-runner user already exists");
@@ -129,8 +142,8 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
     log("      ", "band-runner user created");
   }
 
-  // [5/7] Deploy band server
-  log("[5/7]", "Deploying band server...");
+  // [6/8] Deploy band server
+  log("[6/8]", "Deploying band server...");
   limaShell("mkdir -p ~/bands-server");
 
   // Read server source from band-server.ts and deploy to VM
@@ -150,8 +163,8 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
   }
   log("      ", "Server code deployed");
 
-  // [6/7] Create and start systemd service
-  log("[6/7]", "Creating systemd service...");
+  // [7/8] Create and start systemd service
+  log("[7/8]", "Creating systemd service...");
   limaShell("mkdir -p ~/.config/systemd/user");
 
   const unitB64 = Buffer.from(SYSTEMD_UNIT).toString("base64");
@@ -163,8 +176,8 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
   limaShell("loginctl enable-linger $USER");
   log("      ", "Service enabled and started");
 
-  // [7/7] Set up default firewall (locked down) and verify health
-  log("[7/7]", "Setting up default firewall and verifying...");
+  // [8/8] Set up default firewall (locked down) and verify health
+  log("[8/8]", "Setting up default firewall and verifying...");
 
   // Default iptables: DROP all outbound from band-runner.
   // Only band-runner's traffic is restricted — the server process and SSH

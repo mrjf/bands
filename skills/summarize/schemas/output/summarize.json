@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "The generated summary"
+    }
+  },
+  "required": ["summary"]
+}

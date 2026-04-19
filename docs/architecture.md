@@ -7,8 +7,7 @@ This document describes the overall architecture of the Bands system.
 Bands is a permission and isolation system for AI agent execution. It consists of:
 
 1. **Format** - A YAML-based configuration format for defining permissions
-2. **Runtime** - Executors that run bands on different targets
-3. **Server** - HTTP server that enforces permissions in sandboxed environments
+2. **Runtime** - Executors that run bands on different targets, plus the band server deployed inside VMs
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -22,20 +21,20 @@ Bands is a permission and isolation system for AI agent execution. It consists o
 │                                                                      │
 │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │
 │   │   local-    │  │    lima     │  │  cloudflare │                │
-│   │ dangerously │  │  executor   │  │  executor   │                │
+│   │ dangerously │  │  executor   │  │ (placeholder)│               │
 │   └─────────────┘  └──────┬──────┘  └──────┬──────┘                │
 │          │                │                │                        │
 └──────────┼────────────────┼────────────────┼────────────────────────┘
            │                │                │
-           │ in-process     │ HTTP           │ HTTP
+           │ in-process     │ HTTP           │ not implemented
            ▼                ▼                ▼
     ┌────────────┐   ┌────────────┐   ┌────────────┐
     │  No server │   │ Lima VM    │   │ Cloudflare │
     │  (direct)  │   │ :9000      │   │ Worker     │
-    └────────────┘   │            │   │            │
-                     │ @bands/    │   │ @bands/    │
-                     │ server     │   │ server     │
-                     └────────────┘   └────────────┘
+    └────────────┘   │            │   │ (future)   │
+                     │ band-      │   └────────────┘
+                     │ server.ts  │
+                     └────────────┘
 ```
 
 ## Components
@@ -90,9 +89,9 @@ Key responsibilities:
 - Deploy servers to targets (Lima, Cloudflare)
 - Handle timeouts and metrics
 
-### Band Server (band-server.ts)
+### Band Server (`band-server.ts`)
 
-Execution server deployed inside the Lima VM. Single file: `packages/runtime/src/band-server.ts`.
+Execution server deployed inside the Lima VM. Single file: `packages/runtime/src/band-server.ts` (part of `@bands/runtime`, not a separate package).
 
 Key responsibilities:
 - Receive script + input + secrets + allow rules via `POST /exec`
@@ -230,15 +229,13 @@ function checkInsistSatisfied(band: BandDocument, tracker: Tracker) {
 
 1. VM created with `limactl create`
 2. Bun runtime installed via provisioning script
-3. `@bands/server` built and copied to VM
-4. Server started on port 9000
+3. `band-server.ts` copied to VM
+4. Server started on port 9000 as a systemd service
 5. Port forwarded to host
 
 ### Cloudflare Workers
 
-1. `@bands/server` bundled as Worker script
-2. Deployed via `wrangler deploy`
-3. Worker URL returned (e.g., `https://band-name.account.workers.dev`)
+> **Placeholder.** The Cloudflare executor is not yet implemented. See `docs/TODO.md` for status.
 
 ## Metrics
 

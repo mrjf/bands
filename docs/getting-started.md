@@ -9,10 +9,6 @@
 For Lima VM execution (optional):
 - [Lima](https://lima-vm.io/) (`brew install lima` on macOS)
 
-For Cloudflare execution (optional):
-- Cloudflare account with Workers enabled
-- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) (`bun add -g wrangler`)
-
 ## Setup
 
 ```bash
@@ -35,8 +31,7 @@ This runs the format, editor, and runtime unit tests.
 bands/
 ├── packages/
 │   ├── format/       # Parse, validate, export BAND.md files
-│   ├── runtime/      # CLI, executors, skill system
-│   ├── server/       # HTTP server enforcing permissions
+│   ├── runtime/      # CLI, executors, band server, skill system
 │   ├── editor/       # Visual band editor (web UI)
 │   └── bands/        # Curated band definitions
 ├── skills/           # Banded skills (e.g. github)
@@ -63,7 +58,7 @@ bun run band targets
 |--------|-----------|-------|
 | `local-dangerously` | None (reports only) | None required |
 | `lima` | Full Linux VM | `bun run band setup` |
-| `cloudflare` | V8 isolate | Wrangler + Cloudflare account |
+| `cloudflare` | V8 isolate | Placeholder — not yet implemented |
 
 ### Lima VM Setup
 
@@ -83,17 +78,7 @@ bun run band teardown
 
 ### Cloudflare Setup
 
-```bash
-# Login to Cloudflare
-wrangler login
-
-# Set credentials
-export CLOUDFLARE_API_TOKEN="your-token"
-export CLOUDFLARE_ACCOUNT_ID="your-account-id"
-
-# Deploy and run
-bun run band run examples/minimal.band.md --target cloudflare --input '{"message": "hello"}'
-```
+> **Placeholder.** The Cloudflare executor is not yet implemented. It currently echoes input back without real execution. See `docs/TODO.md` for status.
 
 ## Environment Variables
 
@@ -109,8 +94,6 @@ TEST_GIST_GITHUB_TOKEN=ghp_...     # Classic PAT (gist scope)
 ANTHROPIC_API_KEY=sk-ant-...
 
 # Optional
-CLOUDFLARE_API_TOKEN=...
-CLOUDFLARE_ACCOUNT_ID=...
 ANTHROPIC_MODEL=claude-sonnet-4-20250514   # Override model for agent tests
 ```
 

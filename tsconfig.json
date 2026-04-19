@@ -12,6 +12,8 @@
     "sourceMap": true,
     "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
+  "include": [],
+  "exclude": ["**/dist/**", "**/node_modules/**"],
   "references": [
     { "path": "./packages/format" },
     { "path": "./packages/editor" }

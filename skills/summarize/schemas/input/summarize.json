@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "document": {
+      "type": "string",
+      "description": "The document text to summarize"
+    },
+    "guidance": {
+      "type": "string",
+      "description": "Instructions for how to summarize (e.g. 'bullet points', 'one paragraph', 'focus on technical details', 'ELI5')"
+    }
+  },
+  "required": ["document"]
+}
