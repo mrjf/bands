@@ -70,7 +70,5 @@ See also: `SECURITY.md` for the current threat model.
 ## Not implemented
 
 ### 13. Cloudflare executor
-- **Status: PLACEHOLDER**
-- Echoes input back. No real execution.
-- `packages/runtime/src/worker.ts`
-- Separate track from Lima hardening.
+- **Status: COMING SOON**
+- Not yet available for production use.

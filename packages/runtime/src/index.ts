@@ -1,14 +1,3 @@
-// Core exports
-export { createBandServer } from "./server";
-export type { RuntimeState, HandlerContext } from "./server";
-export { compileBand } from "./loader";
-export { createRestrictedFetch, checkEgress } from "./firewall";
-export {
-  validateInput,
-  validateOutput,
-  checkTimeout,
-} from "./validator";
-
 // Band shell
 export {
   isCommandAllowed,
@@ -53,14 +42,13 @@ export type {
   ConvertResult,
 } from "./banded-skills";
 
-// Types
-export type {
-  CompiledBand,
-  RequestMetrics,
-  BandError,
-  ErrorCode,
-} from "./types";
-export { ErrorCodes } from "./types";
+// Executors
+export {
+  executeBand,
+  getExecutor,
+  listAvailableTargets,
+  isTargetAvailable,
+} from "./executors";
 
 export type {
   SkillFrontmatter,

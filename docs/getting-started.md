@@ -6,7 +6,7 @@
 - macOS or Linux
 - Git
 
-For Lima VM execution (optional):
+For Lima VM execution (recommended):
 - [Lima](https://lima-vm.io/) (`brew install lima` on macOS)
 
 ## Setup
@@ -32,13 +32,10 @@ bands/
 ├── packages/
 │   ├── format/       # Parse, validate, export BAND.md files
 │   ├── runtime/      # CLI, executors, band server, skill system
-│   ├── editor/       # Visual band editor (web UI)
-│   └── bands/        # Curated band definitions
-├── skills/           # Banded skills (e.g. github)
-├── wrapped-skills/   # Pre-built skill bundles
+│   └── editor/       # Visual band editor (web UI, experimental)
+├── skills/           # Banded skills (github, slack, elevenlabs, summarize)
 ├── examples/         # Example band files
 ├── docs/             # Documentation
-├── schemas/          # JSON schemas for skill I/O
 └── scripts/          # Build and test helpers
 ```
 
@@ -57,28 +54,28 @@ bun run band targets
 | Target | Isolation | Setup |
 |--------|-----------|-------|
 | `local-dangerously` | None (reports only) | None required |
-| `lima` | Full Linux VM | `bun run band setup` |
-| `cloudflare` | V8 isolate | Placeholder — not yet implemented |
+| `local-lima` | Full Linux VM | `bun run band setup` |
+| `cloudflare` | Coming soon | Not yet available |
 
 ### Lima VM Setup
 
 ```bash
-# Create and provision the VM (installs Bun, copies server)
+# Create and provision the VM (installs Bun, Claude CLI, copies server)
 bun run band setup
 
 # Verify it's running
 bun run band targets
 
 # Run a band in the VM
-bun run band run examples/minimal.band.md --target lima --input '{"message": "hello"}'
+bun run band run examples/minimal.band.md --target local-lima --input '{"message": "hello"}'
 
 # Tear down the VM when done
 bun run band teardown
 ```
 
-### Cloudflare Setup
+### Cloudflare
 
-> **Placeholder.** The Cloudflare executor is not yet implemented. It currently echoes input back without real execution. See `docs/TODO.md` for status.
+> **Coming soon.** The Cloudflare executor is not yet available for production use.
 
 ## Environment Variables
 

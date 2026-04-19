@@ -262,7 +262,9 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   let allowCli: string[] = [];
   let denyCli: string[] = [];
   let allowRead: string[] = [];
+  let denyRead: string[] = [];
   let allowWrite: string[] = [];
+  let denyWrite: string[] = [];
   let insist: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } | undefined;
   if (skillRoot) {
     const discovery = discoverBandForScript(skillRoot, scriptName);
@@ -287,8 +289,14 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     if (discovery?.band?.allow?.read) {
       allowRead = discovery.band.allow.read;
     }
+    if (discovery?.band?.deny?.read) {
+      denyRead = discovery.band.deny.read;
+    }
     if (discovery?.band?.allow?.write) {
       allowWrite = discovery.band.allow.write;
+    }
+    if (discovery?.band?.deny?.write) {
+      denyWrite = discovery.band.deny.write;
     }
     if (discovery?.band?.insist) {
       insist = {
@@ -364,7 +372,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       skillRoot,
       configPath,
       { allowNet, denyNet },
-      { allowCli, denyCli, allowRead, allowWrite, insist }
+      { allowCli, denyCli, allowRead, denyRead, allowWrite, denyWrite, insist }
     );
 
     if (!result.success) {
@@ -440,7 +448,7 @@ async function executeScript(
   skillRoot?: string,
   configPath?: string,
   networkRules?: { allowNet: string[]; denyNet: string[] },
-  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; allowWrite: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
+  fileRules?: { allowCli: string[]; denyCli: string[]; allowRead: string[]; denyRead?: string[]; allowWrite: string[]; denyWrite?: string[]; insist?: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] } }
 ): Promise<BandExecResult> {
   if (executionTarget === "local-lima") {
     // Delegate to lima-exec
