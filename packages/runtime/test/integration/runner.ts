@@ -173,23 +173,6 @@ export class IntegrationTestHarness {
 }
 
 /**
- * Helper to get the path to a wrapped skill band.
- */
-export function getWrappedSkillPath(skillName: string): string {
-  const paths = [
-    join(process.cwd(), "wrapped-skills", `${skillName}.band.md`),
-    join(process.cwd(), "..", "..", "wrapped-skills", `${skillName}.band.md`),
-    join(process.cwd(), "packages", "runtime", "wrapped-skills", `${skillName}.band.md`),
-  ];
-
-  for (const p of paths) {
-    if (existsSync(p)) return p;
-  }
-
-  throw new Error(`Wrapped skill not found: ${skillName} (searched: ${paths.join(", ")})`);
-}
-
-/**
  * Helper to get path to example bands.
  * Searches in multiple locations:
  * - examples/ directory (for .band.md files)
