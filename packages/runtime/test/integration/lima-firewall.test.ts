@@ -80,19 +80,15 @@ async function runScriptWithFiles(
   return runScriptFull(script, allowNet, [], fileRules);
 }
 
-function skip() {
-  if (!limaAvailable) {
-    console.log("  ⏭  Skipping: Lima VM not available");
-    return true;
-  }
-  return false;
+function requireLima() {
+  if (!limaAvailable) throw new Error("Lima VM not available — start with: limactl start bands-executor");
 }
 
 describe("Lima user separation", () => {
   test(
     "scripts run as unprivileged user, not root",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         MY_UID=$(id -u)
@@ -109,7 +105,7 @@ describe("Lima user separation", () => {
   test(
     "sandbox cannot see host home directories",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         [
           "#!/bin/bash",
@@ -130,7 +126,7 @@ describe("Lima user separation", () => {
   test(
     "sandbox cannot read /etc/shadow (sensitive, root-only)",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         if cat /etc/shadow >/dev/null 2>&1; then
@@ -149,7 +145,7 @@ describe("Lima user separation", () => {
   test(
     "sandbox cannot write outside workdir",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         [
           "#!/bin/bash",
@@ -181,7 +177,7 @@ describe("Lima user separation", () => {
   test(
     "workdir is cleaned up after execution",
     async () => {
-      if (skip()) return;
+      requireLima();
 
       // Run a script that writes its workdir path
       const result = await runScript(
@@ -210,7 +206,7 @@ describe("Lima file access (bwrap bind mounts)", () => {
   test(
     "script can read a file via allow.read bind mount",
     async () => {
-      if (skip()) return;
+      requireLima();
 
       // Create a file in the VM that the script should be able to read
       const testDir = `/tmp/band-file-test-${Date.now()}`;
@@ -241,7 +237,7 @@ describe("Lima file access (bwrap bind mounts)", () => {
   test(
     "script cannot read a file NOT in allow.read",
     async () => {
-      if (skip()) return;
+      requireLima();
 
       const testDir = `/tmp/band-file-test-${Date.now()}`;
       execSync(
@@ -271,7 +267,7 @@ describe("Lima file access (bwrap bind mounts)", () => {
   test(
     "script can write to a file via allow.write bind mount",
     async () => {
-      if (skip()) return;
+      requireLima();
 
       const testDir = `/tmp/band-file-test-${Date.now()}`;
       execSync(
@@ -308,7 +304,7 @@ describe("Lima file access (bwrap bind mounts)", () => {
   test(
     "script cannot write to a path NOT in allow.write",
     async () => {
-      if (skip()) return;
+      requireLima();
 
       const testDir = `/tmp/band-file-test-${Date.now()}`;
       execSync(
@@ -344,7 +340,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "allowed command works",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         RESULT=$(echo '{"a":1}' | jq .a)
@@ -361,7 +357,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "command not in allow.cli is not found (default deny)",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         if curl --version >/dev/null 2>&1; then
@@ -381,7 +377,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "full path bypass blocked (PATH-only enforcement)",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         if /usr/bin/curl --version >/dev/null 2>&1; then
@@ -402,7 +398,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "deny.cli blocks specific argument patterns",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         [
           "#!/bin/bash",
@@ -421,7 +417,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "deny.cli allows non-matching argument patterns",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         [
           "#!/bin/bash",
@@ -440,7 +436,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "deny.cli blocks rm -rf but allows rm",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         [
           "#!/bin/bash",
@@ -461,7 +457,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "essential commands work even without allow.cli listing them",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         TMP=$(mktemp)
@@ -480,7 +476,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "no allow/deny CLI rules means all commands available",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         if ls / >/dev/null 2>&1; then
@@ -500,7 +496,7 @@ describe("Lima CLI enforcement (allow/deny)", () => {
   test(
     "absolute path execution is blocked by extdebug trap",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         [
           "#!/bin/bash",
@@ -526,7 +522,7 @@ describe("Lima deny.net (holes in allow)", () => {
   test(
     "deny.net blocks a host within an allow wildcard",
     async () => {
-      if (skip()) return;
+      requireLima();
       // Allow all of *.github.com but deny api.github.com specifically
       const result = await runScript(
         `#!/bin/bash
@@ -547,7 +543,7 @@ describe("Lima deny.net (holes in allow)", () => {
   test(
     "deny.net does not affect non-denied hosts in the same allow wildcard",
     async () => {
-      if (skip()) return;
+      requireLima();
       // Allow *.github.com, deny api.github.com — github.com itself should still work
       const result = await runScript(
         `#!/bin/bash
@@ -566,7 +562,7 @@ describe("Lima deny.net (holes in allow)", () => {
   test(
     "allow * with deny blocks only the denied host",
     async () => {
-      if (skip()) return;
+      requireLima();
       // Allow everything but deny httpbin.org
       const result = await runScript(
         `#!/bin/bash
@@ -589,7 +585,7 @@ describe("Lima insist enforcement", () => {
   test(
     "insist.cli passes when required command is executed",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         echo '{"a":1}' | jq .a > /dev/null
@@ -610,7 +606,7 @@ describe("Lima insist enforcement", () => {
   test(
     "insist.cli fails when required command is NOT executed",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         echo '{"ok": true}' > "$OUTPUT_PATH"`,
@@ -632,7 +628,7 @@ describe("Lima insist enforcement", () => {
   test(
     "insist.cli with specific pattern requires matching args",
     async () => {
-      if (skip()) return;
+      requireLima();
       // insist requires "jq .name", but script runs "jq .age"
       const result = await runScriptWithFiles(
         `#!/bin/bash
@@ -655,7 +651,7 @@ describe("Lima insist enforcement", () => {
   test(
     "insist.write fails when required file is NOT written",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         echo '{"ok": true}' > "$OUTPUT_PATH"`,
@@ -676,7 +672,7 @@ describe("Lima insist enforcement", () => {
   test(
     "no insist rules means execution always succeeds",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScriptWithFiles(
         `#!/bin/bash
         echo '{"ok": true}' > "$OUTPUT_PATH"`,
@@ -695,7 +691,7 @@ describe("Lima iptables firewall", () => {
   test(
     "allows traffic to permitted host",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         set -e
@@ -715,7 +711,7 @@ describe("Lima iptables firewall", () => {
   test(
     "blocks curl to disallowed host",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         if curl -s --max-time 5 https://httpbin.org/ip >/dev/null 2>&1; then
@@ -736,7 +732,7 @@ describe("Lima iptables firewall", () => {
   test(
     "blocks wget to disallowed host",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         if wget -q --connect-timeout=3 --timeout=5 -O /dev/null https://example.com 2>/dev/null; then
@@ -757,7 +753,7 @@ describe("Lima iptables firewall", () => {
   test(
     "blocks python urllib to disallowed host",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         [
           "#!/bin/bash",
@@ -787,7 +783,7 @@ describe("Lima iptables firewall", () => {
   test(
     "blocks /dev/tcp raw socket to disallowed host",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         # Use timeout command to avoid hanging on blocked connections
@@ -809,7 +805,7 @@ describe("Lima iptables firewall", () => {
   test(
     "allows DNS resolution even for blocked hosts",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         [
           "#!/bin/bash",
@@ -833,7 +829,7 @@ describe("Lima iptables firewall", () => {
   test(
     "blocks all traffic when allowNet is empty (default DROP)",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         if curl -s --connect-timeout 3 https://httpbin.org/ip >/dev/null 2>&1; then
@@ -854,7 +850,7 @@ describe("Lima iptables firewall", () => {
   test(
     "wildcard *.github.com allows api.github.com",
     async () => {
-      if (skip()) return;
+      requireLima();
       const result = await runScript(
         `#!/bin/bash
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://api.github.com)
@@ -873,7 +869,7 @@ describe("Lima iptables firewall", () => {
   test(
     "iptables chains are cleaned up after each execution",
     async () => {
-      if (skip()) return;
+      requireLima();
 
       // Run a script with firewall
       await runScript(

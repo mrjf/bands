@@ -7,7 +7,7 @@
  * - Per-script BAND.md (maximally restricted based on run.sh analysis)
  */
 
-import { exportBandMd, type BandDocument } from "@bands/format";
+import type { BandDocument } from "@bands/format";
 
 /**
  * Generate a wrapper script for a banded skill script.
@@ -223,11 +223,4 @@ function inferNetPatterns(content: string): string[] {
   }
 
   return [...patterns].sort();
-}
-
-/**
- * Export a BandDocument to BAND.md format string.
- */
-export function exportBandToString(band: BandDocument): string {
-  return exportBandMd(band);
 }

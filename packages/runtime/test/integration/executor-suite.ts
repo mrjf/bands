@@ -17,16 +17,14 @@ import {
   getExampleBandPath,
 } from "./runner";
 import type { ExecutionTarget } from "@bands/format";
-import { trackSkip } from "./skip-tracker";
 
 /**
  * Run the full integration test suite for a given execution target.
  */
 export function runExecutorSuite(target: ExecutionTarget, options: {
   timeout?: number;
-  skipIfUnavailable?: boolean;
 } = {}) {
-  const { timeout = 60000, skipIfUnavailable = true } = options;
+  const { timeout = 60000 } = options;
 
   describe(`${target} Executor`, () => {
     const harness = new IntegrationTestHarness({
@@ -40,14 +38,10 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
 
     beforeAll(async () => {
       available = await harness.checkAvailability();
-      if (!available && !skipIfUnavailable) {
-        throw new Error(`${target} executor is not available`);
-      }
-      // Skip tracking happens per-test via skipIf
       if (available) {
         await harness.init();
       }
-    }, timeout); // Use the same timeout for beforeAll
+    }, timeout);
 
     afterAll(async () => {
       if (available) {
@@ -55,19 +49,13 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
       }
     });
 
-    // Helper to skip tests when executor unavailable
-    const skipIf = (condition: boolean, msg: string) => {
-      if (condition) {
-        console.log(`  ⏭  Skipping: ${msg}`);
-        trackSkip(target, "Executor");
-        return true;
-      }
-      return false;
-    };
+    function requireTarget() {
+      if (!available) throw new Error(`${target} executor is not available`);
+    }
 
     describe("Basic Execution", () => {
       test("executes a simple band", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ message: "hello" });
 
@@ -78,7 +66,7 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
       }, timeout);
 
       test("returns execution metrics", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ data: "metrics test" });
 
@@ -90,7 +78,7 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
       }, timeout);
 
       test("handles complex JSON payloads", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const payload = {
           string: "hello",
@@ -106,14 +94,14 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
       }, timeout);
 
       test("handles empty payload", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({});
         expect(result.success).toBe(true);
       }, timeout);
 
       test("handles large payloads", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const largePayload = {
           data: "x".repeat(10000),
@@ -132,14 +120,14 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
 
     describe("Timeouts", () => {
       test("respects timeout limits", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ test: "timeout" }, timeout);
         expect(result.metrics.durationMs).toBeLessThan(timeout);
       }, timeout);
 
       test("completes within reasonable time", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const start = Date.now();
         const result = await harness.execute({ test: "speed" });
@@ -153,7 +141,7 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
 
     describe("Sequential Execution", () => {
       test("handles multiple sequential requests", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const results = [];
         for (let i = 0; i < 3; i++) {
@@ -170,7 +158,7 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
 
     describe("Target Reporting", () => {
       test("correctly reports execution target", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ test: "target" });
 
@@ -186,22 +174,15 @@ export function runExecutorSuite(target: ExecutionTarget, options: {
  */
 export function runPermissionSuite(target: ExecutionTarget, options: {
   timeout?: number;
-  skipIfUnavailable?: boolean;
 } = {}) {
-  const { timeout = 60000, skipIfUnavailable = true } = options;
+  const { timeout = 60000 } = options;
 
   describe(`${target} Permission Enforcement`, () => {
     let available = false;
 
-    // Helper to skip tests when executor unavailable
-    const skipIf = (condition: boolean, msg: string) => {
-      if (condition) {
-        console.log(`  ⏭  Skipping: ${msg}`);
-        trackSkip(target, "Permission");
-        return true;
-      }
-      return false;
-    };
+    function requireTarget() {
+      if (!available) throw new Error(`${target} executor is not available`);
+    }
 
     describe("CLI Command Filtering", () => {
       const harness = new IntegrationTestHarness({
@@ -221,7 +202,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("allows commands in allow list", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // code-runner allows: python *, node *, ls *, echo *
         const result = await harness.execute({
@@ -233,7 +214,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("blocks commands not in allow list", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // code-runner doesn't allow curl
         const result = await harness.execute({
@@ -247,7 +228,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("blocks commands in deny list even if they match allow", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // code-runner denies: rm -rf *, sudo *
         const result = await harness.execute({
@@ -277,7 +258,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("allows reading from allowed paths", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // data-analyst allows read: /tmp/**, ./data/**
         const result = await harness.execute({
@@ -289,7 +270,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("blocks reading from disallowed paths", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // data-analyst denies: **/.env*, **/secrets/**
         const result = await harness.execute({
@@ -301,7 +282,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("allows writing to allowed paths", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // data-analyst allows write: /tmp/**, ./output/**
         const result = await harness.execute({
@@ -313,7 +294,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("blocks writing to disallowed paths", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // data-analyst only allows write to /tmp and ./output
         const result = await harness.execute({
@@ -356,7 +337,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("blocks network when not allowed", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // code-runner has no net permissions
         const result = await harnessNoNet.execute({
@@ -368,7 +349,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("allows network when allowed", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // web-reader allows net: *
         const result = await harnessWithNet.execute({
@@ -398,7 +379,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("enforces timeout", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Request a 100ms timeout, then ask for a slow operation
         const result = await harness.execute({
@@ -411,7 +392,7 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
       });
 
       test("tracks output size", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           generateOutput: 1000, // Generate 1KB of output
@@ -432,19 +413,16 @@ export function runAllExecutorSuites() {
   // NOTE: local-dangerously does NOT enforce permissions!
   runExecutorSuite("local-dangerously", {
     timeout: 30000,
-    skipIfUnavailable: false,
   });
 
   // Lima - requires Lima VM (macOS)
   runExecutorSuite("local-lima", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 
   // Cloudflare - requires wrangler + API token
   runExecutorSuite("cloudflare", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 }
 

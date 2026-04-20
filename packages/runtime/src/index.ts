@@ -56,6 +56,5 @@ export type {
   SkillScript,
   SkillExecutionResult,
   SkillContext,
-  ParsedSkillMd,
   GenerateBandOptions,
 } from "./skills";

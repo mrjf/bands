@@ -15,7 +15,6 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { IntegrationTestHarness } from "./runner";
 import type { ExecutionTarget } from "@bands/format";
 import { join } from "path";
-import { trackSkip } from "./skip-tracker";
 
 const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
 
@@ -24,19 +23,16 @@ const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
  */
 export function runInsistSuite(
   target: ExecutionTarget,
-  options: { timeout?: number; skipIfUnavailable?: boolean } = {}
+  options: { timeout?: number } = {}
 ) {
-  const { timeout = 60000, skipIfUnavailable = true } = options;
+  const { timeout = 60000 } = options;
 
   describe(`${target} Insist Enforcement`, () => {
-    const skipIf = (condition: boolean, msg: string) => {
-      if (condition) {
-        console.log(`  ⏭  Skipping: ${msg}`);
-        trackSkip(target, "Insist");
-        return true;
-      }
-      return false;
-    };
+    function requireTarget() {
+      if (!available) throw new Error(`${target} executor is not available`);
+    }
+
+    let available = false;
 
     describe("CLI Insist", () => {
       const harness = new IntegrationTestHarness({
@@ -46,14 +42,8 @@ export function runInsistSuite(
         timeout,
       });
 
-      let available = false;
-
       beforeAll(async () => {
         available = await harness.checkAvailability();
-        if (!available && !skipIfUnavailable) {
-          throw new Error(`${target} executor is not available`);
-        }
-        // Skip tracking happens per-test via skipIf
         if (available) {
           await harness.init();
         }
@@ -66,7 +56,7 @@ export function runInsistSuite(
       });
 
       test("succeeds when insist CLI command is executed", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on "echo *", so we run an echo command
         const result = await harness.execute({
@@ -79,7 +69,7 @@ export function runInsistSuite(
       }, timeout);
 
       test("fails when insist CLI command is NOT executed", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on "echo *", but we only run ls
         const result = await harness.execute({
@@ -100,7 +90,7 @@ export function runInsistSuite(
       }, timeout);
 
       test("fails when no CLI commands executed but insist requires one", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on "echo *", but we don't run any CLI
         const result = await harness.execute({
@@ -142,7 +132,7 @@ export function runInsistSuite(
       });
 
       test("succeeds when insist file is read", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on reading /tmp/required.txt
         const result = await harness.execute({
@@ -155,7 +145,7 @@ export function runInsistSuite(
       }, timeout);
 
       test("fails when insist file is NOT read", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on /tmp/required.txt but we read something else
         const result = await harness.execute({
@@ -197,7 +187,7 @@ export function runInsistSuite(
       });
 
       test("succeeds when insist file is written", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on writing /tmp/output/required.txt
         const result = await harness.execute({
@@ -210,7 +200,7 @@ export function runInsistSuite(
       }, timeout);
 
       test("fails when insist file is NOT written", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on /tmp/output/required.txt but we write something else
         const result = await harness.execute({
@@ -252,7 +242,7 @@ export function runInsistSuite(
       });
 
       test("succeeds when insist host is accessed", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on httpbin.org
         const result = await harness.execute({
@@ -265,7 +255,7 @@ export function runInsistSuite(
       }, timeout);
 
       test("fails when insist host is NOT accessed", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         // Band insists on httpbin.org but we only access github
         const result = await harness.execute({
@@ -292,18 +282,15 @@ export function runAllInsistSuites() {
   // Local executor - always available, reports but doesn't enforce
   runInsistSuite("local-dangerously", {
     timeout: 30000,
-    skipIfUnavailable: false,
   });
 
   // Lima - requires Lima VM, enforces insist
   runInsistSuite("local-lima", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 
   // Cloudflare - requires wrangler + API token, enforces insist
   runInsistSuite("cloudflare", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 }

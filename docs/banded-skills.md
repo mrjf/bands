@@ -56,11 +56,14 @@ URL references are resolved via `parseGitHubUrl()`. Path references resolve rela
 
 ### Wrapper Scripts
 
-Each wrapper is a 2-line bash script:
+Each wrapper resolves its own path and invokes the CLI:
 
 ```bash
 #!/bin/bash
-band exec scripts/resources/summarize-pull-request "$@"
+DIR="$(cd -P "$(dirname "$0")" && pwd)"
+ROOT="$(cd -P "$DIR/../../.." && pwd)"
+SKILL_ROOT="$(cd -P "$DIR/.." && pwd)"
+bun "$ROOT/packages/runtime/src/cli.ts" exec "$DIR/resources/<name>" --skill_root "$SKILL_ROOT" "$@"
 ```
 
 ### Schema Files

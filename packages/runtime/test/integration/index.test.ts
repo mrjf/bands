@@ -33,7 +33,7 @@ Test Categories:
   • Insist             - Required operation enforcement
   • File I/O           - Actual file read/write operations
 
-Tests will SKIP if a target is not available.
+Tests will ERROR if a target is not available.
 ================================================================================
 `);
 
@@ -51,6 +51,3 @@ runAllInsistSuites();
 
 // Run actual file I/O tests across all executors
 runAllFileIOSuites();
-
-// Skip summary is printed by print-skip-summary.ts AFTER bun test exits.
-// See test:all and test:integration scripts in package.json.

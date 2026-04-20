@@ -2,8 +2,6 @@ export const FRONTMATTER_DELIMITER = "---";
 
 export const REQUIRED_FIELDS = ["band", "icon", "description"] as const;
 
-export const IDENTITY_FIELDS = ["band", "icon", "description"] as const;
-
 export const ALLOWED_TOP_LEVEL_KEYS = [
   "band",
   "icon",

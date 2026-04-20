@@ -74,14 +74,22 @@ describe("resolve", () => {
     expect(result.ancestors.length).toBeLessThanOrEqual(1);
   });
 
-  test("skips unresolvable references", async () => {
+  test("errors on unresolvable extends reference", async () => {
     const self = makeBand({
       band: "main",
       extends: ["nonexistent"],
     });
     const loader: BandLoader = async () => null;
-    const result = await resolve(self, loader);
-    expect(result.ancestors).toHaveLength(0);
+    expect(resolve(self, loader)).rejects.toThrow('extends "nonexistent" which could not be resolved');
+  });
+
+  test("errors on unresolvable includes reference", async () => {
+    const self = makeBand({
+      band: "main",
+      includes: ["nonexistent"],
+    });
+    const loader: BandLoader = async () => null;
+    expect(resolve(self, loader)).rejects.toThrow('includes "nonexistent" which could not be resolved');
   });
 
   test("computes effective policy through resolution", async () => {

@@ -22,7 +22,6 @@ export { fetchSkill } from "./fetcher";
 
 // Parsing
 export { parseSkillMd } from "./parser";
-export type { ParsedSkillMd } from "./parser";
 
 // Band generation
 export { generateSkillBand, generateSkillSystemPrompt } from "./generator";

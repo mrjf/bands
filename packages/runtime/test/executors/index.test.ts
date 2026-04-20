@@ -16,11 +16,11 @@ import {
 import type { BandDocument, ExecutionTarget } from "@bands/format";
 
 // Test band for execution tests
-const createTestBand = (target?: ExecutionTarget): BandDocument => ({
+const createTestBand = (target: ExecutionTarget = "local-dangerously"): BandDocument => ({
   band: "test-band",
   icon: "🧪",
   description: "Test band for executor tests",
-  execution: target ? { target } : undefined,
+  execution: { target },
 });
 
 describe("Executor Registry", () => {
@@ -208,16 +208,14 @@ describe("executeBand", () => {
     expect(result.target).toBe("local-dangerously");
   });
 
-  test("should default to local-dangerously when no target specified", async () => {
+  test("should throw when no target specified", async () => {
     const band: BandDocument = {
       band: "no-target-band",
       icon: "🎯",
       description: "Test band",
     };
 
-    const result = await executeBand(band, {});
-    expect(result.success).toBe(true);
-    expect(result.target).toBe("local-dangerously");
+    expect(() => executeBand(band, {})).toThrow("No execution target specified");
   });
 
   test("should pass payload correctly", async () => {
@@ -248,6 +246,7 @@ describe("executeBand contract enforcement", () => {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
+      execution: { target: "local-dangerously" },
       contract: {
         input: {
           type: "object",
@@ -269,6 +268,7 @@ describe("executeBand contract enforcement", () => {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
+      execution: { target: "local-dangerously" },
       contract: {
         output: {
           type: "object",
@@ -287,21 +287,32 @@ describe("executeBand contract enforcement", () => {
     expect(result.error?.message).toContain("contract.output validation failed");
   });
 
-  test("skips unresolvable string schema refs (missing file, URL)", async () => {
+  test("throws on missing contract schema file", async () => {
     const band: BandDocument = {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
+      execution: { target: "local-dangerously" },
       contract: {
         input: "./nonexistent/schema.json",
+      },
+    };
+
+    expect(executeBand(band, { anything: true })).rejects.toThrow("Contract schema file not found");
+  });
+
+  test("throws on URL contract schema (not yet supported)", async () => {
+    const band: BandDocument = {
+      band: "contract-test",
+      icon: "📋",
+      description: "Test band",
+      execution: { target: "local-dangerously" },
+      contract: {
         output: "https://example.com/output.json",
       },
     };
 
-    const result = await executeBand(band, { anything: true });
-
-    // Unresolvable refs are skipped — execution proceeds normally
-    expect(result.success).toBe(true);
+    expect(executeBand(band, { anything: true })).rejects.toThrow("URL contract schemas are not yet supported");
   });
 
   test("resolves file path string ref for contract.input", async () => {
@@ -324,6 +335,7 @@ describe("executeBand contract enforcement", () => {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
+      execution: { target: "local-dangerously" },
       contract: {
         input: "./input-schema.json",
       },
@@ -347,6 +359,7 @@ describe("executeBand contract enforcement", () => {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
+      execution: { target: "local-dangerously" },
       contract: {
         input: {
           type: "object",
@@ -380,13 +393,12 @@ describe("Execution Target Selection", () => {
     );
     expect(result2.target).toBe("local-dangerously");
 
-    // Test 3: default when nothing specified
+    // Test 3: error when nothing specified (no fallback)
     const bandNoTarget: BandDocument = {
       band: "no-target",
       icon: "🎯",
       description: "Test band",
     };
-    const result3 = await executeBand(bandNoTarget, {});
-    expect(result3.target).toBe("local-dangerously");
+    expect(() => executeBand(bandNoTarget, {})).toThrow("No execution target specified");
   });
 });

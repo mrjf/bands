@@ -114,6 +114,7 @@ describe("bandExec", () => {
     const result = await bandExec({
       resourceDir,
       args: { message: "hello" },
+      skillRoot: join(FIXTURES, "valid-skill"),
     });
 
     expect(result.success).toBe(true);
