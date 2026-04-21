@@ -1,4 +1,4 @@
-# Bands Versioning: The Lobster Scale
+# Lobster Life-cycle Versioning
 
 *Homarus americanus*, from berry to jumbo.
 
