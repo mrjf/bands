@@ -2,53 +2,6 @@
   "$id": "permission-categories.json",
   "type": "object",
   "properties": {
-    "tools": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "skills": {
-      "type": "array",
-      "items": {
-        "oneOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "github",
-                  "local"
-                ]
-              },
-              "ref": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "ref"
-            ]
-          }
-        ]
-      }
-    },
-    "mcps": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "apis": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
     "read": {
       "type": "array",
       "items": {

@@ -1,5 +1,5 @@
 /** Execution target where the band runs */
-export type ExecutionTarget = "local-dangerously" | "cloudflare" | "local-lima";
+export type ExecutionTarget = "cloudflare" | "local-lima";
 
 /** Execution configuration */
 export interface ExecutionConfig {
@@ -64,14 +64,6 @@ export interface NormalizedSkillRef {
  * - `insist` requires child bands to also allow these items
  */
 export interface PermissionCategories {
-  /** Tools - GitHub URLs */
-  tools?: string[];
-  /** Skills - GitHub URLs or {kind, ref} objects */
-  skills?: SkillRef[];
-  /** MCP servers - GitHub URLs */
-  mcps?: string[];
-  /** APIs - GitHub URLs */
-  apis?: string[];
   /** File read paths - glob patterns (e.g., "./data/**", "./config.json") */
   read?: string[];
   /** File write paths - glob patterns (e.g., "./output/**", "/tmp/**") */
@@ -124,12 +116,7 @@ export interface Contract {
 
 /** Adapter metadata */
 export interface AdapterMetadata {
-  provides?: {
-    apis?: string[];
-    tools?: string[];
-    skills?: string[];
-    mcps?: string[];
-  };
+  provides?: Record<string, never>;
   requires?: {
     secrets?: string[];
     network?: {
@@ -212,11 +199,8 @@ export interface EffectiveCapabilitySet {
 /** Effective policy (computed from extends + self + includes) */
 export interface EffectivePolicy {
   capabilities: {
-    tools: EffectiveCapabilitySet;
-    skills: EffectiveCapabilitySet;
-    mcps: EffectiveCapabilitySet;
-    apis: EffectiveCapabilitySet;
-    fs: EffectiveCapabilitySet;
+    read: EffectiveCapabilitySet;
+    write: EffectiveCapabilitySet;
     cli: EffectiveCapabilitySet;
     net: EffectiveCapabilitySet;
   };

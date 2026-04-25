@@ -34,7 +34,7 @@ class BandMiniCard extends HTMLElement {
 
   private countCapabilities(b: BandDocument): number {
     let count = 0;
-    const categories = ["tools", "skills", "mcps", "apis", "fs", "cli", "net"] as const;
+    const categories = ["read", "write", "cli", "net"] as const;
 
     for (const col of ["allow", "deny", "insist"] as const) {
       const permCol = b[col] as PermissionCategories | undefined;
