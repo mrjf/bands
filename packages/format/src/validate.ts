@@ -6,7 +6,6 @@ import {
   LIMIT_FIELDS,
 } from "./constants";
 import { isValidGitHubUrl } from "./github-url";
-import { parseSkillRef } from "./skill-ref";
 
 /** Validate band name is kebab-case */
 function isValidBandName(name: string): boolean {
@@ -168,45 +167,8 @@ function validatePermissionCategories(
     }
   }
 
-  // Validate tools, mcps, apis (GitHub URL items)
-  for (const cat of ["tools", "mcps", "apis"] as const) {
-    if (obj[cat] !== undefined) {
-      if (!Array.isArray(obj[cat])) {
-        errors.push({ path: `${column}.${cat}`, message: `${column}.${cat} must be an array` });
-      } else {
-        const arr = obj[cat] as unknown[];
-        for (let i = 0; i < arr.length; i++) {
-          if (typeof arr[i] !== "string") {
-            errors.push({ path: `${column}.${cat}[${i}]`, message: `Item must be a string`, value: arr[i] });
-          } else if (!isValidGitHubUrl(arr[i] as string)) {
-            warnings.push({ path: `${column}.${cat}[${i}]`, message: `Item should be a GitHub URL`, value: arr[i] });
-          }
-        }
-      }
-    }
-  }
-
-  // Validate skills (SkillRef items)
-  if (obj.skills !== undefined) {
-    if (!Array.isArray(obj.skills)) {
-      errors.push({ path: `${column}.skills`, message: `${column}.skills must be an array` });
-    } else {
-      const arr = obj.skills as unknown[];
-      for (let i = 0; i < arr.length; i++) {
-        const parsed = parseSkillRef(arr[i]);
-        if (!parsed) {
-          warnings.push({
-            path: `${column}.skills[${i}]`,
-            message: "Invalid skill reference",
-            value: arr[i],
-          });
-        }
-      }
-    }
-  }
-
-  // Validate fs, cli, net (string arrays)
-  for (const cat of ["fs", "cli", "net"] as const) {
+  // Validate read, write, cli, net (string arrays)
+  for (const cat of ["read", "write", "cli", "net"] as const) {
     if (obj[cat] !== undefined) {
       if (!Array.isArray(obj[cat])) {
         errors.push({ path: `${column}.${cat}`, message: `${column}.${cat} must be an array` });

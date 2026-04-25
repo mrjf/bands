@@ -39,16 +39,16 @@ describe("validate", () => {
     expect(warnings.some((w) => w.path === "extends[0]")).toBe(true);
   });
 
-  test("validates allow.tools items as GitHub URLs", () => {
+  test("warns on unknown permission category", () => {
     const { warnings } = validate({
       band: "test",
 
       icon: "🎵",
       allow: {
-        tools: ["not-a-url"],
+        unknown_cat: ["some-value"],
       },
     });
-    expect(warnings.some((w) => w.path.includes("allow.tools"))).toBe(true);
+    expect(warnings.some((w) => w.path.includes("allow.unknown_cat"))).toBe(true);
   });
 
   test("validates limit fields are numbers", () => {
