@@ -195,7 +195,7 @@ async function validateAgainstSchema(
  * Execute a banded skill script.
  */
 export async function bandExec(options: BandExecOptions): Promise<BandExecResult> {
-  const { resourceDir, args, inputPath, outputPath, help, skillRoot, forceLima } = options;
+  const { resourceDir, args, inputPath, outputPath, help, skillRoot } = options;
   const startTime = Date.now();
 
   // Resolve resource directory
@@ -338,13 +338,11 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
     }
   }
 
-  // Force Lima execution if requested — reject local-dangerously
-  if (forceLima && executionTarget === "local-dangerously") {
-    executionTarget = "local-lima";
-  }
-
   if (!executionTarget) {
-    return { success: false, error: "No execution target specified. Set execution.target in BAND.md." };
+    return {
+      success: false,
+      error: "No execution target specified. Set execution.target in the band's BAND.md.",
+    };
   }
 
   // Create temp files for input/output
@@ -371,7 +369,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
       resolvedResourceDir,
       tempInputPath,
       tempOutputPath,
-      executionTarget,
+      executionTarget!,
       envSecrets,
       skillRoot,
       configPath,
@@ -460,59 +458,8 @@ async function executeScript(
     return limaExec(runShPath, resourceDir, inputPath, outputPath, undefined, envSecrets, skillRoot, configPath, networkRules, fileRules);
   }
 
-  // Default: local-dangerously — run directly
-  const env: Record<string, string | undefined> = {
-    ...process.env,
-    INPUT_PATH: inputPath,
-    OUTPUT_PATH: outputPath,
+  return {
+    success: false,
+    error: `Unsupported execution target: ${executionTarget}`,
   };
-  if (configPath) {
-    env.CONFIG_PATH = configPath;
-  }
-  const proc = Bun.spawn(["bash", runShPath], {
-    cwd: resourceDir,
-    env,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-
-  if (exitCode !== 0) {
-    // Scripts write {"error": "..."} to OUTPUT_PATH on failure — read it
-    let errorMessage = stderr || stdout;
-    try {
-      const outputContent = readFileSync(outputPath, "utf-8").trim();
-      if (outputContent) {
-        try {
-          const parsed = JSON.parse(outputContent);
-          if (parsed.error) errorMessage = parsed.error;
-        } catch {
-          // Not valid JSON — try to extract error field, else use raw content
-          const match = outputContent.match(/"error"\s*:\s*"(.+)/s);
-          errorMessage = match ? match[1].replace(/"\s*}\s*$/, "") : outputContent;
-        }
-      }
-    } catch {
-      // No output file
-    }
-    return {
-      success: false,
-      error: errorMessage || `Script exited with code ${exitCode}`,
-    };
-  }
-
-  // If no output file was written, use stdout
-  let data: unknown = stdout.trim() || undefined;
-  if (data && typeof data === "string") {
-    try {
-      data = JSON.parse(data as string);
-    } catch {
-      // Keep as string
-    }
-  }
-
-  return { success: true, data };
 }

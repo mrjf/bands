@@ -78,7 +78,6 @@ interface BandExecOptions {
   outputPath?: string;          // Path to write output
   help?: boolean;               // Show help instead of executing
   skillRoot?: string;           // Skill root for band discovery
-  forceLima?: boolean;          // Force Lima VM, reject local-dangerously
 }
 
 interface BandExecResult {

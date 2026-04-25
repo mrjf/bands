@@ -3,8 +3,7 @@
  *
  * Runs the same tests across all execution targets to verify consistent behavior.
  *
- * Tests SKIP if the required target is not available:
- * - local-dangerously: Always available (no isolation)
+ * Tests ERROR if the required target is not available:
  * - lima: Requires Lima VM running
  * - cloudflare: Requires wrangler + CLOUDFLARE_API_TOKEN
  *
@@ -23,7 +22,6 @@ console.log(`
 Testing all execution targets with the same test cases.
 
 Targets:
-  • local-dangerously  - No isolation (always available)
   • lima               - Lima VM isolation (macOS)
   • cloudflare         - Cloudflare Workers V8 isolates
 
@@ -40,7 +38,7 @@ Tests will ERROR if a target is not available.
 // Run basic execution tests across all executors
 runAllExecutorSuites();
 
-// Run permission enforcement tests (excludes local-dangerously)
+// Run permission enforcement tests
 runAllPermissionSuites();
 
 // Run firewall enforcement tests across all executors

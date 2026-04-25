@@ -7,7 +7,7 @@ import { validateBandedSkill } from "../../src/banded-skills/validator";
 
 const FIXTURES = join(import.meta.dir, "../fixtures/banded-skills");
 
-describe("banded skills integration (local-dangerously)", () => {
+describe("banded skills integration (local-lima)", () => {
   test("execute echo-input script end-to-end", async () => {
     const resourceDir = join(
       FIXTURES,

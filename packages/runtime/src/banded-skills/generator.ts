@@ -74,7 +74,7 @@ export function generatePerScriptBand(
     icon: "\u{1F4E6}",
     description: `Sandboxed execution environment for ${scriptName}`,
     execution: {
-      target: "local-dangerously",
+      target: "local-lima",
     },
   };
 

@@ -271,7 +271,7 @@ export class LimaExecutor implements Executor {
     const payload = input.payload as OperationPayload;
     const band = input.band;
 
-    // Track operations for insist checking (same shape as local-dangerously)
+    // Track operations for insist checking
     const tracker = { cli: [] as string[], read: [] as string[], write: [] as string[], net: [] as string[] };
     const operations: Record<string, any[]> = {};
 
@@ -419,7 +419,7 @@ export class LimaExecutor implements Executor {
       vmError = err instanceof Error ? err.message : String(err);
     }
 
-    // Build response with operation tracking (matches local-dangerously format)
+    // Build response with operation tracking
     const result = {
       success: true,
       band: input.band.band,

@@ -16,7 +16,7 @@ requires:
   secrets:
     - SLACK_BOT_TOKEN
 execution:
-  target: local-dangerously
+  target: local-lima
 slack:
   channels:
     allow: [engineering, executive]

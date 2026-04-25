@@ -5,7 +5,7 @@
  * Security model:
  * - Only runs registered scripts from known skills — no arbitrary paths
  * - Auto-discovers scripts: `band gist-list --limit=5`
- * - Never falls back to local-dangerously — always forces Lima VM
+ * - Always uses Lima VM for execution
  * - No subcommands, no exec, no path arguments
  *
  * Usage:
@@ -231,7 +231,6 @@ async function main() {
     args: parsed.args,
     help: parsed.help,
     skillRoot,
-    forceLima: true,
   });
 
   if (result.success) {

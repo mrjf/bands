@@ -5,7 +5,6 @@
     "target": {
       "type": "string",
       "enum": [
-        "local-dangerously",
         "cloudflare",
         "local-lima"
       ]

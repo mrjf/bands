@@ -98,7 +98,7 @@ describe("slack skill: structure & basics", () => {
   test("BAND.md has correct execution target", () => {
     const { readFileSync } = require("fs");
     const bandMd = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
-    expect(bandMd).toContain("target: local-dangerously");
+    expect(bandMd).toContain("target: local-lima");
     expect(bandMd).toContain("SLACK_BOT_TOKEN");
     expect(bandMd).toContain('curl *');
     expect(bandMd).toContain('jq *');

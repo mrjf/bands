@@ -4,9 +4,7 @@
  * Tests that permission enforcement works correctly across all execution targets.
  * Uses special test payloads that check permissions without executing actual operations.
  *
- * Key difference between executors:
- * - local-dangerously: Reports what WOULD be allowed, but doesn't enforce
- * - cloudflare, lima: Actually ENFORCE permissions (return errors on deny)
+ * All executors (lima, cloudflare) actually ENFORCE permissions (return errors on deny).
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -88,17 +86,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testCli: "rm -rf /tmp/test" });
 
-        // For sandboxed executors, this should fail
-        // For local-dangerously, it succeeds but reports denied
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.cli?.allowed).toBe(false);
-          expect(data.enforced).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies sudo command (in deny list)", async () => {
@@ -106,14 +95,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testCli: "sudo apt-get install foo" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.cli?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies curl command (not in allow list)", async () => {
@@ -121,14 +104,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testCli: "curl http://example.com" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.cli?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies wget command (not in allow list)", async () => {
@@ -136,14 +113,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testCli: "wget http://example.com" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.cli?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
     });
 
@@ -195,14 +166,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testRead: "/home/user/.env" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.read?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies reading from secrets directory", async () => {
@@ -210,14 +175,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testRead: "/app/secrets/api-key.txt" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.read?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("allows writing to /tmp/output", async () => {
@@ -235,14 +194,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testWrite: "/etc/passwd" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.write?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies writing to /usr", async () => {
@@ -250,14 +203,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testWrite: "/usr/local/bin/malware" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.write?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
     });
 
@@ -309,14 +256,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testNet: "localhost" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.net?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies access to internal.corp domains", async () => {
@@ -324,14 +265,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testNet: "db.internal.corp" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.net?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies access to arbitrary domains not in allow list", async () => {
@@ -339,14 +274,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testNet: "evil.com" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.net?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
     });
 
@@ -378,14 +307,8 @@ export function runFirewallSuite(
 
         const result = await harness.execute({ testNet: "google.com" });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.permissions?.net?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("allows echo command (only allowed CLI)", async () => {
@@ -405,11 +328,6 @@ export function runFirewallSuite(
  * Run firewall tests across all executors.
  */
 export function runAllFirewallSuites() {
-  // Local executor - always available, reports but doesn't enforce
-  runFirewallSuite("local-dangerously", {
-    timeout: 30000,
-  });
-
   // Lima - requires Lima VM, enforces permissions
   runFirewallSuite("local-lima", {
     timeout: 180000,

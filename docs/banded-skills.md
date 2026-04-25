@@ -123,7 +123,6 @@ The discovered BAND.md determines where scripts run:
 
 | Target | Isolation | Enforcement |
 |--------|-----------|-------------|
-| `local-dangerously` | None | Tracks only |
 | `lima` | Full Linux VM | File-based I/O via `limactl` |
 | `cloudflare` | V8 isolates | Full enforcement |
 
@@ -165,7 +164,7 @@ allow:
   cli:
     - "echo *"
 execution:
-  target: local-dangerously
+  target: local-lima
 ---
 ```
 

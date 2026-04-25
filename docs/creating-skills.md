@@ -87,7 +87,7 @@ execution:
 | `deny.*` | Explicit denials (override allow) |
 | `env.secrets` | Environment variables passed into sandbox |
 | `requires.secrets` | Secrets that must be set (fails fast if missing) |
-| `execution.target` | Where to run: `local-dangerously`, `lima`, `cloudflare` |
+| `execution.target` | Where to run: `lima`, `cloudflare` |
 
 ### Band Discovery
 

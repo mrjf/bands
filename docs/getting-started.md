@@ -53,7 +53,6 @@ bun run band targets
 
 | Target | Isolation | Setup |
 |--------|-----------|-------|
-| `local-dangerously` | None (reports only) | None required |
 | `local-lima` | Full Linux VM | `bun run band setup` |
 | `cloudflare` | Coming soon | Not yet available |
 

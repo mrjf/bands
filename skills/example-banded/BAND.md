@@ -7,5 +7,5 @@ allow:
     - "echo *"
     - "cat *"
 execution:
-  target: local-dangerously
+  target: local-lima
 ---
