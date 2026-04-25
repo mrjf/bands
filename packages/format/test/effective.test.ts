@@ -9,72 +9,72 @@ function makeBand(overrides: Partial<BandDocument> = {}): BandDocument {
 describe("computeEffective", () => {
   test("simple allow/deny/insist from self only", () => {
     const self = makeBand({
-      allow: { tools: ["tool-a", "tool-b"] },
-      deny: { tools: ["tool-c"] },
-      insist: { tools: ["tool-d"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
+      deny: { cli: ["cmd-c"] },
+      insist: { cli: ["cmd-d"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.tools.allow).toEqual(["tool-a", "tool-b"]);
-    expect(result.capabilities.tools.deny).toEqual(["tool-c"]);
-    expect(result.capabilities.tools.insist).toEqual(["tool-d"]);
+    expect(result.capabilities.cli.allow).toEqual(["cmd-a", "cmd-b"]);
+    expect(result.capabilities.cli.deny).toEqual(["cmd-c"]);
+    expect(result.capabilities.cli.insist).toEqual(["cmd-d"]);
   });
 
   test("deny wins over insist", () => {
     const self = makeBand({
-      deny: { tools: ["tool-a"] },
-      insist: { tools: ["tool-a"] },
+      deny: { cli: ["cmd-a"] },
+      insist: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.tools.deny).toContain("tool-a");
-    expect(result.capabilities.tools.insist).not.toContain("tool-a");
+    expect(result.capabilities.cli.deny).toContain("cmd-a");
+    expect(result.capabilities.cli.insist).not.toContain("cmd-a");
   });
 
   test("deny wins over allow", () => {
     const self = makeBand({
-      allow: { tools: ["tool-a"] },
-      deny: { tools: ["tool-a"] },
+      allow: { cli: ["cmd-a"] },
+      deny: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.tools.deny).toContain("tool-a");
-    expect(result.capabilities.tools.allow).not.toContain("tool-a");
+    expect(result.capabilities.cli.deny).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).not.toContain("cmd-a");
   });
 
   test("insist items removed from allow", () => {
     const self = makeBand({
-      allow: { tools: ["tool-a", "tool-b"] },
-      insist: { tools: ["tool-a"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
+      insist: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.tools.insist).toContain("tool-a");
-    expect(result.capabilities.tools.allow).not.toContain("tool-a");
-    expect(result.capabilities.tools.allow).toContain("tool-b");
+    expect(result.capabilities.cli.insist).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).not.toContain("cmd-a");
+    expect(result.capabilities.cli.allow).toContain("cmd-b");
   });
 
   test("ceiling_allow: includes don't expand ceiling", () => {
     const self = makeBand({
-      allow: { tools: ["tool-a"] },
+      allow: { cli: ["cmd-a"] },
     });
     const included = makeBand({
       band: "addon",
-      allow: { tools: ["tool-a", "tool-b"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
     });
     const result = computeEffective(self, [], [included]);
     // tool-b was requested by include but not in ceiling (self+extends only has tool-a)
-    expect(result.capabilities.tools.allow).toContain("tool-a");
-    expect(result.capabilities.tools.allow).not.toContain("tool-b");
+    expect(result.capabilities.cli.allow).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).not.toContain("cmd-b");
   });
 
   test("extends expand ceiling", () => {
     const parent = makeBand({
       band: "parent",
-      allow: { tools: ["tool-a", "tool-b"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
     });
     const self = makeBand({
-      allow: { tools: ["tool-a"] },
+      allow: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [parent], []);
-    expect(result.capabilities.tools.allow).toContain("tool-a");
-    expect(result.capabilities.tools.allow).toContain("tool-b");
+    expect(result.capabilities.cli.allow).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).toContain("cmd-b");
   });
 
   test("limits: most restrictive wins", () => {
@@ -93,8 +93,8 @@ describe("computeEffective", () => {
   test("no permissions returns empty sets", () => {
     const self = makeBand({});
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.tools.allow).toEqual([]);
-    expect(result.capabilities.tools.deny).toEqual([]);
-    expect(result.capabilities.tools.insist).toEqual([]);
+    expect(result.capabilities.cli.allow).toEqual([]);
+    expect(result.capabilities.cli.deny).toEqual([]);
+    expect(result.capabilities.cli.insist).toEqual([]);
   });
 });

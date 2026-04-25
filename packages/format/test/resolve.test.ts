@@ -95,20 +95,20 @@ describe("resolve", () => {
   test("computes effective policy through resolution", async () => {
     const parent = makeBand({
       band: "parent",
-      allow: { tools: ["tool-a", "tool-b"] },
-      deny: { tools: ["tool-c"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
+      deny: { cli: ["cmd-c"] },
     });
     const self = makeBand({
       band: "child",
       extends: ["parent"],
-      allow: { tools: ["tool-a"] },
-      insist: { tools: ["tool-d"] },
+      allow: { cli: ["cmd-a"] },
+      insist: { cli: ["cmd-d"] },
     });
     const loader: BandLoader = async (ref) => (ref === "parent" ? parent : null);
     const result = await resolve(self, loader);
-    expect(result.effective.capabilities.tools.allow).toContain("tool-a");
-    expect(result.effective.capabilities.tools.allow).toContain("tool-b");
-    expect(result.effective.capabilities.tools.deny).toContain("tool-c");
-    expect(result.effective.capabilities.tools.insist).toContain("tool-d");
+    expect(result.effective.capabilities.cli.allow).toContain("cmd-a");
+    expect(result.effective.capabilities.cli.allow).toContain("cmd-b");
+    expect(result.effective.capabilities.cli.deny).toContain("cmd-c");
+    expect(result.effective.capabilities.cli.insist).toContain("cmd-d");
   });
 });

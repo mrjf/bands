@@ -36,33 +36,16 @@ band: cap-band
 icon: "🔧"
 description: "A band with permissions"
 allow:
-  tools:
-    - https://github.com/acme/tools/tree/main/search
+  cli:
+    - "git pull"
 deny:
-  tools:
-    - https://github.com/acme/tools/tree/main/dangerous
+  cli:
+    - "rm -rf *"
 ---`;
     const result = parseBandMd(source);
     expect(result.errors).toHaveLength(0);
-    expect(result.document.allow?.tools).toHaveLength(1);
-    expect(result.document.deny?.tools).toHaveLength(1);
-  });
-
-  test("parses band with skills (mixed refs)", () => {
-    const source = `---
-band: skills-band
-icon: "📚"
-description: "Skills band"
-allow:
-  skills:
-    - https://github.com/acme/skills/tree/main/summarize
-    - kind: local
-      ref: ./skills/custom
----`;
-    const result = parseBandMd(source);
-    expect(result.errors).toHaveLength(0);
-    const skills = result.document.allow?.skills;
-    expect(skills).toHaveLength(2);
+    expect(result.document.allow?.cli).toHaveLength(1);
+    expect(result.document.deny?.cli).toHaveLength(1);
   });
 
   test("errors on missing frontmatter", () => {
