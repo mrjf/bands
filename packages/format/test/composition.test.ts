@@ -70,17 +70,17 @@ describe("Composition end-to-end", () => {
   test("includes cannot expand beyond extends ceiling", async () => {
     const parent = makeBand({
       band: "parent",
-      allow: { read: ["path-a", "path-b"] },
+      allow: { read: ["./data/**", "./config/**"] },
     });
     const addon = makeBand({
       band: "addon",
-      allow: { read: ["path-a", "path-c"] },
+      allow: { read: ["./data/**", "./secrets/**"] },
     });
     const child = makeBand({
       band: "child",
       extends: ["parent"],
       includes: ["addon"],
-      allow: { read: ["path-a"] },
+      allow: { read: ["./data/**"] },
     });
 
     const bands: Record<string, BandDocument> = { parent, addon };
@@ -89,12 +89,12 @@ describe("Composition end-to-end", () => {
     const result = await resolve(child, loader);
     const effectiveRead = result.effective.capabilities.read;
 
-    // ceiling = union(extends_allows, self_allows) = [path-a, path-b]
-    // requested = union(extends_allows, self_allows, includes_allows) = [path-a, path-b, path-c]
-    // effective = (requested ∩ ceiling) = [path-a, path-b]
-    expect(effectiveRead.allow).toContain("path-a");
-    expect(effectiveRead.allow).toContain("path-b");
-    expect(effectiveRead.allow).not.toContain("path-c");
+    // ceiling = union(extends_allows, self_allows) = [./data/**, ./config/**]
+    // requested = union(extends_allows, self_allows, includes_allows) = [./data/**, ./config/**, ./secrets/**]
+    // effective = (requested ∩ ceiling) = [./data/**, ./config/**]
+    expect(effectiveRead.allow).toContain("./data/**");
+    expect(effectiveRead.allow).toContain("./config/**");
+    expect(effectiveRead.allow).not.toContain("./secrets/**");
   });
 
   test("deny wins over everything", async () => {

@@ -42,13 +42,23 @@ describe("validate", () => {
   test("warns on unknown permission category", () => {
     const { warnings } = validate({
       band: "test",
-
       icon: "🎵",
       allow: {
         unknown_cat: ["some-value"],
       },
     });
     expect(warnings.some((w) => w.path.includes("allow.unknown_cat"))).toBe(true);
+  });
+
+  test("validates allow.cli items are strings", () => {
+    const { errors } = validate({
+      band: "test",
+      icon: "🎵",
+      allow: {
+        cli: [42 as any],
+      },
+    });
+    expect(errors.some((e) => e.path.includes("allow.cli"))).toBe(true);
   });
 
   test("validates limit fields are numbers", () => {

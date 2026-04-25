@@ -77,7 +77,6 @@ export function computeEffective(
 function getField(doc: BandDocument, category: PermCategory, column: "allow" | "deny" | "insist"): string[] {
   const permCol = doc[column];
   if (!permCol) return [];
-
   const arr = permCol[category];
   return (arr as string[] | undefined) ?? [];
 }

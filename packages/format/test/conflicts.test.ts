@@ -10,7 +10,7 @@ function makeBand(overrides: Partial<BandDocument> = {}): BandDocument {
 describe("detectConflicts", () => {
   test("no conflicts for simple band", () => {
     const self = makeBand({
-      allow: { read: ["path-a"] },
+      allow: { cli: ["cmd-a"] },
     });
     const effective = computeEffective(self, [], []);
     const conflicts = detectConflicts(self, [], [], effective);
@@ -19,26 +19,26 @@ describe("detectConflicts", () => {
 
   test("deny-insist conflict", () => {
     const self = makeBand({
-      deny: { read: ["path-a"] },
-      insist: { read: ["path-a"] },
+      deny: { cli: ["cmd-a"] },
+      insist: { cli: ["cmd-a"] },
     });
     const effective = computeEffective(self, [], []);
     const conflicts = detectConflicts(self, [], [], effective);
-    expect(conflicts.some((c) => c.type === "deny-insist" && c.item === "path-a")).toBe(true);
+    expect(conflicts.some((c) => c.type === "deny-insist" && c.item === "cmd-a")).toBe(true);
   });
 
   test("ceiling-exceeded conflict for included band", () => {
     const self = makeBand({
       band: "parent",
-      allow: { read: ["path-a"] },
+      allow: { cli: ["cmd-a"] },
     });
     const included = makeBand({
       band: "addon",
-      allow: { read: ["path-a", "path-b"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
     });
     const effective = computeEffective(self, [], [included]);
     const conflicts = detectConflicts(self, [], [included], effective);
-    expect(conflicts.some((c) => c.type === "ceiling-exceeded" && c.item === "path-b")).toBe(true);
+    expect(conflicts.some((c) => c.type === "ceiling-exceeded" && c.item === "cmd-b")).toBe(true);
   });
 
   test("requires-unsatisfied conflict", () => {

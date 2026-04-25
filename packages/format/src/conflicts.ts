@@ -105,7 +105,6 @@ function getColumnItems(
 ): string[] {
   const permCol = doc[column];
   if (!permCol) return [];
-
   const arr = permCol[category];
   return (arr as string[] | undefined) ?? [];
 }

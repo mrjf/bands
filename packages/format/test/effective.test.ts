@@ -9,72 +9,72 @@ function makeBand(overrides: Partial<BandDocument> = {}): BandDocument {
 describe("computeEffective", () => {
   test("simple allow/deny/insist from self only", () => {
     const self = makeBand({
-      allow: { read: ["path-a", "path-b"] },
-      deny: { read: ["path-c"] },
-      insist: { read: ["path-d"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
+      deny: { cli: ["cmd-c"] },
+      insist: { cli: ["cmd-d"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.read.allow).toEqual(["path-a", "path-b"]);
-    expect(result.capabilities.read.deny).toEqual(["path-c"]);
-    expect(result.capabilities.read.insist).toEqual(["path-d"]);
+    expect(result.capabilities.cli.allow).toEqual(["cmd-a", "cmd-b"]);
+    expect(result.capabilities.cli.deny).toEqual(["cmd-c"]);
+    expect(result.capabilities.cli.insist).toEqual(["cmd-d"]);
   });
 
   test("deny wins over insist", () => {
     const self = makeBand({
-      deny: { read: ["path-a"] },
-      insist: { read: ["path-a"] },
+      deny: { cli: ["cmd-a"] },
+      insist: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.read.deny).toContain("path-a");
-    expect(result.capabilities.read.insist).not.toContain("path-a");
+    expect(result.capabilities.cli.deny).toContain("cmd-a");
+    expect(result.capabilities.cli.insist).not.toContain("cmd-a");
   });
 
   test("deny wins over allow", () => {
     const self = makeBand({
-      allow: { read: ["path-a"] },
-      deny: { read: ["path-a"] },
+      allow: { cli: ["cmd-a"] },
+      deny: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.read.deny).toContain("path-a");
-    expect(result.capabilities.read.allow).not.toContain("path-a");
+    expect(result.capabilities.cli.deny).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).not.toContain("cmd-a");
   });
 
   test("insist items removed from allow", () => {
     const self = makeBand({
-      allow: { read: ["path-a", "path-b"] },
-      insist: { read: ["path-a"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
+      insist: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.read.insist).toContain("path-a");
-    expect(result.capabilities.read.allow).not.toContain("path-a");
-    expect(result.capabilities.read.allow).toContain("path-b");
+    expect(result.capabilities.cli.insist).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).not.toContain("cmd-a");
+    expect(result.capabilities.cli.allow).toContain("cmd-b");
   });
 
   test("ceiling_allow: includes don't expand ceiling", () => {
     const self = makeBand({
-      allow: { read: ["path-a"] },
+      allow: { cli: ["cmd-a"] },
     });
     const included = makeBand({
       band: "addon",
-      allow: { read: ["path-a", "path-b"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
     });
     const result = computeEffective(self, [], [included]);
-    // path-b was requested by include but not in ceiling (self+extends only has path-a)
-    expect(result.capabilities.read.allow).toContain("path-a");
-    expect(result.capabilities.read.allow).not.toContain("path-b");
+    // tool-b was requested by include but not in ceiling (self+extends only has tool-a)
+    expect(result.capabilities.cli.allow).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).not.toContain("cmd-b");
   });
 
   test("extends expand ceiling", () => {
     const parent = makeBand({
       band: "parent",
-      allow: { read: ["path-a", "path-b"] },
+      allow: { cli: ["cmd-a", "cmd-b"] },
     });
     const self = makeBand({
-      allow: { read: ["path-a"] },
+      allow: { cli: ["cmd-a"] },
     });
     const result = computeEffective(self, [parent], []);
-    expect(result.capabilities.read.allow).toContain("path-a");
-    expect(result.capabilities.read.allow).toContain("path-b");
+    expect(result.capabilities.cli.allow).toContain("cmd-a");
+    expect(result.capabilities.cli.allow).toContain("cmd-b");
   });
 
   test("limits: most restrictive wins", () => {
@@ -93,8 +93,8 @@ describe("computeEffective", () => {
   test("no permissions returns empty sets", () => {
     const self = makeBand({});
     const result = computeEffective(self, [], []);
-    expect(result.capabilities.read.allow).toEqual([]);
-    expect(result.capabilities.read.deny).toEqual([]);
-    expect(result.capabilities.read.insist).toEqual([]);
+    expect(result.capabilities.cli.allow).toEqual([]);
+    expect(result.capabilities.cli.deny).toEqual([]);
+    expect(result.capabilities.cli.insist).toEqual([]);
   });
 });

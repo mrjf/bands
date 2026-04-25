@@ -14,17 +14,17 @@ describe("normalize", () => {
     expect(result.extends).toEqual(["a", "b"]);
   });
 
-  test("sorts allow.tools array", () => {
+  test("sorts allow.cli array", () => {
     const doc: BandDocument = {
       band: "test",
 
       icon: "🎵",
       allow: {
-        tools: ["c", "a", "b"],
+        cli: ["c", "a", "b"],
       },
     };
     const result = normalize(doc);
-    expect(result.allow?.tools).toEqual(["a", "b", "c"]);
+    expect(result.allow?.cli).toEqual(["a", "b", "c"]);
   });
 
   test("does not mutate original", () => {
