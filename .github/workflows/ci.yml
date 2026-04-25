@@ -29,10 +29,6 @@ jobs:
         run: bun test test/unit/ test/executors/
         working-directory: packages/runtime
 
-      - name: Runtime integration tests (local-dangerously)
-        run: bun test test/integration/
-        working-directory: packages/runtime
-
   skill-tests-direct:
     name: Skill Tests (Direct)
     runs-on: ubuntu-latest

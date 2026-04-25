@@ -13,7 +13,6 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { IntegrationTestHarness } from "./runner";
 import type { ExecutionTarget } from "@bands/format";
 import { join } from "path";
-import { trackSkip } from "./skip-tracker";
 
 const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
 
@@ -22,20 +21,16 @@ const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
  */
 export function runFirewallSuite(
   target: ExecutionTarget,
-  options: { timeout?: number; skipIfUnavailable?: boolean } = {}
+  options: { timeout?: number } = {}
 ) {
-  const { timeout = 60000, skipIfUnavailable = true } = options;
+  const { timeout = 60000 } = options;
 
   describe(`${target} Firewall Enforcement`, () => {
-    // Helper to skip tests when executor unavailable
-    const skipIf = (condition: boolean, msg: string) => {
-      if (condition) {
-        console.log(`  ⏭  Skipping: ${msg}`);
-        trackSkip(target, "Firewall");
-        return true;
-      }
-      return false;
-    };
+    function requireTarget() {
+      if (!available) throw new Error(`${target} executor is not available`);
+    }
+
+    let available = false;
 
     describe("CLI Permission Enforcement", () => {
       const harness = new IntegrationTestHarness({
@@ -45,14 +40,8 @@ export function runFirewallSuite(
         timeout,
       });
 
-      let available = false;
-
       beforeAll(async () => {
         available = await harness.checkAvailability();
-        if (!available && !skipIfUnavailable) {
-          throw new Error(`${target} executor is not available`);
-        }
-        // Skip tracking happens per-test via skipIf
         if (available) {
           await harness.init();
         }
@@ -65,7 +54,7 @@ export function runFirewallSuite(
       });
 
       test("allows commands matching allow patterns", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "echo hello world" });
 
@@ -75,7 +64,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("allows cat command", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "cat /tmp/test.txt" });
 
@@ -85,7 +74,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("allows ls command", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "ls -la /tmp" });
 
@@ -95,7 +84,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies rm command (in deny list)", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "rm -rf /tmp/test" });
 
@@ -113,7 +102,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies sudo command (in deny list)", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "sudo apt-get install foo" });
 
@@ -128,7 +117,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies curl command (not in allow list)", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "curl http://example.com" });
 
@@ -143,7 +132,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies wget command (not in allow list)", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "wget http://example.com" });
 
@@ -182,7 +171,7 @@ export function runFirewallSuite(
       });
 
       test("allows reading from /tmp", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testRead: "/tmp/data.txt" });
 
@@ -192,7 +181,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("allows reading from ./allowed directory", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testRead: "./allowed/file.txt" });
 
@@ -202,7 +191,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies reading .env files", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testRead: "/home/user/.env" });
 
@@ -217,7 +206,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies reading from secrets directory", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testRead: "/app/secrets/api-key.txt" });
 
@@ -232,7 +221,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("allows writing to /tmp/output", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testWrite: "/tmp/output/result.txt" });
 
@@ -242,7 +231,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies writing to /etc", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testWrite: "/etc/passwd" });
 
@@ -257,7 +246,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies writing to /usr", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testWrite: "/usr/local/bin/malware" });
 
@@ -296,7 +285,7 @@ export function runFirewallSuite(
       });
 
       test("allows access to api.github.com", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testNet: "api.github.com" });
 
@@ -306,7 +295,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("allows access to httpbin.org", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testNet: "httpbin.org" });
 
@@ -316,7 +305,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies access to localhost", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testNet: "localhost" });
 
@@ -331,7 +320,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies access to internal.corp domains", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testNet: "db.internal.corp" });
 
@@ -346,7 +335,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("denies access to arbitrary domains not in allow list", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testNet: "evil.com" });
 
@@ -385,7 +374,7 @@ export function runFirewallSuite(
       });
 
       test("denies all network access when no net permissions", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testNet: "google.com" });
 
@@ -400,7 +389,7 @@ export function runFirewallSuite(
       }, timeout);
 
       test("allows echo command (only allowed CLI)", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({ testCli: "echo hello" });
 
@@ -419,18 +408,15 @@ export function runAllFirewallSuites() {
   // Local executor - always available, reports but doesn't enforce
   runFirewallSuite("local-dangerously", {
     timeout: 30000,
-    skipIfUnavailable: false,
   });
 
   // Lima - requires Lima VM, enforces permissions
   runFirewallSuite("local-lima", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 
   // Cloudflare - requires wrangler + API token, enforces permissions
   runFirewallSuite("cloudflare", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 }

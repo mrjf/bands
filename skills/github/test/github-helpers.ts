@@ -80,24 +80,61 @@ export function requireGitHubEnv(): { token: string; repo: string } {
   return { token: GITHUB_TOKEN!, repo: GITHUB_REPO! };
 }
 
+// ── Retry helper for transient GitHub API failures ──────────────────
+
+const TRANSIENT_PATTERNS = [
+  /connection refused/i,
+  /ETIMEDOUT/i,
+  /ECONNRESET/i,
+  /socket hang up/i,
+  /502 Bad Gateway/i,
+  /503 Service Unavailable/i,
+];
+
+function isTransient(error: string | undefined): boolean {
+  if (!error) return false;
+  return TRANSIENT_PATTERNS.some((p) => p.test(error));
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 // ── Helper to exec a github skill script with proper JSON input ──────
 
-export async function gh(script: string, input: Record<string, unknown>) {
+export async function gh(
+  script: string,
+  input: Record<string, unknown>,
+  options: { retries?: number; retryDelayMs?: number } = {}
+) {
   requireGitHubEnv();
-  const tempDir = mkdtempSync(join(tmpdir(), "gh-test-"));
-  const inputPath = join(tempDir, "input.json");
-  writeFileSync(inputPath, JSON.stringify(input));
+  const { retries = 2, retryDelayMs = 3000 } = options;
 
-  try {
-    return await bandExec({
-      resourceDir: join(RESOURCES, script),
-      args: {},
-      inputPath,
-      skillRoot: SKILL_ROOT,
-    });
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const tempDir = mkdtempSync(join(tmpdir(), "gh-test-"));
+    const inputPath = join(tempDir, "input.json");
+    writeFileSync(inputPath, JSON.stringify(input));
+
+    try {
+      const result = await bandExec({
+        resourceDir: join(RESOURCES, script),
+        args: {},
+        inputPath,
+        skillRoot: SKILL_ROOT,
+      });
+
+      if (!result.success && isTransient(result.error) && attempt < retries) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+
+      return result;
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   }
+
+  throw new Error("unreachable");
 }
 
 // ── Ensure repo has at least one commit ──────────────────────────────
@@ -158,5 +195,17 @@ export async function createBranchWithFile(branchName: string): Promise<string> 
     throw new Error(`Failed to create file on branch ${branchName}: ${fileResult.error}`);
   }
 
-  return baseSha;
+  // Wait for GitHub to propagate the commit — the branch ref must differ from main
+  for (let i = 0; i < 10; i++) {
+    const check = await gh("api", {
+      endpoint: `repos/${owner}/${repo}/compare/main...${branchName}`,
+      method: "GET",
+    });
+    if (check.success) {
+      const commits = (check.data as any).total_commits ?? (check.data as any).ahead_by;
+      if (commits > 0) return baseSha;
+    }
+    await sleep(1500);
+  }
+  throw new Error(`Branch ${branchName} commit did not propagate within timeout`);
 }

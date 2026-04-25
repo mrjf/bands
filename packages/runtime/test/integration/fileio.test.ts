@@ -15,7 +15,6 @@ import { IntegrationTestHarness } from "./runner";
 import type { ExecutionTarget } from "@bands/format";
 import { join } from "path";
 import { writeFile, rm, mkdir } from "fs/promises";
-import { trackSkip } from "./skip-tracker";
 
 const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
 
@@ -24,19 +23,16 @@ const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
  */
 export function runFileIOSuite(
   target: ExecutionTarget,
-  options: { timeout?: number; skipIfUnavailable?: boolean } = {}
+  options: { timeout?: number } = {}
 ) {
-  const { timeout = 60000, skipIfUnavailable = true } = options;
+  const { timeout = 60000 } = options;
 
   describe(`${target} File I/O`, () => {
-    const skipIf = (condition: boolean, msg: string) => {
-      if (condition) {
-        console.log(`  ⏭  Skipping: ${msg}`);
-        trackSkip(target, "File I/O");
-        return true;
-      }
-      return false;
-    };
+    function requireTarget() {
+      if (!available) throw new Error(`${target} executor is not available`);
+    }
+
+    let available = false;
 
     describe("File Read Operations", () => {
       const harness = new IntegrationTestHarness({
@@ -46,14 +42,8 @@ export function runFileIOSuite(
         timeout,
       });
 
-      let available = false;
-
       beforeAll(async () => {
         available = await harness.checkAvailability();
-        if (!available && !skipIfUnavailable) {
-          throw new Error(`${target} executor is not available`);
-        }
-        // Skip tracking happens per-test via skipIf
         if (available) {
           await harness.init();
 
@@ -82,7 +72,7 @@ export function runFileIOSuite(
       });
 
       test("can read allowed file", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           readFiles: ["/tmp/test-read.txt"],
@@ -102,7 +92,7 @@ export function runFileIOSuite(
       }, timeout);
 
       test("denies reading .env files", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           readFiles: ["/home/user/.env"],
@@ -121,7 +111,7 @@ export function runFileIOSuite(
       }, timeout);
 
       test("denies reading from secrets directory", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           readFiles: ["/app/secrets/key.pem"],
@@ -174,7 +164,7 @@ export function runFileIOSuite(
       });
 
       test("can write to allowed path", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           writeFiles: [{ path: "/tmp/output/test.txt", content: "hello world" }],
@@ -192,7 +182,7 @@ export function runFileIOSuite(
       }, timeout);
 
       test("denies writing to /etc", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           writeFiles: [{ path: "/etc/malicious.conf", content: "bad stuff" }],
@@ -209,7 +199,7 @@ export function runFileIOSuite(
       }, timeout);
 
       test("denies writing to /usr", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           writeFiles: [{ path: "/usr/local/bin/backdoor", content: "#!/bin/sh\nrm -rf /" }],
@@ -250,7 +240,7 @@ export function runFileIOSuite(
       });
 
       test("can do multiple allowed operations", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           readFiles: ["/tmp/input.txt"],
@@ -264,7 +254,7 @@ export function runFileIOSuite(
       }, timeout);
 
       test("fails entire operation if any denied", async () => {
-        if (skipIf(!available, `${target} not available`)) return;
+        requireTarget();
 
         const result = await harness.execute({
           readFiles: ["/tmp/input.txt"], // allowed
@@ -293,18 +283,15 @@ export function runAllFileIOSuites() {
   // Local executor - always available
   runFileIOSuite("local-dangerously", {
     timeout: 30000,
-    skipIfUnavailable: false,
   });
 
   // Lima - has full filesystem
   runFileIOSuite("local-lima", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 
   // Cloudflare - has no filesystem, but tests permission checks
   runFileIOSuite("cloudflare", {
     timeout: 180000,
-    skipIfUnavailable: true,
   });
 }

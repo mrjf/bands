@@ -54,8 +54,11 @@ export async function limaExec(
   let input: unknown;
   try {
     input = JSON.parse(inputContent);
-  } catch {
-    input = {};
+  } catch (e) {
+    return {
+      success: false,
+      error: `Failed to parse input JSON from ${inputPath}: ${e instanceof Error ? e.message : e}`,
+    };
   }
 
   // Read config if present
@@ -63,7 +66,12 @@ export async function limaExec(
   if (configPath) {
     try {
       config = JSON.parse(readFileSync(configPath, "utf-8"));
-    } catch { /* skip */ }
+    } catch (e) {
+      return {
+        success: false,
+        error: `Failed to parse config JSON from ${configPath}: ${e instanceof Error ? e.message : e}`,
+      };
+    }
   }
 
   // Build the execution request
@@ -156,6 +164,9 @@ function runSkillSetup(
   }
 
   const skillName = basename(skillRoot);
+  if (/[^a-zA-Z0-9._-]/.test(skillName)) {
+    return { success: false, error: `Unsafe skill name for shell interpolation: ${skillName}` };
+  }
   const markerPath = `/tmp/.band-setup-done-${skillName}`;
 
   // Check if setup already ran

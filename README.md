@@ -188,15 +188,18 @@ The setup creates a `bands-executor` VM with:
 - File copy-in/copy-out with deny enforcement
 - User privilege separation
 - Insist enforcement (required operations)
-- Input/output size limits
 - Secrets isolation
 - Contract schema validation (inline + file path refs)
 - Band server v3.0 (HTTP, single-use mutex, per-execution teardown)
 
+### Parsed but not yet enforced
+
+- `maxInputBytes` / `maxOutputBytes` (limits are compiled but not checked at execution time)
+- `maxCostDollars` (for skills calling Claude API internally)
+
 ### Planned
 
-- `maxCostDollars` enforcement (for skills calling Claude API internally)
-- Cloudflare Workers executor (V8 isolates)
+- Cloudflare Workers executor (V8 isolates) — implementation exists, not production-tested
 - `deny.read`/`deny.write` at OS level (currently enforced at copy boundary)
 - seccomp profiles
 

@@ -254,7 +254,7 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   }
 
   // Discover band for this script
-  let executionTarget = "local-dangerously";
+  let executionTarget: string | undefined;
   let envSecrets: Record<string, string> = {};
   let bandConfig: Record<string, unknown> | undefined;
   let allowNet: string[] = [];
@@ -341,6 +341,10 @@ export async function bandExec(options: BandExecOptions): Promise<BandExecResult
   // Force Lima execution if requested — reject local-dangerously
   if (forceLima && executionTarget === "local-dangerously") {
     executionTarget = "local-lima";
+  }
+
+  if (!executionTarget) {
+    return { success: false, error: "No execution target specified. Set execution.target in BAND.md." };
   }
 
   // Create temp files for input/output

@@ -67,8 +67,9 @@ See also: `SECURITY.md` for the current threat model.
 - Cost tracking is for skills that make Claude API calls from inside the VM. No current skills do this.
 - **Blocked on:** Having a skill that calls Claude from inside the VM.
 
-## Not implemented
+## Not production-tested
 
 ### 13. Cloudflare executor
-- **Status: COMING SOON**
-- Not yet available for production use.
+- **Status: IMPLEMENTED, NOT PRODUCTION-TESTED**
+- `CloudflareExecutor` class exists and is registered. Requires wrangler + API token.
+- Needs real-world testing before production use.

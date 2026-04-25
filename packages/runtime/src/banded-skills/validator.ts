@@ -388,11 +388,10 @@ function validateCentralizedSchemas(
         });
       }
     }
-  } catch {
-    // Ajv not available — skip compilation checks
-    warnings.push({
+  } catch (e) {
+    errors.push({
       path: "schemas/",
-      message: "Ajv not available, skipping schema compilation checks",
+      message: `Ajv is required for schema validation but failed to load: ${e instanceof Error ? e.message : e}`,
     });
   }
 }

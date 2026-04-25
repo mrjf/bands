@@ -48,7 +48,10 @@ export async function executeBand(
     executorOptions?: ExecutorOptions;
   } = {}
 ): Promise<ExecutorResult> {
-  const target = options.target || band.execution?.target || "local-dangerously";
+  const target = options.target || band.execution?.target;
+  if (!target) {
+    throw new Error("No execution target specified. Set execution.target in the band or pass target in options.");
+  }
 
   // Validate input against contract schema (resolve string refs to JSON)
   const inputSchema = resolveContractSchema(band.contract?.input, options.workdir);
@@ -117,8 +120,8 @@ export async function isTargetAvailable(target: ExecutionTarget): Promise<boolea
  * - If it's already an object, return it directly.
  * - If it's a relative file path (e.g., "./schemas/input.json"), resolve
  *   against workdir and read the file.
- * - If it's a URL (http/https), return null (not yet supported).
- * - Otherwise return null.
+ * - If it's a URL (http/https), throw (not yet supported).
+ * - Throws if a declared schema file is missing or unparseable.
  */
 function resolveContractSchema(
   schema: string | Record<string, unknown> | undefined,
@@ -130,15 +133,19 @@ function resolveContractSchema(
   if (typeof schema === "object") return schema;
 
   // URL — not supported yet
-  if (schema.startsWith("http://") || schema.startsWith("https://")) return null;
+  if (schema.startsWith("http://") || schema.startsWith("https://")) {
+    throw new Error(`URL contract schemas are not yet supported: ${schema}`);
+  }
 
   // File path — resolve relative to workdir
   const filePath = workdir ? resolve(workdir, schema) : resolve(schema);
-  if (!existsSync(filePath)) return null;
+  if (!existsSync(filePath)) {
+    throw new Error(`Contract schema file not found: ${schema} (resolved to ${filePath})`);
+  }
 
   try {
     return JSON.parse(readFileSync(filePath, "utf-8"));
-  } catch {
-    return null;
+  } catch (e) {
+    throw new Error(`Failed to parse contract schema ${schema}: ${e instanceof Error ? e.message : e}`);
   }
 }

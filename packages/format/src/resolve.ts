@@ -22,7 +22,9 @@ export async function resolve(
       seen.add(ref);
 
       const parent = await loader(ref);
-      if (!parent) continue; // unresolvable ref
+      if (!parent) {
+        throw new Error(`Band "${band.band}" extends "${ref}" which could not be resolved`);
+      }
 
       // Recursively resolve the parent
       const resolvedParent = await resolve(parent, loader, seen);
@@ -39,7 +41,10 @@ export async function resolve(
       seen.add(ref);
 
       const inc = await loader(ref);
-      if (inc) included.push(inc);
+      if (!inc) {
+        throw new Error(`Band "${band.band}" includes "${ref}" which could not be resolved`);
+      }
+      included.push(inc);
     }
   }
 

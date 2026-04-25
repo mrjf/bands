@@ -34,7 +34,6 @@ export {
   generateWrapper,
   generateSparseSKILLMd,
   generatePerScriptBand,
-  exportBandToString,
 } from "./generator";
 
 // Converter

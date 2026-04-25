@@ -27,17 +27,17 @@ let executing = false;
 
 // Get band-runner uid/gid once at startup
 function getBandRunnerIds(): { uid: number; gid: number } {
-  try {
-    const uid = parseInt(
-      Bun.spawnSync(["id", "-u", BAND_RUNNER_USER]).stdout.toString().trim()
-    );
-    const gid = parseInt(
-      Bun.spawnSync(["id", "-g", BAND_RUNNER_USER]).stdout.toString().trim()
-    );
-    return { uid, gid };
-  } catch {
-    return { uid: 65534, gid: 65534 };
+  const uidResult = Bun.spawnSync(["id", "-u", BAND_RUNNER_USER]);
+  const gidResult = Bun.spawnSync(["id", "-g", BAND_RUNNER_USER]);
+  if (uidResult.exitCode !== 0 || gidResult.exitCode !== 0) {
+    throw new Error(`User "${BAND_RUNNER_USER}" not found. Run setup to create it.`);
   }
+  const uid = parseInt(uidResult.stdout.toString().trim());
+  const gid = parseInt(gidResult.stdout.toString().trim());
+  if (isNaN(uid) || isNaN(gid)) {
+    throw new Error(`Failed to parse uid/gid for "${BAND_RUNNER_USER}".`);
+  }
+  return { uid, gid };
 }
 
 const bandRunnerIds = getBandRunnerIds();
@@ -140,6 +140,14 @@ function randomId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+/** Reject values containing shell metacharacters. Used for any band-config value interpolated into shell commands. */
+function shellSafe(value: string, label: string): string {
+  if (/[;`$(){}|&<>!\\"\n\r]/.test(value)) {
+    throw new Error(`Unsafe characters in ${label}: ${value}`);
+  }
+  return value;
+}
+
 function writeFile(path: string, content: string): void {
   const b64 = Buffer.from(content).toString("base64");
   shell(`echo '${b64}' | base64 -d > ${path}`);
@@ -172,7 +180,7 @@ function setupFirewall(
 
   // Deny rules FIRST — they punch holes in allow (deny takes precedence)
   for (const host of denyNet) {
-    const resolveHost = host.startsWith("*.") ? host.slice(2) : host;
+    const resolveHost = shellSafe(host.startsWith("*.") ? host.slice(2) : host, "deny.net host");
     cmds.push(
       `for ip in $(getent ahosts "${resolveHost}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j REJECT; done`
     );
@@ -182,15 +190,16 @@ function setupFirewall(
   for (const host of allowNet) {
     if (host === "*") continue;
     if (host.startsWith("*.")) {
-      const base = host.slice(2);
+      const base = shellSafe(host.slice(2), "allow.net host");
       cmds.push(
         `for ip in $(getent ahosts "${base}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`,
         `for ip in $(getent ahosts "api.${base}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`,
         `for ip in $(getent ahosts "www.${base}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`
       );
     } else {
+      const safeHost = shellSafe(host, "allow.net host");
       cmds.push(
-        `for ip in $(getent ahosts "${host}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`
+        `for ip in $(getent ahosts "${safeHost}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`
       );
     }
   }
@@ -410,7 +419,8 @@ function checkInsist(
 
   for (const pattern of insist.write ?? []) {
     try {
-      const found = shell(`find / -path '${pattern}' -type f 2>/dev/null | head -1`).trim();
+      const safePattern = shellSafe(pattern, "insist.write pattern");
+      const found = shell(`find / -path '${safePattern}' -type f 2>/dev/null | head -1`).trim();
       if (!found) missing.push(`write: ${pattern}`);
     } catch {
       missing.push(`write: ${pattern}`);
@@ -426,7 +436,7 @@ function checkInsist(
 
   for (const pattern of insist.net ?? []) {
     try {
-      const host = pattern.replace(/^\*\./, "");
+      const host = shellSafe(pattern.replace(/^\*\./, ""), "insist.net host");
       const packets = shell(
         `iptables -L OUTPUT -n -v 2>/dev/null | grep -c '${host}' || echo 0`
       ).trim();
