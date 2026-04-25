@@ -1,6 +1,17 @@
 # Bands
 
-> **Pre-alpha. Experimental.** [0.1.0-berry](VERSIONING.md) — lobster life-stage versioning.
+> ## ⚠️ WARNING: PRE-ALPHA EXPERIMENTAL CONCEPT ⚠️
+>
+> **This is a pre-alpha experimental concept. It is not ready for production use.**
+>
+> - 🚧 APIs, formats, and behavior **will** change without notice.
+> - 🐛 Expect bugs, breakage, and incomplete features.
+> - 🔓 Security guarantees are **aspirational** — do not rely on them to contain genuinely hostile code.
+> - 💥 Running this on a machine you care about may have unintended consequences.
+>
+> Use at your own risk. You have been warned.
+
+> [0.1.0-berry](VERSIONING.md) — lobster life-stage versioning.
 
 **Sandboxed execution for AI agent skills.**
 
