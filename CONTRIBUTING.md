@@ -14,7 +14,7 @@ If you open a PR directly, we'll likely close it and convert it to an issue.
 
 - What you expected vs what happened
 - Steps to reproduce (for bugs)
-- Which execution target you're using (`local-dangerously`, `lima`)
+- Which execution target you're using (`lima`, `cloudflare`)
 - Your environment (OS, Bun version)
 
 ## Experimental packages

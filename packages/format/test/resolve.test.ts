@@ -19,12 +19,12 @@ describe("resolve", () => {
   test("resolves single-level extends", async () => {
     const parent = makeBand({
       band: "parent",
-      allow: { tools: ["tool-a", "tool-b"] },
+      allow: { read: ["path-a", "path-b"] },
     });
     const self = makeBand({
       band: "child",
       extends: ["parent"],
-      allow: { tools: ["tool-a"] },
+      allow: { read: ["path-a"] },
     });
     const loader: BandLoader = async (ref) => (ref === "parent" ? parent : null);
     const result = await resolve(self, loader);
@@ -49,12 +49,12 @@ describe("resolve", () => {
   test("resolves includes", async () => {
     const addon = makeBand({
       band: "addon",
-      allow: { tools: ["tool-x"] },
+      allow: { read: ["path-x"] },
     });
     const self = makeBand({
       band: "main",
       includes: ["addon"],
-      allow: { tools: ["tool-a"] },
+      allow: { read: ["path-a"] },
     });
     const loader: BandLoader = async (ref) => (ref === "addon" ? addon : null);
     const result = await resolve(self, loader);

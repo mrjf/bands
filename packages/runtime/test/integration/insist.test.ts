@@ -6,9 +6,7 @@
  * The `insist` field means "these operations MUST be performed during execution."
  * If an execution completes without performing all insist operations, it fails.
  *
- * Key behavior:
- * - local-dangerously: Reports insist satisfaction but doesn't fail (enforced: false)
- * - cloudflare, lima: FAIL if insist items not satisfied (enforced: true)
+ * All executors FAIL if insist items not satisfied (enforced: true).
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -76,17 +74,8 @@ export function runInsistSuite(
           runCli: ["ls /tmp"],
         });
 
-        if (target === "local-dangerously") {
-          // local-dangerously doesn't enforce insist
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.insist?.satisfied).toBe(false);
-          expect(data.insist?.enforced).toBe(false);
-        } else {
-          // Sandboxed executors enforce insist
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
       }, timeout);
 
       test("fails when no CLI commands executed but insist requires one", async () => {
@@ -97,14 +86,8 @@ export function runInsistSuite(
           readFiles: ["/tmp/nonexistent.txt"],
         });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.insist?.satisfied).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
       }, timeout);
     });
 
@@ -152,14 +135,8 @@ export function runInsistSuite(
           readFiles: ["/tmp/other.txt"],
         });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.insist?.satisfied).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
       }, timeout);
     });
 
@@ -207,14 +184,8 @@ export function runInsistSuite(
           writeFiles: [{ path: "/tmp/output/other.txt", content: "nope" }],
         });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.insist?.satisfied).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
       }, timeout);
     });
 
@@ -262,14 +233,8 @@ export function runInsistSuite(
           fetchUrls: ["https://api.github.com"],
         });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.insist?.satisfied).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("INSIST_NOT_SATISFIED");
       }, timeout);
     });
   });
@@ -279,11 +244,6 @@ export function runInsistSuite(
  * Run insist tests across all executors.
  */
 export function runAllInsistSuites() {
-  // Local executor - always available, reports but doesn't enforce
-  runInsistSuite("local-dangerously", {
-    timeout: 30000,
-  });
-
   // Lima - requires Lima VM, enforces insist
   runInsistSuite("local-lima", {
     timeout: 180000,

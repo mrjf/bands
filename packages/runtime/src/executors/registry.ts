@@ -78,8 +78,6 @@ function getHelpText(target: ExecutionTarget): string {
       return "Make sure Lima VM is running (limactl start bands-executor).";
     case "cloudflare":
       return "Make sure you have configured Cloudflare credentials.";
-    case "local-dangerously":
-      return "This executor should always be available.";
     default:
       return "";
   }

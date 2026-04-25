@@ -7,7 +7,6 @@ describes what is enforced, what is not, and the threat model.
 
 | Target | Isolation | Status |
 |--------|-----------|--------|
-| `local-dangerously` | None. Reports permissions but does not enforce. | Development only. |
 | `local-lima` | Lima VM with iptables + bubblewrap + user separation. | Implemented and tested. |
 | `cloudflare` | Coming soon. | Not yet available. |
 

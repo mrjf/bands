@@ -30,10 +30,10 @@ describe("exportBandMd", () => {
 
       icon: "🔧",
       allow: {
-        tools: ["https://github.com/acme/tools/tree/main/b", "https://github.com/acme/tools/tree/main/a"],
+        read: ["https://github.com/acme/tools/tree/main/b", "https://github.com/acme/tools/tree/main/a"],
       },
       deny: {
-        tools: ["https://github.com/acme/tools/tree/main/c"],
+        read: ["https://github.com/acme/tools/tree/main/c"],
       },
     };
     const output = exportBandMd(doc);
@@ -57,7 +57,7 @@ describe("exportBandMd", () => {
       band: "test",
       icon: "🎵",
       description: "desc",
-      allow: { tools: ["a"] },
+      allow: { read: ["a"] },
     };
     const output = exportBandMd(doc);
     const iconIdx = output.indexOf("icon:");

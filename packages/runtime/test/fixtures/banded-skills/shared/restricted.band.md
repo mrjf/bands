@@ -6,5 +6,5 @@ allow:
   cli:
     - "echo *"
 execution:
-  target: local-dangerously
+  target: local-lima
 ---

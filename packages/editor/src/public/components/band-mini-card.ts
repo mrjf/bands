@@ -19,7 +19,7 @@ class BandMiniCard extends HTMLElement {
 
     const capCount = this.countCapabilities(b);
     const target = b.execution?.target;
-    const targetLabel = target === "cloudflare" ? "CF" : target === "local-lima" ? "🖥️" : target === "local-dangerously" ? "⚠️" : "";
+    const targetLabel = target === "cloudflare" ? "CF" : target === "local-lima" ? "🖥️" : "";
 
     this.innerHTML = `
       <div class="mini-card">

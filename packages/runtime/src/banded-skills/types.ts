@@ -90,9 +90,6 @@ export interface BandExecOptions {
 
   /** Root of the banded skill (for band discovery) */
   skillRoot?: string;
-
-  /** If true, override local-dangerously → lima, fail if lima unavailable */
-  forceLima?: boolean;
 }
 
 /** Result of band exec */

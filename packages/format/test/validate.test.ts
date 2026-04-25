@@ -39,6 +39,17 @@ describe("validate", () => {
     expect(warnings.some((w) => w.path === "extends[0]")).toBe(true);
   });
 
+  test("warns on unknown permission category", () => {
+    const { warnings } = validate({
+      band: "test",
+      icon: "🎵",
+      allow: {
+        unknown_cat: ["some-value"],
+      },
+    });
+    expect(warnings.some((w) => w.path.includes("allow.unknown_cat"))).toBe(true);
+  });
+
   test("validates allow.cli items are strings", () => {
     const { errors } = validate({
       band: "test",
