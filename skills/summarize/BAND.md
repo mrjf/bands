@@ -5,10 +5,15 @@ description: Summarize documents using Claude Code CLI in non-interactive mode
 allow:
   cli:
     - "claude *"
+    - "curl *"
     - "jq *"
     - "cat *"
   net:
     - "api.anthropic.com"
+    - "*"
+insist:
+  cli:
+    - "claude *"
 env:
   secrets:
     - ANTHROPIC_API_KEY

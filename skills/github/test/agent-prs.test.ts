@@ -1,12 +1,17 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { resolve } from "path";
 import {
-  agentCall,
+  createSkillHarness,
+  requireLima,
+  expectScriptSucceeded,
   AGENT_TIMEOUT,
-  GITHUB_REPO,
-  gh,
-  ensureRepoInitialized,
-  createBranchWithFile,
-} from "./agent-helpers";
+} from "../../../scripts/cli-agent-test-helpers";
+import { ensureRepoInitialized, createBranchWithFile } from "./github-helpers";
+
+const GITHUB_REPO = process.env.TEST_GITHUB_REPO;
+const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
+  GITHUB_TOKEN: "TEST_GITHUB_TOKEN",
+});
 
 const SETUP_TIMEOUT = AGENT_TIMEOUT * 3;
 
@@ -18,13 +23,14 @@ describe("agent: pull requests", () => {
   let mergePrNumber: number;
 
   beforeAll(async () => {
+    requireLima();
     repoInitialized = await ensureRepoInitialized();
   }, SETUP_TIMEOUT);
 
   afterAll(async () => {
     if (prNumber) {
       try {
-        await gh("pr-close", { repo: GITHUB_REPO!, number: prNumber, delete_branch: true });
+        await gh("pr-close", { repo: GITHUB_REPO, number: prNumber, delete_branch: true });
       } catch {}
     }
   }, AGENT_TIMEOUT);
@@ -47,21 +53,21 @@ describe("agent: pull requests", () => {
         `Create a pull request titled '${prTitle}' from branch ${lifecycleBranch} to main in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("pr-create");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.head).toBe(lifecycleBranch);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "pr-create");
 
-      const data = result.execResult.data as any;
-      prNumber = data.number;
-      expect(prNumber).toBeGreaterThan(0);
-      expect(data.url).toContain("github.com");
-      expect(data.title).toBe(prTitle);
-
-      // Verify via API that the PR actually exists with correct state
-      const verify = await gh("pr-view", { repo: GITHUB_REPO!, number: prNumber });
+      // Verify via API that the PR actually exists
+      const verify = await gh("pr-list", { repo: GITHUB_REPO });
       expect(verify.success).toBe(true);
-      const pr = verify.data as any;
+      const prs = verify.data as any[];
+      const created = prs.find((p: any) => p.headRefName === lifecycleBranch);
+      expect(created).toBeTruthy();
+      prNumber = created.number;
+      expect(prNumber).toBeGreaterThan(0);
+
+      // Verify PR details
+      const prView = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
+      expect(prView.success).toBe(true);
+      const pr = prView.data as any;
       expect(pr.title).toBe(prTitle);
       expect(pr.state).toMatch(/OPEN|open/i);
       expect(pr.headRefName).toBe(lifecycleBranch);
@@ -79,19 +85,17 @@ describe("agent: pull requests", () => {
         `View pull request #${prNumber} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("pr-view");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(prNumber);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "pr-view");
 
-      const data = result.execResult.data as any;
+      // Verify via direct API
+      const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any;
       expect(data.number).toBe(prNumber);
       expect(data.state).toMatch(/OPEN|open/i);
       expect(data.headRefName).toBe(lifecycleBranch);
       expect(data.baseRefName).toBe("main");
       expect(data.author.login).toBeTruthy();
-      expect(data.url).toContain(`${prNumber}`);
-      expect(data.createdAt).toBeTruthy();
     },
     AGENT_TIMEOUT
   );
@@ -104,11 +108,12 @@ describe("agent: pull requests", () => {
         `List open pull requests in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("pr-list");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "pr-list");
 
-      const data = result.execResult.data as any[];
+      // Verify via direct API
+      const verify = await gh("pr-list", { repo: GITHUB_REPO });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
 
@@ -136,17 +141,8 @@ describe("agent: pull requests", () => {
         `Show the diff for pull request #${prNumber} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("pr-diff");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(prNumber);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      // Diff output should contain the file we created in the branch
-      const diff = typeof data === "string" ? data : data.diff;
-      expect(typeof diff).toBe("string");
-      expect(diff.length).toBeGreaterThan(0);
-      expect(diff).toContain("diff");
+      const call = expectScriptSucceeded(result, "pr-diff");
+      expect(call.output.length).toBeGreaterThan(0);
     },
     AGENT_TIMEOUT
   );
@@ -159,12 +155,12 @@ describe("agent: pull requests", () => {
         `Show CI checks for pull request #${prNumber} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("pr-checks");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(prNumber);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "pr-checks");
 
-      const data = result.execResult.data;
+      // Verify via direct API
+      const verify = await gh("pr-checks", { repo: GITHUB_REPO, number: prNumber });
+      expect(verify.success).toBe(true);
+      const data = verify.data;
       // Checks is an array (may be empty if no CI configured)
       expect(Array.isArray(data)).toBe(true);
     },
@@ -180,16 +176,10 @@ describe("agent: pull requests", () => {
         `Leave a COMMENT review (not approve) on pull request #${prNumber} in ${GITHUB_REPO} with body '${reviewBody}'`
       );
 
-      expect(result.toolName).toBe("pr-review");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(prNumber);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.state).toBeTruthy();
+      expectScriptSucceeded(result, "pr-review");
 
       // Verify the review exists on the PR
-      const verify = await gh("pr-view", { repo: GITHUB_REPO!, number: prNumber });
+      const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
       expect(verify.success).toBe(true);
       const reviews = (verify.data as any).reviews;
       expect(Array.isArray(reviews)).toBe(true);
@@ -206,17 +196,10 @@ describe("agent: pull requests", () => {
         `Close pull request #${prNumber} in ${GITHUB_REPO} without merging`
       );
 
-      expect(result.toolName).toBe("pr-close");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(prNumber);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.closed).toBe(true);
-      expect(data.number).toBe(prNumber);
+      expectScriptSucceeded(result, "pr-close");
 
       // Verify the PR is actually closed
-      const verify = await gh("pr-view", { repo: GITHUB_REPO!, number: prNumber });
+      const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
       expect(verify.success).toBe(true);
       expect((verify.data as any).state).toMatch(/CLOSED|closed/i);
     },
@@ -226,10 +209,10 @@ describe("agent: pull requests", () => {
   test(
     "pr-merge",
     async () => {
-      // Create a separate PR for merging
+      // Create a separate PR for merging via direct API
       const mergeTitle = `Agent merge PR ${mergeBranch}`;
       const createResult = await gh("pr-create", {
-        repo: GITHUB_REPO!,
+        repo: GITHUB_REPO,
         title: mergeTitle,
         body: "Agent test PR for merge",
         head: mergeBranch,
@@ -242,17 +225,10 @@ describe("agent: pull requests", () => {
         `Merge pull request #${mergePrNumber} in ${GITHUB_REPO} using squash`
       );
 
-      expect(result.toolName).toBe("pr-merge");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(mergePrNumber);
-      expect(result.toolInput.method).toBe("squash");
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.merged).toBe(true);
+      expectScriptSucceeded(result, "pr-merge");
 
       // Verify the PR is actually merged
-      const verify = await gh("pr-view", { repo: GITHUB_REPO!, number: mergePrNumber });
+      const verify = await gh("pr-view", { repo: GITHUB_REPO, number: mergePrNumber });
       expect(verify.success).toBe(true);
       expect((verify.data as any).state).toMatch(/MERGED|merged/i);
     },

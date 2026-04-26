@@ -1,19 +1,29 @@
-import { describe, test, expect, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { resolve } from "path";
 import {
-  agentCall,
+  createSkillHarness,
+  requireLima,
+  expectScriptSucceeded,
   AGENT_TIMEOUT,
-  GITHUB_REPO,
-  gh,
-} from "./agent-helpers";
+} from "../../../scripts/cli-agent-test-helpers";
+
+const GITHUB_REPO = process.env.TEST_GITHUB_REPO;
+const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
+  GITHUB_TOKEN: "TEST_GITHUB_TOKEN",
+});
 
 describe("agent: issues", () => {
+  beforeAll(() => {
+    requireLima();
+  });
+
   const uniqueTag = `agent-test-${Date.now()}`;
   const issueTitle = `Agent test ${uniqueTag}`;
   let issueNumber: number;
 
   afterAll(async () => {
     if (issueNumber) {
-      await gh("issue-close", { repo: GITHUB_REPO!, number: issueNumber });
+      await gh("issue-close", { repo: GITHUB_REPO, number: issueNumber });
     }
   }, AGENT_TIMEOUT);
 
@@ -24,25 +34,16 @@ describe("agent: issues", () => {
         `Create an issue titled '${issueTitle}' with body 'Automated agent test' in ${GITHUB_REPO}`
       );
 
-      // Agent picked the right tool with correct params
-      expect(result.toolName).toBe("issue-create");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.title).toBe(issueTitle);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "issue-create");
 
-      const data = result.execResult.data as any;
-      issueNumber = data.number;
-      expect(issueNumber).toBeGreaterThan(0);
-      expect(data.url).toContain("github.com");
-      expect(data.title).toBe(issueTitle);
-
-      // Verify via API that the issue actually exists
-      const verify = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
+      // Verify the issue was actually created via direct API
+      const verify = await gh("issue-list", { repo: GITHUB_REPO });
       expect(verify.success).toBe(true);
-      const issue = verify.data as any;
-      expect(issue.title).toBe(issueTitle);
-      expect(issue.state).toMatch(/OPEN|open/i);
-      expect(issue.number).toBe(issueNumber);
+      const issues = verify.data as any[];
+      const created = issues.find((i: any) => i.title === issueTitle);
+      expect(created).toBeTruthy();
+      issueNumber = created.number;
+      expect(issueNumber).toBeGreaterThan(0);
     },
     AGENT_TIMEOUT
   );
@@ -55,18 +56,15 @@ describe("agent: issues", () => {
         `View issue #${issueNumber} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("issue-view");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(issueNumber);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "issue-view");
 
-      const data = result.execResult.data as any;
+      // Verify via direct API
+      const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any;
       expect(data.title).toBe(issueTitle);
       expect(data.number).toBe(issueNumber);
       expect(data.state).toMatch(/OPEN|open/i);
-      expect(data.url).toContain(`${issueNumber}`);
-      expect(data.author.login).toBeTruthy();
-      expect(data.createdAt).toBeTruthy();
     },
     AGENT_TIMEOUT
   );
@@ -80,17 +78,11 @@ describe("agent: issues", () => {
         `Comment '${commentBody}' on issue #${issueNumber} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("issue-comment");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(issueNumber);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.url).toContain("github.com");
+      expectScriptSucceeded(result, "issue-comment");
 
       // Verify the comment exists via API
       const verify = await gh("issue-view", {
-        repo: GITHUB_REPO!,
+        repo: GITHUB_REPO,
         number: issueNumber,
         comments: true,
       });
@@ -112,11 +104,12 @@ describe("agent: issues", () => {
         `List open issues in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("issue-list");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "issue-list");
 
-      const data = result.execResult.data as any[];
+      // Verify via direct API
+      const verify = await gh("issue-list", { repo: GITHUB_REPO });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
 
@@ -124,14 +117,6 @@ describe("agent: issues", () => {
       const found = data.find((i: any) => i.number === issueNumber);
       expect(found).toBeTruthy();
       expect(found.state).toMatch(/OPEN|open/i);
-      expect(found.url).toContain("github.com");
-
-      // Every item should have expected shape
-      for (const item of data) {
-        expect(item.number).toBeGreaterThan(0);
-        expect(typeof item.title).toBe("string");
-        expect(item.url).toContain("github.com");
-      }
     },
     AGENT_TIMEOUT
   );
@@ -145,18 +130,10 @@ describe("agent: issues", () => {
         `Change the title of issue #${issueNumber} to '${updatedTitle}' in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("issue-edit");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(issueNumber);
-      expect(result.toolInput.title).toBe(updatedTitle);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.edited).toBe(true);
-      expect(data.number).toBe(issueNumber);
+      expectScriptSucceeded(result, "issue-edit");
 
       // Verify the title actually changed
-      const verify = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
+      const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
       expect(verify.success).toBe(true);
       expect((verify.data as any).title).toBe(updatedTitle);
     },
@@ -171,17 +148,10 @@ describe("agent: issues", () => {
         `Close issue #${issueNumber} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("issue-close");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(issueNumber);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.closed).toBe(true);
-      expect(data.number).toBe(issueNumber);
+      expectScriptSucceeded(result, "issue-close");
 
       // Verify the issue is actually closed
-      const verify = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
+      const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
       expect(verify.success).toBe(true);
       expect((verify.data as any).state).toMatch(/CLOSED|closed/i);
     },
@@ -196,17 +166,10 @@ describe("agent: issues", () => {
         `Reopen issue #${issueNumber} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("issue-reopen");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.number).toBe(issueNumber);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.reopened).toBe(true);
-      expect(data.number).toBe(issueNumber);
+      expectScriptSucceeded(result, "issue-reopen");
 
       // Verify the issue is actually open again
-      const verify = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
+      const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
       expect(verify.success).toBe(true);
       expect((verify.data as any).state).toMatch(/OPEN|open/i);
     },

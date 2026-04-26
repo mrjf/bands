@@ -1,18 +1,28 @@
-import { describe, test, expect, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { resolve } from "path";
 import {
-  agentCall,
+  createSkillHarness,
+  requireLima,
+  expectScriptSucceeded,
   AGENT_TIMEOUT,
-  GITHUB_REPO,
-  gh,
-} from "./agent-helpers";
+} from "../../../scripts/cli-agent-test-helpers";
+
+const GITHUB_REPO = process.env.TEST_GITHUB_REPO;
+const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
+  GITHUB_TOKEN: "TEST_GITHUB_TOKEN",
+});
 
 describe("agent: releases", () => {
+  beforeAll(() => {
+    requireLima();
+  });
+
   const tag = `v0.0.0-agent-${Date.now()}`;
   const releaseTitle = "Agent Test Release";
 
   afterAll(async () => {
     try {
-      await gh("release-delete", { repo: GITHUB_REPO!, tag, cleanup_tag: true });
+      await gh("release-delete", { repo: GITHUB_REPO, tag, cleanup_tag: true });
     } catch {}
   }, AGENT_TIMEOUT);
 
@@ -23,17 +33,10 @@ describe("agent: releases", () => {
         `Create a release with tag ${tag} titled '${releaseTitle}' in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("release-create");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.tag).toBe(tag);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.tag).toBe(tag);
-      expect(data.url).toContain("github.com");
+      expectScriptSucceeded(result, "release-create");
 
       // Verify the release actually exists
-      const verify = await gh("release-view", { repo: GITHUB_REPO!, tag });
+      const verify = await gh("release-view", { repo: GITHUB_REPO, tag });
       expect(verify.success).toBe(true);
       const release = verify.data as any;
       expect(release.tagName).toBe(tag);
@@ -50,11 +53,12 @@ describe("agent: releases", () => {
         `List releases in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("release-list");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "release-list");
 
-      const data = result.execResult.data as any[];
+      // Verify via direct API
+      const verify = await gh("release-list", { repo: GITHUB_REPO });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
 
@@ -80,12 +84,12 @@ describe("agent: releases", () => {
         `View the release tagged ${tag} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("release-view");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.tag).toBe(tag);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "release-view");
 
-      const data = result.execResult.data as any;
+      // Verify via direct API
+      const verify = await gh("release-view", { repo: GITHUB_REPO, tag });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any;
       expect(data.tagName).toBe(tag);
       expect(data.name).toBe(releaseTitle);
       expect(data.isDraft).toBe(false);
@@ -104,17 +108,10 @@ describe("agent: releases", () => {
         `Delete the release tagged ${tag} from ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("release-delete");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.tag).toBe(tag);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.deleted).toBe(true);
-      expect(data.tag).toBe(tag);
+      expectScriptSucceeded(result, "release-delete");
 
       // Verify the release is actually gone
-      const verify = await gh("release-view", { repo: GITHUB_REPO!, tag });
+      const verify = await gh("release-view", { repo: GITHUB_REPO, tag });
       expect(verify.success).toBe(false);
     },
     AGENT_TIMEOUT

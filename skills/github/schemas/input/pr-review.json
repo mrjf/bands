@@ -12,7 +12,10 @@
       "enum": [
         "APPROVE",
         "REQUEST_CHANGES",
-        "COMMENT"
+        "COMMENT",
+        "approve",
+        "request_changes",
+        "comment"
       ],
       "description": "Review action",
       "default": "COMMENT"

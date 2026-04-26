@@ -11,6 +11,7 @@
         "issues",
         "prs",
         "repos",
+        "repositories",
         "code"
       ],
       "description": "Type of search",

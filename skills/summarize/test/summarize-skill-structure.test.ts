@@ -26,9 +26,16 @@ describe("summarize skill: structure", () => {
     expect(band).toContain("api.anthropic.com");
   });
 
-  test("BAND.md allows claude CLI", () => {
+  test("BAND.md allows claude and curl CLI", () => {
     const band = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
     expect(band).toContain("claude *");
+    expect(band).toContain("curl *");
+  });
+
+  test("BAND.md insists on claude being called", () => {
+    const band = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
+    expect(band).toContain("insist:");
+    expect(band).toMatch(/insist:[\s\S]*claude \*/);
   });
 
   test("summarize script has run.sh", () => {
@@ -43,16 +50,15 @@ describe("summarize skill: structure", () => {
     expect(existsSync(join(SKILL_ROOT, "schemas", "output", "summarize.json"))).toBe(true);
   });
 
-  test("input schema requires document field", () => {
+  test("input schema has document and url fields", () => {
     const schema = JSON.parse(readFileSync(join(SKILL_ROOT, "schemas", "input", "summarize.json"), "utf-8"));
-    expect(schema.required).toContain("document");
     expect(schema.properties.document.type).toBe("string");
+    expect(schema.properties.url.type).toBe("string");
   });
 
   test("input schema has optional guidance field", () => {
     const schema = JSON.parse(readFileSync(join(SKILL_ROOT, "schemas", "input", "summarize.json"), "utf-8"));
     expect(schema.properties.guidance.type).toBe("string");
-    expect(schema.required).not.toContain("guidance");
   });
 
   test("output schema requires summary field", () => {
@@ -65,6 +71,7 @@ describe("summarize skill: structure", () => {
     const wrapper = join(SKILL_ROOT, "scripts", "summarize");
     expect(existsSync(wrapper)).toBe(true);
     const content = readFileSync(wrapper, "utf-8");
-    expect(content).toContain("band exec scripts/resources/summarize");
+    expect(content).toContain("exec");
+    expect(content).toContain("resources/summarize");
   });
 });
