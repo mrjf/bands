@@ -11,6 +11,7 @@ import { describe, test, expect, beforeAll } from "bun:test";
 import { resolve } from "path";
 import {
   createSkillHarness,
+  requireClaude,
   requireLima,
   expectScriptSucceeded,
   AGENT_TIMEOUT,
@@ -22,6 +23,7 @@ const { agentCall, exec: el } = createSkillHarness(resolve(__dirname, ".."), {
 
 describe("agent: elevenlabs voices", () => {
   beforeAll(() => {
+    requireClaude();
     requireLima();
   });
 

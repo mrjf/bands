@@ -40,6 +40,20 @@ for (const p of ENV_PATHS) {
 export const AGENT_TIMEOUT = 120_000;
 
 /**
+ * Check that Claude Code CLI is installed and available.
+ * Throws if not — agent tests cannot run without it.
+ */
+export function requireClaude() {
+  try {
+    execSync("claude --version", { stdio: "pipe" });
+  } catch {
+    throw new Error(
+      "Claude Code CLI not found in PATH. Install it with: npm install -g @anthropic-ai/claude-code"
+    );
+  }
+}
+
+/**
  * Check that Lima VM is running and the band server is reachable.
  * Throws if not — tests must not pass without real execution.
  */

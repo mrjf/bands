@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { resolve } from "path";
 import {
   createSkillHarness,
+  requireClaude,
   requireLima,
   expectScriptSucceeded,
   AGENT_TIMEOUT,
@@ -23,6 +24,7 @@ describe("agent: pull requests", () => {
   let mergePrNumber: number;
 
   beforeAll(async () => {
+    requireClaude();
     requireLima();
     repoInitialized = await ensureRepoInitialized();
   }, SETUP_TIMEOUT);

@@ -11,6 +11,7 @@ import { describe, test, expect, beforeAll } from "bun:test";
 import { resolve } from "path";
 import {
   createSkillHarness,
+  requireClaude,
   requireLima,
   expectScriptSucceeded,
 } from "../../../scripts/cli-agent-test-helpers";
@@ -23,6 +24,7 @@ const SUMMARIZE_TIMEOUT = 300_000;
 
 describe("agent: summarize (end-to-end via CLI)", () => {
   beforeAll(() => {
+    requireClaude();
     requireLima();
   });
 

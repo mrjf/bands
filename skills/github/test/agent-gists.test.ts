@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { resolve } from "path";
 import {
   createSkillHarness,
+  requireClaude,
   requireLima,
   expectScriptSucceeded,
   AGENT_TIMEOUT,
@@ -13,6 +14,7 @@ const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
 
 describe("agent: gists", () => {
   beforeAll(() => {
+    requireClaude();
     requireLima();
   });
 
