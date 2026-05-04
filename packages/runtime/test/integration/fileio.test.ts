@@ -53,9 +53,6 @@ export function runFileIOSuite(
             const { execSync } = await import("child_process");
             execSync('limactl shell bands-executor -- bash -c "echo test-content > /tmp/test-read.txt"');
             execSync('limactl shell bands-executor -- bash -c "echo secret > /tmp/.env.secret"');
-          } else if (target === "local-dangerously") {
-            await writeFile("/tmp/test-read.txt", "test-content");
-            await writeFile("/tmp/.env.secret", "secret");
           }
         }
       }, timeout);
@@ -98,16 +95,8 @@ export function runFileIOSuite(
           readFiles: ["/home/user/.env"],
         });
 
-        if (target === "local-dangerously") {
-          // Reports denied but doesn't block
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.operations?.read?.[0]?.allowed).toBe(false);
-        } else {
-          // Sandboxed executors block
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies reading from secrets directory", async () => {
@@ -117,14 +106,8 @@ export function runFileIOSuite(
           readFiles: ["/app/secrets/key.pem"],
         });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.operations?.read?.[0]?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
     });
 
@@ -147,8 +130,6 @@ export function runFileIOSuite(
           if (target === "local-lima") {
             const { execSync } = await import("child_process");
             execSync('limactl shell bands-executor -- bash -c "mkdir -p /tmp/output"');
-          } else if (target === "local-dangerously") {
-            await mkdir("/tmp/output", { recursive: true });
           }
         }
       }, timeout);
@@ -188,14 +169,8 @@ export function runFileIOSuite(
           writeFiles: [{ path: "/etc/malicious.conf", content: "bad stuff" }],
         });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.operations?.write?.[0]?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
 
       test("denies writing to /usr", async () => {
@@ -205,14 +180,8 @@ export function runFileIOSuite(
           writeFiles: [{ path: "/usr/local/bin/backdoor", content: "#!/bin/sh\nrm -rf /" }],
         });
 
-        if (target === "local-dangerously") {
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.operations?.write?.[0]?.allowed).toBe(false);
-        } else {
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
     });
 
@@ -261,16 +230,8 @@ export function runFileIOSuite(
           writeFiles: [{ path: "/etc/passwd", content: "hacked" }], // denied
         });
 
-        if (target === "local-dangerously") {
-          // local-dangerously doesn't block
-          expect(result.success).toBe(true);
-          const data = result.data as any;
-          expect(data.operations?.write?.[0]?.allowed).toBe(false);
-        } else {
-          // Sandboxed executors should fail the whole operation
-          expect(result.success).toBe(false);
-          expect(result.error?.code).toBe("PERMISSION_DENIED");
-        }
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("PERMISSION_DENIED");
       }, timeout);
     });
   });
@@ -280,11 +241,6 @@ export function runFileIOSuite(
  * Run file I/O tests across all executors.
  */
 export function runAllFileIOSuites() {
-  // Local executor - always available
-  runFileIOSuite("local-dangerously", {
-    timeout: 30000,
-  });
-
   // Lima - has full filesystem
   runFileIOSuite("local-lima", {
     timeout: 180000,

@@ -77,13 +77,6 @@ export function computeEffective(
 function getField(doc: BandDocument, category: PermCategory, column: "allow" | "deny" | "insist"): string[] {
   const permCol = doc[column];
   if (!permCol) return [];
-
-  if (category === "skills") {
-    const arr = permCol.skills;
-    if (!arr) return [];
-    return arr.map((item) => (typeof item === "string" ? item : item.ref));
-  }
-
   const arr = permCol[category];
   return (arr as string[] | undefined) ?? [];
 }

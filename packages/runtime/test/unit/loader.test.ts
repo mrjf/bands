@@ -251,7 +251,7 @@ describe("compileBand", () => {
         extends: ["base-band"],
         includes: ["helper-band"],
         env: { secrets: ["API_KEY"], variables: ["DEBUG=true"] },
-        execution: { target: "local-dangerously" },
+        execution: { target: "local-lima" },
       });
 
       const result = compileBand(band);
@@ -259,7 +259,7 @@ describe("compileBand", () => {
       expect(result.band.extends).toEqual(["base-band"]);
       expect(result.band.includes).toEqual(["helper-band"]);
       expect(result.band.env?.secrets).toEqual(["API_KEY"]);
-      expect(result.band.execution?.target).toBe("local-dangerously");
+      expect(result.band.execution?.target).toBe("local-lima");
     });
   });
 

@@ -110,7 +110,7 @@ export async function convertToBandedSkill(
       icon: "\u{1F527}",
       description: skill.frontmatter.description,
       execution: {
-        target: "local-dangerously",
+        target: "local-lima",
       },
       allow: {
         cli: ["*"],

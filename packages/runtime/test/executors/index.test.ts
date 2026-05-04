@@ -9,34 +9,27 @@ import {
   executeBand,
   listAvailableTargets,
   isTargetAvailable,
-  LocalDangerousExecutor,
   CloudflareExecutor,
   LimaExecutor,
 } from "../../src/executors";
 import type { BandDocument, ExecutionTarget } from "@bands/format";
 
-// Test band for execution tests
-const createTestBand = (target: ExecutionTarget = "local-dangerously"): BandDocument => ({
+const createTestBand = (target?: ExecutionTarget): BandDocument => ({
   band: "test-band",
   icon: "🧪",
   description: "Test band for executor tests",
-  execution: { target },
+  execution: target ? { target } : undefined,
 });
 
 describe("Executor Registry", () => {
   test("should have all executors registered", () => {
-    expect(executorRegistry.get("local-dangerously")).toBeDefined();
     expect(executorRegistry.get("local-lima")).toBeDefined();
     expect(executorRegistry.get("cloudflare")).toBeDefined();
   });
 
   test("should create executor instances", () => {
-    const localDangerous = executorRegistry.create("local-dangerously");
-    expect(localDangerous).toBeInstanceOf(LocalDangerousExecutor);
-
     const lima = executorRegistry.create("local-lima");
     expect(lima).toBeInstanceOf(LimaExecutor);
-
     const cloudflare = executorRegistry.create("cloudflare");
     expect(cloudflare).toBeInstanceOf(CloudflareExecutor);
   });
@@ -47,77 +40,17 @@ describe("Executor Registry", () => {
   });
 
   test("should cache executor instances", () => {
-    const first = executorRegistry.create("local-dangerously");
-    const second = executorRegistry.create("local-dangerously");
+    const first = executorRegistry.create("local-lima");
+    const second = executorRegistry.create("local-lima");
     expect(first).toBe(second);
   });
 
   test("clearCache should allow new instance creation", () => {
-    const first = executorRegistry.create("local-dangerously");
+    const first = executorRegistry.create("local-lima");
     executorRegistry.clearCache();
-    const second = executorRegistry.create("local-dangerously");
+    const second = executorRegistry.create("local-lima");
     expect(first).not.toBe(second);
   });
-});
-
-describe("LocalDangerousExecutor", () => {
-  test("should always be available", async () => {
-    const executor = new LocalDangerousExecutor();
-    expect(await executor.isAvailable()).toBe(true);
-  });
-
-  test("should have correct name and target", () => {
-    const executor = new LocalDangerousExecutor();
-    expect(executor.name).toBe("local-dangerous");
-    expect(executor.target).toBe("local-dangerously");
-  });
-
-  test("should execute a simple band", async () => {
-    const executor = new LocalDangerousExecutor();
-    const band = createTestBand();
-
-    const result = await executor.execute({
-      band,
-      payload: { test: "data" },
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.target).toBe("local-dangerously");
-    expect(result.metrics).toBeDefined();
-    expect(result.metrics.durationMs).toBeGreaterThanOrEqual(0);
-  });
-
-  test("should return input with band info", async () => {
-    const executor = new LocalDangerousExecutor();
-    const band = createTestBand();
-
-    const result = await executor.execute({
-      band,
-      payload: { message: "hello" },
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.data).toHaveProperty("success", true);
-    expect(result.data).toHaveProperty("band", "test-band");
-    expect(result.data).toHaveProperty("input");
-    expect((result.data as { input: unknown }).input).toEqual({ message: "hello" });
-  });
-
-  test("should track execution metrics", async () => {
-    const executor = new LocalDangerousExecutor();
-    const band = createTestBand();
-
-    const result = await executor.execute({
-      band,
-      payload: { data: "test" },
-    });
-
-    expect(result.metrics.startupMs).toBeGreaterThanOrEqual(0);
-    expect(result.metrics.durationMs).toBeGreaterThanOrEqual(0);
-    expect(result.metrics.inputBytes).toBeGreaterThan(0);
-    expect(result.metrics.outputBytes).toBeGreaterThan(0);
-  });
-
 });
 
 describe("LimaExecutor", () => {
@@ -130,7 +63,6 @@ describe("LimaExecutor", () => {
   test("isAvailable should check for Lima VM", async () => {
     const executor = new LimaExecutor();
     const available = await executor.isAvailable();
-    // Result depends on whether Lima VM is running
     expect(typeof available).toBe("boolean");
   });
 });
@@ -145,17 +77,11 @@ describe("CloudflareExecutor", () => {
   test("isAvailable should check for wrangler and credentials", async () => {
     const executor = new CloudflareExecutor();
     const available = await executor.isAvailable();
-    // Result depends on whether wrangler and credentials are configured
     expect(typeof available).toBe("boolean");
   });
 });
 
 describe("getExecutor", () => {
-  test("should return executor for local-dangerously", async () => {
-    const executor = await getExecutor("local-dangerously");
-    expect(executor).toBeInstanceOf(LocalDangerousExecutor);
-  });
-
   test("should throw for unregistered target", async () => {
     await expect(getExecutor("unknown" as ExecutionTarget)).rejects.toThrow(
       /No executor registered/
@@ -164,25 +90,15 @@ describe("getExecutor", () => {
 });
 
 describe("listAvailableTargets", () => {
-  test("should always include local-dangerously", async () => {
-    const targets = await listAvailableTargets();
-    expect(targets).toContain("local-dangerously");
-  });
-
   test("should return an array of ExecutionTarget values", async () => {
     const targets = await listAvailableTargets();
     expect(Array.isArray(targets)).toBe(true);
-    expect(targets.length).toBeGreaterThanOrEqual(1);
   });
 });
 
 describe("isTargetAvailable", () => {
-  test("should return true for local-dangerously", async () => {
-    expect(await isTargetAvailable("local-dangerously")).toBe(true);
-  });
-
   test("should return boolean for all targets", async () => {
-    const targets: ExecutionTarget[] = ["local-dangerously", "local-lima", "cloudflare"];
+    const targets: ExecutionTarget[] = ["local-lima", "cloudflare"];
     for (const target of targets) {
       const available = await isTargetAvailable(target);
       expect(typeof available).toBe("boolean");
@@ -191,47 +107,25 @@ describe("isTargetAvailable", () => {
 });
 
 describe("executeBand", () => {
-  test("should use band's configured target", async () => {
-    const band = createTestBand("local-dangerously");
-    const result = await executeBand(band, { test: true });
-
-    expect(result.success).toBe(true);
-    expect(result.target).toBe("local-dangerously");
-  });
-
-  test("should allow target override", async () => {
-    const band = createTestBand("cloudflare"); // Band says cloudflare
-    // But we override to local-dangerously
-    const result = await executeBand(band, { test: true }, { target: "local-dangerously" });
-
-    expect(result.success).toBe(true);
-    expect(result.target).toBe("local-dangerously");
-  });
-
   test("should throw when no target specified", async () => {
     const band: BandDocument = {
       band: "no-target-band",
       icon: "🎯",
       description: "Test band",
     };
-
-    expect(() => executeBand(band, {})).toThrow("No execution target specified");
+    await expect(executeBand(band, {})).rejects.toThrow(
+      /No execution target specified/
+    );
   });
 
-  test("should pass payload correctly", async () => {
-    const band = createTestBand();
-    const payload = { key: "value", number: 42, nested: { a: 1 } };
-
-    const result = await executeBand(band, payload);
-
-    expect(result.success).toBe(true);
-    expect((result.data as { input: unknown }).input).toEqual(payload);
-  });
-
-  test("should include metrics in result", async () => {
-    const band = createTestBand();
+  test("should include metrics in result when target available", async () => {
+    const band = createTestBand("local-lima");
+    const available = await isTargetAvailable("local-lima");
+    if (!available) {
+      await expect(executeBand(band, {})).rejects.toThrow(/not available/);
+      return;
+    }
     const result = await executeBand(band, {});
-
     expect(result.metrics).toBeDefined();
     expect(typeof result.metrics.startupMs).toBe("number");
     expect(typeof result.metrics.durationMs).toBe("number");
@@ -246,7 +140,7 @@ describe("executeBand contract enforcement", () => {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
-      execution: { target: "local-dangerously" },
+      execution: { target: "local-lima" },
       contract: {
         input: {
           type: "object",
@@ -255,103 +149,30 @@ describe("executeBand contract enforcement", () => {
         },
       },
     };
-
     const result = await executeBand(band, { wrong: 123 });
-
     expect(result.success).toBe(false);
     expect(result.error?.code).toBe("CONTRACT_INPUT_INVALID");
     expect(result.error?.message).toContain("contract.input validation failed");
   });
 
-  test("rejects output that violates contract.output", async () => {
-    const band: BandDocument = {
+  test("throws on unresolvable string schema refs (missing file, URL)", async () => {
+    const bandMissingFile: BandDocument = {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
-      execution: { target: "local-dangerously" },
-      contract: {
-        output: {
-          type: "object",
-          properties: { result: { type: "number" } },
-          required: ["result"],
-        },
-      },
+      execution: { target: "local-lima" },
+      contract: { input: "./nonexistent/schema.json" },
     };
+    await expect(executeBand(bandMissingFile, { anything: true })).rejects.toThrow(/not found/);
 
-    // LocalDangerousExecutor returns { success: true, band: ..., input: ... }
-    // which won't match the output schema requiring { result: number }
-    const result = await executeBand(band, { data: "hello" });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.code).toBe("CONTRACT_OUTPUT_INVALID");
-    expect(result.error?.message).toContain("contract.output validation failed");
-  });
-
-  test("throws on missing contract schema file", async () => {
-    const band: BandDocument = {
+    const bandUrl: BandDocument = {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
-      execution: { target: "local-dangerously" },
-      contract: {
-        input: "./nonexistent/schema.json",
-      },
+      execution: { target: "local-lima" },
+      contract: { input: "https://example.com/output.json" },
     };
-
-    expect(executeBand(band, { anything: true })).rejects.toThrow("Contract schema file not found");
-  });
-
-  test("throws on URL contract schema (not yet supported)", async () => {
-    const band: BandDocument = {
-      band: "contract-test",
-      icon: "📋",
-      description: "Test band",
-      execution: { target: "local-dangerously" },
-      contract: {
-        output: "https://example.com/output.json",
-      },
-    };
-
-    expect(executeBand(band, { anything: true })).rejects.toThrow("URL contract schemas are not yet supported");
-  });
-
-  test("resolves file path string ref for contract.input", async () => {
-    const { mkdtempSync, writeFileSync } = await import("fs");
-    const { tmpdir } = await import("os");
-    const { join } = await import("path");
-
-    const tmpDir = mkdtempSync(join(tmpdir(), "contract-ref-test-"));
-    const schemaPath = join(tmpDir, "input-schema.json");
-    writeFileSync(
-      schemaPath,
-      JSON.stringify({
-        type: "object",
-        properties: { name: { type: "string" } },
-        required: ["name"],
-      })
-    );
-
-    const band: BandDocument = {
-      band: "contract-test",
-      icon: "📋",
-      description: "Test band",
-      execution: { target: "local-dangerously" },
-      contract: {
-        input: "./input-schema.json",
-      },
-    };
-
-    // Valid input — should pass
-    const validResult = await executeBand(band, { name: "test" }, { workdir: tmpDir });
-    expect(validResult.success).toBe(true);
-
-    // Invalid input — should fail
-    const invalidResult = await executeBand(band, { wrong: 123 }, { workdir: tmpDir });
-    expect(invalidResult.success).toBe(false);
-    expect(invalidResult.error?.code).toBe("CONTRACT_INPUT_INVALID");
-
-    const { rmSync } = await import("fs");
-    rmSync(tmpDir, { recursive: true, force: true });
+    await expect(executeBand(bandUrl, { anything: true })).rejects.toThrow(/not yet supported/);
   });
 
   test("allows valid input through contract check", async () => {
@@ -359,7 +180,7 @@ describe("executeBand contract enforcement", () => {
       band: "contract-test",
       icon: "📋",
       description: "Test band",
-      execution: { target: "local-dangerously" },
+      execution: { target: "local-lima" },
       contract: {
         input: {
           type: "object",
@@ -368,37 +189,38 @@ describe("executeBand contract enforcement", () => {
         },
       },
     };
-
+    const available = await isTargetAvailable("local-lima");
+    if (!available) {
+      await expect(executeBand(band, { name: "alice" })).rejects.toThrow(/not available/);
+      return;
+    }
     const result = await executeBand(band, { name: "alice" });
-
     expect(result.success).toBe(true);
   });
 });
 
 describe("Execution Target Selection", () => {
-  test("priority: options.target > band.execution.target > default", async () => {
-    // Test 1: options.target takes precedence
-    const bandWithTarget = createTestBand("cloudflare");
-    const result1 = await executeBand(
-      bandWithTarget,
-      {},
-      { target: "local-dangerously" }
-    );
-    expect(result1.target).toBe("local-dangerously");
-
-    // Test 2: band.execution.target used when no override
-    const result2 = await executeBand(
-      createTestBand("local-dangerously"),
-      {}
-    );
-    expect(result2.target).toBe("local-dangerously");
-
-    // Test 3: error when nothing specified (no fallback)
+  test("requires explicit target — no default", async () => {
     const bandNoTarget: BandDocument = {
       band: "no-target",
       icon: "🎯",
       description: "Test band",
     };
-    expect(() => executeBand(bandNoTarget, {})).toThrow("No execution target specified");
+    await expect(executeBand(bandNoTarget, {})).rejects.toThrow(
+      /No execution target specified/
+    );
+  });
+
+  test("options.target overrides band.execution.target", async () => {
+    const band = createTestBand("cloudflare");
+    const available = await isTargetAvailable("local-lima");
+    if (!available) {
+      await expect(
+        executeBand(band, {}, { target: "local-lima" })
+      ).rejects.toThrow(/not available/);
+      return;
+    }
+    const result = await executeBand(band, {}, { target: "local-lima" });
+    expect(result.target).toBe("local-lima");
   });
 });

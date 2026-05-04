@@ -2,7 +2,6 @@
  * Executor types and interfaces.
  *
  * Executors are responsible for running bands in different environments:
- * - local-dangerously: No isolation, runs in the current process
  * - local-lima: Runs in a Lima VM with restrictions enforced
  * - cloudflare: Runs in a remote Cloudflare Worker
  */

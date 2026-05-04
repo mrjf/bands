@@ -7,10 +7,6 @@ type PermColumn = "allow" | "deny" | "insist";
 type EnvField = keyof EnvConfig;
 
 const PERM_CATEGORIES: { key: PermCategory; label: string; placeholder: string; tooltip: string }[] = [
-  { key: "tools", label: "Tools", placeholder: "https://github.com/owner/repo/tree/main/tool", tooltip: "External tool definitions the band can invoke" },
-  { key: "skills", label: "Skills", placeholder: "https://github.com/owner/repo or ./local/path", tooltip: "Reusable skill packages (GitHub URLs or local paths)" },
-  { key: "mcps", label: "MCPs", placeholder: "https://github.com/owner/repo/tree/main/mcp", tooltip: "Model Context Protocol servers for external integrations" },
-  { key: "apis", label: "APIs", placeholder: "https://github.com/owner/repo/tree/main/api", tooltip: "API definitions the band can call" },
   { key: "read", label: "Read", placeholder: "./data/**, ./config.json", tooltip: "File paths the band can read (glob patterns)" },
   { key: "write", label: "Write", placeholder: "./output/**, /tmp/**", tooltip: "File paths the band can write (glob patterns)" },
   { key: "cli", label: "CLI", placeholder: "python *, jq *, npm run *", tooltip: "Shell commands the band can execute (glob patterns)" },
@@ -127,12 +123,11 @@ class BandCompact extends HTMLElement {
     const permCol = band[col];
     if (!permCol) return items;
 
-    for (const cat of ["tools", "skills", "mcps", "apis", "fs", "cli", "net"] as const) {
+    for (const cat of ["read", "write", "cli", "net"] as const) {
       const arr = permCol[cat];
       if (!arr) continue;
       for (const v of arr) {
-        const val = typeof v === "string" ? v : `${v.kind}:${v.ref}`;
-        items.push({ cat, val });
+        items.push({ cat, val: v });
       }
     }
 

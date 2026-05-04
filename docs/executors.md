@@ -6,40 +6,8 @@ Bands can run on different execution targets, each providing different levels of
 
 | Target | Isolation | Enforcement | Use Case |
 |--------|-----------|-------------|----------|
-| `local-dangerously` | None | Reports only | Development, testing |
 | `local-lima` | Full (VM) | Enforces | Production on macOS |
 | `cloudflare` | Coming soon | — | Not yet available |
-
-## local-dangerously
-
-Runs the band in the current process with **no isolation**.
-
-```typescript
-const result = await executeBand(band, payload, {
-  target: "local-dangerously"
-});
-```
-
-**Behavior:**
-- Always available
-- Does NOT enforce permissions - only reports what would be allowed
-- Returns `enforced: false` in responses
-- Useful for development and testing permission configurations
-
-**Response example:**
-```json
-{
-  "success": true,
-  "data": {
-    "permissions": {
-      "cli": { "command": "rm -rf /", "allowed": false }
-    },
-    "enforced": false
-  }
-}
-```
-
-Even though `allowed: false`, the operation would succeed because `enforced: false`.
 
 ## local-lima
 
@@ -143,7 +111,7 @@ const limaAvailable = await isTargetAvailable("local-lima");
 
 // List all available targets
 const targets = await listAvailableTargets();
-// ["local-dangerously", "local-lima"]  // if Lima VM is running
+// ["local-lima"]  // if Lima VM is running
 ```
 
 ## Using the CLI
@@ -153,10 +121,6 @@ const targets = await listAvailableTargets();
 bun run packages/runtime/src/cli.ts targets
 
 # Output:
-# ✓ local-dangerously
-#     Run in current process (no isolation)
-#     Isolation: None - full system access
-#
 # ✓ local-lima
 #     Run in Lima VM (macOS)
 #     Isolation: Full - Linux VM via Virtualization.framework
@@ -174,12 +138,12 @@ bun run packages/runtime/src/cli.ts run ./my-band.md \
 
 ## Enforcement Differences
 
-| Behavior | local-dangerously | local-lima |
-|----------|-------------------|------|
-| Permission denied | Returns `allowed: false`, continues | Returns error, fails |
-| Insist not met | Reports missing, succeeds | Returns error, fails |
-| Network blocked | Reports, allows anyway | Actually blocks (iptables) |
-| File access denied | Reports, allows anyway | Actually blocks (bwrap) |
+| Behavior | local-lima |
+|----------|------|
+| Permission denied | Returns error, fails |
+| Insist not met | Returns error, fails |
+| Network blocked | Actually blocks (iptables) |
+| File access denied | Actually blocks (bwrap) |
 
 ## Metrics
 

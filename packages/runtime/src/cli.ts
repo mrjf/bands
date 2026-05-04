@@ -81,12 +81,11 @@ Commands:
   teardown                           Stop and delete Lima VM
 
 Execution Targets:
-  local-dangerously   Run in current process (no isolation, no restrictions)
   local-lima          Run in Lima VM (full isolation and enforcement)
   cloudflare          Run on Cloudflare Workers (edge deployment)
 
 Options:
-  --target <target>  Execution target (default: from band or local-dangerously)
+  --target <target>  Execution target (default: from band)
   --input <json>     Input payload as JSON string
   --input-file <f>   Read input from JSON file
   --name <name>      Worker name (default: derived from band name)
@@ -527,7 +526,11 @@ async function run(args: string[]) {
   }
 
   // Determine execution target
-  const target = (targetOverride || band.execution?.target || "local-dangerously") as ExecutionTarget;
+  const target = (targetOverride || band.execution?.target) as ExecutionTarget | undefined;
+  if (!target) {
+    console.error("Error: No execution target specified. Set execution.target in the band or use --target.");
+    process.exit(1);
+  }
 
   // Check if target is available
   const available = await isTargetAvailable(target);
@@ -585,11 +588,6 @@ async function targets(_args: string[]) {
     isolation: string;
     requires?: string;
   }> = [
-    {
-      name: "local-dangerously",
-      description: "Run in current process (no isolation)",
-      isolation: "None - full system access",
-    },
     {
       name: "local-lima",
       description: "Run in Lima VM (macOS)",

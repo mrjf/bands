@@ -409,12 +409,6 @@ export function runPermissionSuite(target: ExecutionTarget, options: {
  * Run the full test suite across all executors.
  */
 export function runAllExecutorSuites() {
-  // Local executor - always available, fast
-  // NOTE: local-dangerously does NOT enforce permissions!
-  runExecutorSuite("local-dangerously", {
-    timeout: 30000,
-  });
-
   // Lima - requires Lima VM (macOS)
   runExecutorSuite("local-lima", {
     timeout: 180000,
@@ -428,7 +422,6 @@ export function runAllExecutorSuites() {
 
 /**
  * Run permission enforcement tests across all sandboxed executors.
- * Excludes local-dangerously since it has no enforcement.
  *
  * NOTE: Permission enforcement is not yet fully implemented in the executors.
  * These tests are disabled until the band-shell integration is complete.

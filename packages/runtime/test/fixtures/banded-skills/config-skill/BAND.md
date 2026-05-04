@@ -7,7 +7,7 @@ allow:
     - "cat *"
     - "echo *"
 execution:
-  target: local-dangerously
+  target: local-lima
 config-skill:
   feature-a: true
   feature-b: false

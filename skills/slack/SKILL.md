@@ -49,4 +49,4 @@ Scripts enforce restrictions from the `slack` config section in `BAND.md` before
 
 - `message-search` requires a user token (`xoxp-`), not a bot token. Set `SLACK_USER_TOKEN` for search.
 - Channel references accept `#channel-name` or Slack channel IDs (e.g., `C01234ABCDE`).
-- Execution target is `local-dangerously` — scripts run on the host machine.
+- Execution target is `local-lima` — scripts run in an isolated Lima VM.

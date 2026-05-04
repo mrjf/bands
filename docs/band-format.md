@@ -51,7 +51,7 @@ Optional markdown documentation about this band.
 | `extends` | string[] | Parent bands to inherit from (GitHub URLs) |
 | `includes` | string[] | Bands to merge into this one (GitHub URLs) |
 | `env` | object | Environment configuration (secrets and variables) |
-| `provides` | object | APIs, tools, skills, and MCPs this band offers |
+| `provides` | object | Capabilities this band offers |
 | `requires` | object | Secrets and network access this band needs |
 | `contract` | object | I/O contract (inline JSON Schema or path/URL ref) |
 
@@ -101,16 +101,6 @@ env:
 Bands can declare what they offer and what they need:
 
 ```yaml
-provides:
-  apis:
-    - https://github.com/acme/apis/tree/main/search
-  tools:
-    - https://github.com/acme/tools/tree/main/formatter
-  skills:
-    - https://github.com/acme/skills/tree/main/summarize
-  mcps:
-    - https://github.com/acme/mcps/tree/main/memory
-
 requires:
   secrets:
     - API_KEY
@@ -368,12 +358,11 @@ Bands can specify where they should run:
 
 ```yaml
 execution:
-  target: cloudflare       # or: local-lima, local-dangerously
+  target: cloudflare       # or: local-lima
 ```
 
 | Target | Description | Isolation |
 |--------|-------------|-----------|
-| `local-dangerously` | Runs in current process | None (dev only) |
 | `local-lima` | Lima VM on macOS | Full (Linux VM) |
 | `cloudflare` | Cloudflare Workers | Full (V8 isolate) |
 

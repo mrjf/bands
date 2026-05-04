@@ -23,16 +23,11 @@ export const ALLOWED_TOP_LEVEL_KEYS = [
 ] as const;
 
 export const EXECUTION_TARGETS = [
-  "local-dangerously",
   "local-lima",
   "cloudflare",
 ] as const;
 
 export const PERMISSION_CATEGORIES = [
-  "tools",
-  "skills",
-  "mcps",
-  "apis",
   "read",
   "write",
   "cli",
@@ -65,14 +60,10 @@ export const CANONICAL_KEY_ORDER: Record<string, number> = {
 export const ENV_FIELDS = ["secrets", "variables"] as const;
 
 export const CANONICAL_CATEGORY_ORDER: Record<string, number> = {
-  tools: 0,
-  skills: 1,
-  mcps: 2,
-  apis: 3,
-  read: 4,
-  write: 5,
-  cli: 6,
-  net: 7,
+  read: 0,
+  write: 1,
+  cli: 2,
+  net: 3,
 };
 
 export const LIMIT_FIELDS = [

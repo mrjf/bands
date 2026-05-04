@@ -4,17 +4,14 @@
 
 export * from "./types";
 export { executorRegistry, getExecutor } from "./registry";
-export { LocalDangerousExecutor, createLocalDangerousExecutor } from "./local-dangerous";
 export { CloudflareExecutor, createCloudflareExecutor } from "./cloudflare";
 export { LimaExecutor, createLimaExecutor } from "./lima";
 
 import { executorRegistry, getExecutor } from "./registry";
-import { createLocalDangerousExecutor } from "./local-dangerous";
 import { createCloudflareExecutor } from "./cloudflare";
 import { createLimaExecutor } from "./lima";
 
 // Register all executors on module load
-executorRegistry.register("local-dangerously", createLocalDangerousExecutor);
 executorRegistry.register("cloudflare", createCloudflareExecutor);
 executorRegistry.register("local-lima", createLimaExecutor);
 

@@ -20,7 +20,7 @@ band run <band.md> [options]
 
 | Option | Description |
 |--------|-------------|
-| `--target <target>` | Execution target: `local-dangerously`, `lima`, `cloudflare` |
+| `--target <target>` | Execution target: `lima`, `cloudflare` |
 | `--input <json>` | JSON payload string |
 | `--input-file <file>` | Read payload from JSON file |
 | `--verbose` | Enable verbose logging |
@@ -75,7 +75,7 @@ List available execution targets and their status.
 band targets
 ```
 
-Shows whether each target (local-dangerously, lima, cloudflare) is available and ready.
+Shows whether each target (lima, cloudflare) is available and ready.
 
 ---
 
@@ -208,7 +208,7 @@ band --list
 band <script-name> --help
 ```
 
-It discovers scripts from `BAND_SKILLS_DIR` (default: `~/.claude/skills`), only runs registered scripts, and forces Lima VM execution (no `local-dangerously` fallback).
+It discovers scripts from `BAND_SKILLS_DIR` (default: `~/.claude/skills`), only runs registered scripts, and forces Lima VM execution.
 
 ```bash
 # List all available scripts

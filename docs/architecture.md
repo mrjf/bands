@@ -19,22 +19,22 @@ Bands is a permission and isolation system for AI agent execution. It consists o
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         @bands/runtime                               │
 │                                                                      │
-│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │
-│   │   local-    │  │    lima     │  │  cloudflare │                │
-│   │ dangerously │  │  executor   │  │ (placeholder)│               │
-│   └─────────────┘  └──────┬──────┘  └──────┬──────┘                │
-│          │                │                │                        │
-└──────────┼────────────────┼────────────────┼────────────────────────┘
-           │                │                │
-           │ in-process     │ HTTP           │ not implemented
-           ▼                ▼                ▼
-    ┌────────────┐   ┌────────────┐   ┌────────────┐
-    │  No server │   │ Lima VM    │   │ Cloudflare │
-    │  (direct)  │   │ :9000      │   │ Worker     │
-    └────────────┘   │            │   │ (future)   │
-                     │ band-      │   └────────────┘
-                     │ server.ts  │
-                     └────────────┘
+│   ┌─────────────┐  ┌─────────────┐                                │
+│   │    lima     │  │  cloudflare │                                │
+│   │  executor   │  │ (placeholder)│                               │
+│   └──────┬──────┘  └──────┬──────┘                                │
+│          │                │                                        │
+└──────────┼────────────────┼────────────────────────────────────────┘
+           │                │
+           │ HTTP           │ not implemented
+           ▼                ▼
+    ┌────────────┐   ┌────────────┐
+    │ Lima VM    │   │ Cloudflare │
+    │ :9000      │   │ Worker     │
+    │            │   │ (future)   │
+    │ band-      │   └────────────┘
+    │ server.ts  │
+    └────────────┘
 ```
 
 ## Components
@@ -113,18 +113,12 @@ const { document, errors } = parseBandMd(content);
 
 ```typescript
 // Based on band config or override
-const target = options.target || band.execution?.target || "local-dangerously";
+const target = options.target || band.execution?.target;
+if (!target) throw new Error("No execution target specified");
 const executor = await getExecutor(target);
 ```
 
 ### 3. Execute
-
-For `local-dangerously`:
-```typescript
-// Run in-process, no HTTP call
-const result = executor.execute({ band, payload });
-// Reports what WOULD be allowed, but doesn't enforce
-```
 
 For `lima` or `cloudflare`:
 ```typescript
