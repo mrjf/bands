@@ -14,7 +14,7 @@ Pre-release stages live under `0.x`. The first stable release is Chicken (`1.0.0
 | **Prezoea** | `0.2.y` | Newly hatched. Not yet a larva, not still an egg. |
 | **Larva I** | `0.3.y` | First true larva. Planktonic, translucent, drifting. |
 | **Larva II** | `0.4.y` | Claws forming. Features stabilizing. |
-| **Larva III** | `0.5.y` | Final larval stage. Skill contract locked. |
+| **Larva III** | `0.5.y` | Final larval stage. |
 | **Postlarva** | `0.6.y` | Settles to the bottom. First real isolation. |
 | **Juvenile** | `0.7.y` | Hides in shelter. Molts frequently. Soft-shell. |
 | **Adolescent** | `0.8.y` | Leaves the burrow. Hard-shell forming. |
