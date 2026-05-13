@@ -1,33 +1,27 @@
 # Contributing
 
-Bands is a pre-alpha research project. Expect breaking changes.
+Pre-alpha. Expect breaking changes.
 
-## How to contribute
+## Open issues, not pull requests
 
-**Open issues, not pull requests.**
+We use an AI agent to write code from issues. Describe what you need — the agent creates the PR.
 
-We use an AI agent to write code from issues. If you find a bug, have a feature request, or want to suggest an improvement, open an issue describing what you need. The agent will create the PR.
+PRs opened directly will be converted to issues.
 
-If you open a PR directly, we'll likely close it and convert it to an issue.
-
-## What to include in an issue
+## What to include
 
 - What you expected vs what happened
-- Steps to reproduce (for bugs)
+- Steps to reproduce
 - Which execution target you're using (`lima`, `cloudflare`)
-- Your environment (OS, Bun version)
+- Environment (OS, Bun version)
 
-## Experimental packages
-
-The `@bands/editor` package is experimental and under active development. Its API and UI are unstable.
-
-## Running tests
+## Tests
 
 ```bash
 bun install
-bun test          # Unit tests (format, editor, runtime)
-bun test:all      # Unit + integration + executor tests
-bun test:skills   # Skill tests (requires API keys in .env)
+bun test
+bun test:all
+bun test:skills
 ```
 
-See `docs/getting-started.md` for full setup instructions.
+See `docs/getting-started.md` for full setup.

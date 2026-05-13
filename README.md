@@ -1,220 +1,130 @@
 # Bands
 
-> ## ⚠️ WARNING: PRE-ALPHA EXPERIMENTAL CONCEPT ⚠️
->
-> **This is a pre-alpha experimental concept. It is not ready for production use.**
->
-> - 🚧 APIs, formats, and behavior **will** change without notice.
-> - 🐛 Expect bugs, breakage, and incomplete features.
-> - 🔓 Security guarantees are **aspirational** — do not rely on them to contain genuinely hostile code.
-> - 💥 Running this on a machine you care about may have unintended consequences.
->
-> Use at your own risk. You have been warned.
+> Pre-alpha. 0.1.0-berry. [Lobster life-cycle versioning.](VERSIONING.md)
 
-> [0.1.0-berry](VERSIONING.md) — lobster life-stage versioning.
+Sandboxed execution for AI agent skills. Deny by default.
 
-**Sandboxed execution for AI agent skills.**
+Skills are functions. Bands are their closures. Every skill declares what it needs — network hosts, CLI commands, file paths, secrets. Everything else is denied at the kernel level.
 
-Bands runs untrusted scripts inside isolated Linux VMs with kernel-level enforcement of network, filesystem, and CLI restrictions. Every skill declares what it needs. Everything else is denied.
+## Isolation
 
-## Security First
+Scripts run inside a Lima VM with five enforcement layers.
 
-Scripts execute inside a Lima VM with multiple isolation layers:
+| Layer | Mechanism |
+|-------|-----------|
+| VM boundary | Full Linux kernel via KVM / Virtualization.framework |
+| Network | Per-execution iptables chains, UID-owner matched |
+| Filesystem | Bubblewrap mount namespace, deny patterns excluded |
+| CLI | PATH-only wrapper directory, argument pattern matching |
+| User | Unprivileged `band-runner` via sudo |
 
-| Layer | Mechanism | What it prevents |
-|-------|-----------|------------------|
-| **VM boundary** | Full Linux kernel (KVM / Virtualization.framework) | Host system access |
-| **Network** | Per-execution iptables chains | Connections to undeclared hosts |
-| **Filesystem** | Bubblewrap mount namespace | Reading files outside the workdir |
-| **CLI** | PATH-only wrapper directory | Running undeclared commands |
-| **User** | Unprivileged `band-runner` via sudo | Privilege escalation |
-| **Secrets** | Workdir-scoped env vars, cleaned after execution | Secret leakage between executions |
+A script that declares `allow.net: ["api.github.com"]` can reach GitHub and nothing else. A script that declares `allow.cli: ["gh *", "jq *"]` can run those two commands and nothing else. Undeclared paths do not exist inside the sandbox. Secrets are scoped to the workdir and cleaned after every execution.
 
-Default deny. A script that declares `allow.net: ["api.github.com"]` can reach GitHub and nothing else. A script that declares `allow.cli: ["gh *", "jq *"]` can run `gh` and `jq` and nothing else. Everything not declared is blocked at the kernel level.
+## How it works
 
-## How It Works
-
-A **band** is a YAML config that declares permissions. A **skill** is a directory with a band config, scripts, and schemas.
+A band is a YAML frontmatter block in a Markdown file. A skill is a directory with a band, scripts, and schemas.
 
 ```yaml
-# skills/github/BAND.md
+# BAND.md
 ---
 band: github
 allow:
-  cli:
-    - "gh *"
-    - "git *"
-    - "jq *"
-  net:
-    - "*.github.com"
-    - "*.githubusercontent.com"
+  cli: ["gh *", "git *", "jq *"]
+  net: ["*.github.com", "*.githubusercontent.com"]
 env:
-  secrets:
-    - GITHUB_TOKEN
+  secrets: [GITHUB_TOKEN]
 execution:
   target: local-lima
 ---
 ```
 
-When a skill runs:
+The agent sees simple CLI commands. The runtime enforces everything else.
 
-1. Host validates input against the script's JSON Schema
-2. Host sends script + input + rules to the band server in the VM (`POST /exec`)
-3. Server sets up per-execution iptables firewall (kernel-level network restriction)
-4. Server creates bubblewrap sandbox (mount namespace, user separation)
-5. Server creates CLI wrappers (only declared commands exist in PATH)
-6. Script runs inside the sandbox as `band-runner`
-7. Server validates output against the output schema
-8. Server tears down firewall, cleans up workdir, returns output
-9. Host writes back allowed output files (deny patterns enforced at copy boundary)
+1. Validate input against the script's JSON Schema
+2. Send script + input + rules to the band server in the VM
+3. Set up per-execution iptables firewall
+4. Create bubblewrap sandbox with mount namespace
+5. Create CLI wrappers — only declared commands exist in PATH
+6. Run script as `band-runner` inside the sandbox
+7. Validate output against the output schema
+8. Tear down firewall, clean workdir, return output
 
-## Typed Contracts
+## Permission model
 
-Every script has a typed contract — JSON Schema for input and output. The runtime validates both before and after execution. No untyped data crosses the boundary.
+Deny > Insist > Allow.
+
+```yaml
+allow:
+  cli: ["gh *", "jq *"]
+  net: ["api.github.com"]
+  read: ["./data/**"]
+  write: ["./output/**"]
+
+deny:
+  cli: ["rm -rf *"]
+  read: ["./data/secrets/**"]
+
+insist:
+  cli: ["gh issue create *"]
+```
+
+Deny punches holes in allow. Insist forces the skill to use a capability — the run fails if the pattern is never satisfied. Anything not in allow is denied.
+
+## Contracts
+
+Every script has typed input and output defined by JSON Schema. The runtime validates both boundaries. No untyped data crosses the sandbox.
 
 ```
 skills/github/
 ├── schemas/
-│   ├── input/           # One schema per script
-│   │   ├── issue-create.json
-│   │   ├── pr-list.json
-│   │   └── ...
-│   ├── output/          # Return type per script
-│   │   ├── issue-create.json
-│   │   └── ...
-│   └── defs/            # Shared types ($ref)
-│       ├── repo.json    # "owner/name" string
-│       ├── limit.json   # integer, minimum: 1
-│       └── ...
-```
-
-Input schemas define required fields, types, and descriptions. The runtime uses Ajv with `$ref` resolution and type coercion (CLI string args like `--limit=5` are coerced to integers).
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "repo": { "$ref": "repo.json" },
-    "title": { "type": "string" },
-    "labels": { "$ref": "labels-input.json" }
-  },
-  "required": ["repo", "title"]
-}
-```
-
-Shared definitions in `schemas/defs/` are reusable across scripts — define `repo.json` once, `$ref` it everywhere. The type system catches invalid input before the script runs and invalid output before the caller receives it.
-
-## Permission Model
-
-**Default deny.** Every operation must be explicitly allowed.
-
-```yaml
-allow:
-  cli: ["gh *", "jq *"]      # Only these commands exist
-  net: ["api.github.com"]     # Only this host is reachable
-  read: ["./data/**"]         # Only these files are copied in
-  write: ["./output/**"]      # Only these files are copied back
-
-deny:
-  cli: ["rm -rf *"]           # Punch holes in allow (argument-level)
-  net: ["evil.github.com"]    # Punch holes in allow wildcards
-  read: ["./data/secrets/**"] # Excluded from copy-in
-  write: ["./output/.env*"]   # Excluded from copy-back
-
-insist:
-  cli: ["gh issue-create *"]  # Must be executed or run fails
+│   ├── input/        # One schema per script
+│   ├── output/       # Return type per script
+│   └── defs/         # Shared types ($ref)
+├── scripts/          # Executable scripts with run.sh
+├── BAND.md           # Permissions and execution target
+└── SKILL.md          # Instructions for the agent
 ```
 
 ## Skills
 
-Skills live in `skills/<name>/` with:
-
-- **`BAND.md`** — Permissions, secrets, execution target
-- **`SKILL.md`** — Instructions for the AI agent
-- **`scripts/`** — Executable scripts with `run.sh` in each resource dir
-- **`schemas/`** — JSON Schema for input/output validation
-
-### Included skills
-
 | Skill | Scripts | Description |
 |-------|---------|-------------|
-| `github` | 31 | Issues, PRs, releases, labels, gists, search, raw API |
-| `slack` | 9 | Messages, channels, threads, reactions, files |
-| `elevenlabs` | 5 | Text-to-speech, voices, sound effects |
-| `summarize` | 1 | Summarize documents using Claude Code CLI |
+| github | 32 | Issues, PRs, releases, labels, gists, search, raw API |
+| slack | 11 | Messages, channels, threads, reactions, files |
+| elevenlabs | 6 | Text-to-speech, voices, sound effects |
+| summarize | 2 | Document summarization via Claude Code CLI |
 
-## Project Structure
-
-```
-bands/
-├── packages/
-│   ├── format/          # Parse, validate, export BAND.md files
-│   ├── runtime/         # Execute bands (Lima VM, band server)
-│   └── editor/          # Visual band editor
-├── skills/              # Banded skills (github, slack, elevenlabs)
-├── docs/                # Architecture, TODO, future plans
-├── SECURITY.md          # Threat model and enforcement status
-├── VERSIONING.md        # Lobster Scale versioning
-└── VERSION              # Current version (0.1.0-berry)
-```
-
-## Development
+## Setup
 
 ```bash
 bun install
-
-# Run all unit tests
-bun test:all
-
-# Run skill tests (needs API keys in .env)
-bun test:skills
-
-# Run specific skill tests
-bun test:skills:direct    # Direct execution
-bun test:skills:agent     # Agent mode (needs ANTHROPIC_API_KEY)
+bun test
 ```
 
-## Lima VM Setup
+Lima VM (recommended):
 
 ```bash
 brew install lima
-bun run band setup        # Creates VM, deploys band server, configures firewall
+bun run band setup
 ```
 
-The setup creates a `bands-executor` VM with:
-- Bun runtime
-- iptables (network enforcement)
-- bubblewrap (filesystem isolation)
-- `band-runner` user (privilege separation)
-- Band server v3.0 (systemd service on port 9000)
-- Default iptables policy: REJECT all outbound from `band-runner`
-
-## What's Implemented vs Planned
-
-### Implemented and tested
+## What works
 
 - Network egress enforcement (iptables, kernel-level)
 - Filesystem isolation (bubblewrap mount namespace)
-- CLI allow/deny (PATH wrappers + argument pattern matching)
-- File copy-in/copy-out with deny enforcement
+- CLI allow/deny with argument pattern matching
+- File deny patterns enforced in mount namespace
 - User privilege separation
-- Insist enforcement (required operations)
-- Secrets isolation
-- Contract schema validation (inline + file path refs)
-- Band server v3.0 (HTTP, single-use mutex, per-execution teardown)
+- Insist enforcement
+- Secrets isolation and cleanup
+- Contract schema validation (Ajv, `$ref` resolution)
 
-### Parsed but not yet enforced
+## What doesn't work yet
 
-- `maxInputBytes` / `maxOutputBytes` (limits are compiled but not checked at execution time)
-- `maxCostDollars` (for skills calling Claude API internally)
-
-### Planned
-
-- Cloudflare Workers executor (V8 isolates) — implementation exists, not production-tested
-- `deny.read`/`deny.write` at OS level (currently enforced at copy boundary)
+- `maxInputBytes` / `maxOutputBytes` (parsed, not enforced)
+- `maxCostDollars` (parsed, not enforced)
+- Cloudflare Workers executor (code exists, not production-tested)
 - seccomp profiles
-
-See `docs/TODO.md` for details and `SECURITY.md` for the threat model.
 
 ## License
 

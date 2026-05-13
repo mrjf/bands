@@ -1,18 +1,18 @@
 # CLI Reference
 
-The `band` CLI manages band execution, skill operations, and VM lifecycle.
-
 ```bash
 bun run band <command> [options]
 ```
 
 Or if installed as a binary: `band-cli <command> [options]`.
 
+
 ## Commands
+
 
 ### `run`
 
-Execute a band with a specified target.
+Execute a band.
 
 ```bash
 band run <band.md> [options]
@@ -23,18 +23,13 @@ band run <band.md> [options]
 | `--target <target>` | Execution target: `lima`, `cloudflare` |
 | `--input <json>` | JSON payload string |
 | `--input-file <file>` | Read payload from JSON file |
-| `--verbose` | Enable verbose logging |
+| `--verbose` | Verbose logging |
 
 ```bash
-# Local execution
-band run examples/minimal.band.md --input '{"message": "hello"}'
-
-# Run in Lima VM
 band run my-band.md --target lima --input-file payload.json
-
-# Deploy and run on Cloudflare
 band run my-band.md --target cloudflare --input '{"data": [1,2,3]}'
 ```
+
 
 ### `deploy`
 
@@ -47,25 +42,26 @@ band deploy <band.md> [--name <name>] [--dry-run]
 | Option | Description |
 |--------|-------------|
 | `--name <name>` | Worker name (default: derived from band name) |
-| `--dry-run` | Show deployment plan without deploying |
+| `--dry-run` | Show plan without deploying |
+
 
 ### `init`
 
-Initialize an existing Cloudflare Worker with a band configuration.
+Initialize a Cloudflare Worker with a band configuration.
 
 ```bash
 band init <worker-url> <band.md>
 ```
 
+
 ### `validate`
 
-Validate a band file.
+Validate a band file. Checks YAML syntax, required fields, permission patterns, limit values. Exits non-zero on failure.
 
 ```bash
 band validate <band.md>
 ```
 
-Checks YAML syntax, required fields, permission patterns, and limit values. Exits non-zero if validation fails.
 
 ### `targets`
 
@@ -75,31 +71,25 @@ List available execution targets and their status.
 band targets
 ```
 
-Shows whether each target (lima, cloudflare) is available and ready.
-
 ---
+
 
 ## Skill Commands
 
+
 ### `wrap-skill`
 
-Generate a `.band.md` file from an Agent Skills directory or GitHub URL.
+Generate a `.band.md` from a skill directory or GitHub URL.
 
 ```bash
 band wrap-skill <source> [--output <file>]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--output <file>` | Write output to file (default: stdout) |
-
 ```bash
-# From local directory
 band wrap-skill ./skills/github --output github.band.md
-
-# From GitHub
 band wrap-skill https://github.com/org/skill-repo --output skill.band.md
 ```
+
 
 ### `run-skill`
 
@@ -109,23 +99,19 @@ Execute a skill locally.
 band run-skill <source> [--request <text>]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--request <text>` | Request text for the skill |
 
 ### `validate-skill`
 
-Validate a banded skill directory structure.
+Validate a banded skill directory. Checks SKILL.md, BAND.md, script resources, schemas.
 
 ```bash
 band validate-skill <skill-dir>
 ```
 
-Checks for required files (SKILL.md, BAND.md), validates frontmatter, and verifies script resources have `input_schema.json` and `run.sh`.
 
 ### `convert-skill`
 
-Convert an Agent Skills directory into banded format.
+Convert an Agent Skills directory to banded format.
 
 ```bash
 band convert-skill <source> --output <dir> [--dry-run] [--verbose]
@@ -135,11 +121,13 @@ band convert-skill <source> --output <dir> [--dry-run] [--verbose]
 |--------|-------------|
 | `--output <dir>` | Output directory (required unless `--dry-run`) |
 | `--dry-run` | Show what would be created |
-| `--verbose` | Enable verbose logging |
+| `--verbose` | Verbose logging |
 
 ---
 
+
 ## Script Execution
+
 
 ### `exec`
 
@@ -154,39 +142,32 @@ band exec <resource-dir> [--key=value ...] [options]
 | `--key=value` | Script parameters |
 | `--input_path=<file>` | Read input from JSON file |
 | `--output_path=<file>` | Write output to file |
-| `--skill_root=<dir>` | Skill root directory for band discovery |
+| `--skill_root=<dir>` | Skill root for band discovery |
 | `--help` | Show script schema |
 
 ```bash
-# Run a script with parameters
 band exec skills/github/scripts/resources/gist-list --limit=5
-
-# With input file
-band exec skills/github/scripts/resources/issue-view --input_path=input.json
-
-# Show script parameters
 band exec skills/github/scripts/resources/pr-create --help
 ```
 
-CLI string arguments are automatically coerced to match the script's `input_schema.json` types (e.g., `--limit=5` becomes the integer `5`).
+CLI string arguments are coerced to match `input_schema.json` types (`--limit=5` becomes integer `5`).
 
 ---
 
+
 ## VM Management
+
 
 ### `setup`
 
-Create and provision the Lima VM for band execution.
+Create and provision the Lima VM.
 
 ```bash
 band setup [--force]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--force` | Force recreation if VM already exists |
+Installs Bun, copies the server, starts it on port 9000. `--force` recreates if VM exists.
 
-Installs Bun, copies the server, and starts it on port 9000.
 
 ### `teardown`
 
@@ -198,9 +179,10 @@ band teardown
 
 ---
 
+
 ## Locked-Down Runner
 
-The `band` binary (built from `band-run.ts` via `bun run install:band`) is a separate, locked-down entrypoint for agent sessions.
+The `band` binary (built from `band-run.ts`) is a locked-down entrypoint for agent sessions.
 
 ```bash
 band <script-name> [--key=value ...]
@@ -208,20 +190,7 @@ band --list
 band <script-name> --help
 ```
 
-It discovers scripts from `BAND_SKILLS_DIR` (default: `~/.claude/skills`), only runs registered scripts, and forces Lima VM execution.
-
-```bash
-# List all available scripts
-band --list
-
-# Run a script
-band gist-list --limit=5
-
-# Show script parameters
-band issue-create --help
-```
-
-### Environment Variables
+Discovers scripts from `BAND_SKILLS_DIR` (default: `~/.claude/skills`). Only runs registered scripts. Forces Lima VM execution.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

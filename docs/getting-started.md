@@ -1,13 +1,10 @@
-# Getting Started
+# Getting started
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.3+
 - macOS or Linux
-- Git
-
-For Lima VM execution (recommended):
-- [Lima](https://lima-vm.io/) (`brew install lima` on macOS)
+- [Lima](https://lima-vm.io/) for VM execution (`brew install lima`)
 
 ## Setup
 
@@ -15,123 +12,54 @@ For Lima VM execution (recommended):
 git clone https://github.com/mrjf/bands.git
 cd bands
 bun install
-```
-
-Verify everything works:
-
-```bash
 bun test
 ```
 
-This runs the format, editor, and runtime unit tests.
-
-## Project Structure
-
-```
-bands/
-├── packages/
-│   ├── format/       # Parse, validate, export BAND.md files
-│   ├── runtime/      # CLI, executors, band server, skill system
-│   └── editor/       # Visual band editor (web UI, experimental)
-├── skills/           # Banded skills (github, slack, elevenlabs, summarize)
-├── examples/         # Example band files
-├── docs/             # Documentation
-└── scripts/          # Build and test helpers
-```
-
-## Running a Band
+## Lima VM
 
 ```bash
-# Run locally (no isolation)
-bun run band run examples/minimal.band.md --input '{"message": "hello"}'
-
-# Check available execution targets
-bun run band targets
-```
-
-## Execution Targets
-
-| Target | Isolation | Setup |
-|--------|-----------|-------|
-| `local-lima` | Full Linux VM | `bun run band setup` |
-| `cloudflare` | Coming soon | Not yet available |
-
-### Lima VM Setup
-
-```bash
-# Create and provision the VM (installs Bun, Claude CLI, copies server)
 bun run band setup
-
-# Verify it's running
 bun run band targets
+```
 
-# Run a band in the VM
+Setup creates a `bands-executor` VM with Bun, iptables, bubblewrap, the `band-runner` user, and the band server on port 9000.
+
+```bash
 bun run band run examples/minimal.band.md --target local-lima --input '{"message": "hello"}'
-
-# Tear down the VM when done
-bun run band teardown
 ```
 
-### Cloudflare
+## Environment
 
-> **Coming soon.** The Cloudflare executor is not yet available for production use.
-
-## Environment Variables
-
-Create a `.env` file at the project root or `packages/runtime/.env`:
+Create `.env` at the project root:
 
 ```bash
-# Required for skill tests
-TEST_GITHUB_TOKEN=ghp_...          # GitHub PAT (repo scope)
-TEST_GITHUB_REPO=owner/repo        # Test repository
-TEST_GIST_GITHUB_TOKEN=ghp_...     # Classic PAT (gist scope)
-
-# Required for agent tests
+TEST_GITHUB_TOKEN=ghp_...
+TEST_GITHUB_REPO=owner/repo
+TEST_GIST_GITHUB_TOKEN=ghp_...
 ANTHROPIC_API_KEY=sk-ant-...
-
-# Optional
-ANTHROPIC_MODEL=claude-sonnet-4-20250514   # Override model for agent tests
 ```
 
-## Running Tests
+## Tests
 
 ```bash
-# All tests
-bun test
-
-# By package
-bun run test:format      # @bands/format
-bun run test:editor      # @bands/editor
-bun run test:runtime     # @bands/runtime (unit + executor)
-bun run test:unit        # Runtime unit tests only
-bun run test:integration # Runtime integration tests
-
-# Skill tests (require env vars above)
-bun run test:skills github         # All github skill tests
-bun run test:skills:direct github  # Direct script tests only
-bun run test:skills:agent github   # Agent tests only (requires ANTHROPIC_API_KEY)
+bun test                       # Unit tests
+bun test:all                   # Unit + integration
+bun test:skills github         # Skill tests (requires env vars)
+bun test:skills:agent github   # Agent mode (requires ANTHROPIC_API_KEY)
 ```
 
-## Building
+## Build
 
 ```bash
-# Build format and editor packages
-bun run build
-
-# Build standalone CLI binary
-bun run install:cli    # → /usr/local/bin/band-cli
-
-# Build locked-down band runner
-bun run install:band   # → /usr/local/bin/band
-
-# Type check
+bun run build           # Format + editor packages
+bun run install:cli     # Standalone CLI binary
+bun run install:band    # Locked-down band runner
 bun run typecheck
 ```
 
-## Next Steps
+## Next
 
-- [CLI Reference](cli.md) — All commands and options
-- [Band Format](band-format.md) — BAND.md specification
-- [Creating Skills](creating-skills.md) — Build a banded skill
-- [Architecture](architecture.md) — System design
-- [Testing](testing.md) — Testing guide
+- [Band format](band-format.md)
+- [CLI reference](cli.md)
+- [Creating skills](creating-skills.md)
+- [Architecture](architecture.md)

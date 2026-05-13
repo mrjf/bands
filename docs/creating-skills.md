@@ -1,15 +1,16 @@
 # Creating Skills
 
-A banded skill is a directory containing instructions, permissions, and executable scripts that an AI agent can use.
+A banded skill is a directory containing instructions, permissions, and executable scripts for an AI agent.
 
-## Skill Structure
+
+## Structure
 
 ```
 my-skill/
 ├── SKILL.md                        # Agent instructions + metadata
 ├── BAND.md                         # Permissions and execution config
 └── scripts/
-    ├── my-script                   # Wrapper script (called by agent)
+    ├── my-script                   # Wrapper (called by agent)
     └── resources/
         └── my-script/
             ├── run.sh              # Execution script
@@ -17,9 +18,10 @@ my-skill/
             └── output_schema.json  # Output format
 ```
 
-## Step 1: Create SKILL.md
 
-The SKILL.md contains metadata (frontmatter) and instructions (body) for the agent.
+## Step 1: SKILL.md
+
+Metadata in frontmatter, instructions in body.
 
 ```markdown
 ---
@@ -37,7 +39,7 @@ Description of what this skill does.
 - **`check-status`** — Checks status. Input: `id`
 ```
 
-**Frontmatter fields:**
+Frontmatter fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -48,9 +50,10 @@ Description of what this skill does.
 | `compatibility` | No | Environment requirements |
 | `metadata` | No | Arbitrary key-value pairs |
 
-## Step 2: Create BAND.md
 
-The BAND.md defines what the scripts are allowed to do inside the sandbox.
+## Step 2: BAND.md
+
+Defines what scripts are allowed to do inside the sandbox.
 
 ```yaml
 ---
@@ -72,11 +75,11 @@ requires:
     - MY_API_TOKEN
 
 execution:
-  target: local-lima
+  target: lima
 ---
 ```
 
-**Key sections:**
+Key sections:
 
 | Section | Description |
 |---------|-------------|
@@ -89,19 +92,18 @@ execution:
 | `requires.secrets` | Secrets that must be set (fails fast if missing) |
 | `execution.target` | Where to run: `lima`, `cloudflare` |
 
-### Band Discovery
-
-Bands are resolved from most-specific to least-specific:
+Band discovery (most-specific wins):
 
 1. `scripts/resources/<name>/BAND.md` — per-script override
 2. `scripts/BAND.md` — default for all scripts
 3. `BAND.md` — skill-wide default
 
+
 ## Step 3: Create a Script
 
 ### 3a. Input Schema
 
-Define parameters in `scripts/resources/my-script/input_schema.json`:
+`scripts/resources/my-script/input_schema.json`:
 
 ```json
 {
@@ -125,7 +127,7 @@ Supported types: `string`, `integer`, `number`, `boolean`, `array`, `object`.
 
 ### 3b. Output Schema
 
-Define the output format in `scripts/resources/my-script/output_schema.json`:
+`scripts/resources/my-script/output_schema.json`:
 
 ```json
 {
@@ -141,7 +143,7 @@ Define the output format in `scripts/resources/my-script/output_schema.json`:
 
 ### 3c. Execution Script
 
-Write the logic in `scripts/resources/my-script/run.sh`:
+`scripts/resources/my-script/run.sh`:
 
 ```bash
 #!/bin/bash
@@ -150,23 +152,22 @@ INPUT=$(cat "$INPUT_PATH")
 NAME=$(echo "$INPUT" | jq -r '.name')
 COUNT=$(echo "$INPUT" | jq -r '.count // 1')
 
-# Do the work
 GREETING="Hello, $NAME! (x$COUNT)"
 
-# Write JSON output
 echo "{\"greeting\": $(echo "$GREETING" | jq -Rs .)}" > "${OUTPUT_PATH:-/dev/stdout}"
 ```
 
-**Conventions:**
-- Read input from `$INPUT_PATH` (JSON file)
-- Write JSON output to `$OUTPUT_PATH` (or stdout if unset)
-- Use `jq` for JSON parsing and construction
-- Exit non-zero on failure with error message on stderr
-- Keep scripts idempotent when possible
+Conventions:
+
+- Read from `$INPUT_PATH` (JSON)
+- Write JSON to `$OUTPUT_PATH` (or stdout if unset)
+- Use `jq` for JSON
+- Exit non-zero on failure, error on stderr
+- Keep scripts idempotent
 
 ### 3d. Wrapper Script
 
-Create `scripts/my-script` (the agent-facing entrypoint):
+`scripts/my-script`:
 
 ```bash
 #!/bin/bash
@@ -176,13 +177,12 @@ SKILL_ROOT="$(cd -P "$DIR/.." && pwd)"
 bun "$ROOT/packages/runtime/src/cli.ts" exec "$DIR/resources/my-script" --skill_root "$SKILL_ROOT" "$@"
 ```
 
-Make it executable:
-
 ```bash
 chmod +x scripts/my-script
 ```
 
-The wrapper resolves symlinks (via `cd -P`) so the skill works when symlinked into `~/.claude/skills/`.
+Uses `cd -P` to resolve symlinks, so the skill works when symlinked into `~/.claude/skills/`.
+
 
 ## Step 4: Validate
 
@@ -190,18 +190,12 @@ The wrapper resolves symlinks (via `cd -P`) so the skill works when symlinked in
 bun run band validate-skill skills/my-skill
 ```
 
-This checks:
-- SKILL.md exists with `name` and `description`
-- BAND.md exists (at any level in the discovery chain)
-- Every wrapper in `scripts/` has a matching `scripts/resources/<name>/` directory
-- Every resource directory has a `run.sh`
-- All `input_schema.json` and `output_schema.json` files are valid JSON
+Checks: SKILL.md has `name`/`description`, BAND.md exists and parses, wrappers match resources, `run.sh` exists, schemas are valid JSON.
+
 
 ## Step 5: Test
 
-### Direct Tests
-
-Test scripts by calling them directly:
+### Direct
 
 ```typescript
 import { bandExec } from "../../../packages/runtime/src/banded-skills/exec";
@@ -216,9 +210,7 @@ expect(result.success).toBe(true);
 expect((result.data as any).greeting).toContain("World");
 ```
 
-### Agent Tests
-
-Test that an AI agent correctly selects and uses scripts:
+### Agent
 
 ```typescript
 import { createAgentHarness } from "../../../scripts/agent-test-helpers";
@@ -234,19 +226,20 @@ expect(result.toolName).toBe("my-script");
 expect(result.toolInput.name).toBe("Alice");
 ```
 
-See [Testing](testing.md) for more detail.
+See [testing.md](testing.md).
+
 
 ## Step 6: Install
-
-Symlink the skill into `~/.claude/skills/`:
 
 ```bash
 mkdir -p ~/.claude/skills
 ln -s /path/to/my-skill ~/.claude/skills/my-skill
 ```
 
-The `band` runner and Claude Code's skill system will discover it automatically.
+The `band` runner and Claude Code's skill system discover it automatically.
 
-## Complete Example
 
-The `skills/example-banded/` directory contains a minimal working skill with one script (`echo-input`). The `skills/github/` directory demonstrates a full-featured skill with 30+ scripts.
+## Examples
+
+`skills/example-banded/` — minimal working skill with one script (`echo-input`).
+`skills/github/` — full-featured skill with 30+ scripts.
