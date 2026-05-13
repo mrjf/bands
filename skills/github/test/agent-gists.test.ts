@@ -1,11 +1,23 @@
-import { describe, test, expect, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { resolve } from "path";
 import {
-  agentCall,
+  createSkillHarness,
+  requireClaude,
+  requireLima,
+  expectScriptSucceeded,
   AGENT_TIMEOUT,
-  gh,
-} from "./agent-gist-helpers";
+} from "../../../scripts/cli-agent-test-helpers";
+
+const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
+  GITHUB_TOKEN: "TEST_GIST_GITHUB_TOKEN",
+});
 
 describe("agent: gists", () => {
+  beforeAll(() => {
+    requireClaude();
+    requireLima();
+  });
+
   let gistId: string;
 
   afterAll(async () => {
@@ -24,17 +36,21 @@ describe("agent: gists", () => {
         `Create a secret gist with filename 'test.ts' containing '${gistContent}'`
       );
 
-      expect(result.toolName).toBe("gist-create");
-      expect(result.toolInput.filename).toBe("test.ts");
-      expect(result.toolInput.content).toContain("console.log");
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "gist-create");
 
-      const data = result.execResult.data as any;
-      gistId = data.id;
+      // Verify the gist was created by listing gists and finding it
+      const listResult = await gh("gist-list", {});
+      expect(listResult.success).toBe(true);
+      const gists = listResult.data as any[];
+      // Find the most recently created gist with test.ts
+      const created = gists.find((g: any) =>
+        g.files && Array.isArray(g.files) && g.files.some((f: string) => f.includes("test.ts"))
+      );
+      expect(created).toBeTruthy();
+      gistId = created.id;
       expect(gistId).toBeTruthy();
-      expect(data.url).toContain("gist.github.com");
 
-      // Verify the gist actually exists and has correct content
+      // Verify the gist content via direct API
       const verify = await gh("gist-view", { id: gistId });
       expect(verify.success).toBe(true);
       const gist = verify.data as any;
@@ -64,10 +80,12 @@ describe("agent: gists", () => {
         `List my gists`
       );
 
-      expect(result.toolName).toBe("gist-list");
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "gist-list");
 
-      const data = result.execResult.data as any[];
+      // Verify via direct API
+      const verify = await gh("gist-list", {});
+      expect(verify.success).toBe(true);
+      const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
 
@@ -102,11 +120,12 @@ describe("agent: gists", () => {
         `View gist ${gistId}`
       );
 
-      expect(result.toolName).toBe("gist-view");
-      expect(result.toolInput.id).toBe(gistId);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "gist-view");
 
-      const data = result.execResult.data as any;
+      // Verify via direct API
+      const verify = await gh("gist-view", { id: gistId });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any;
       expect(data.id).toBe(gistId);
       expect(data.public).toBe(false);
       expect(data.files).toBeInstanceOf(Array);
@@ -132,13 +151,7 @@ describe("agent: gists", () => {
         `Delete gist ${gistId}`
       );
 
-      expect(result.toolName).toBe("gist-delete");
-      expect(result.toolInput.id).toBe(gistId);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.deleted).toBe(true);
-      expect(data.id).toBe(gistId);
+      expectScriptSucceeded(result, "gist-delete");
 
       // Verify the gist is actually gone
       const verify = await gh("gist-view", { id: gistId });

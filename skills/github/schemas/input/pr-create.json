@@ -39,7 +39,6 @@
   "required": [
     "repo",
     "title",
-    "head",
-    "body"
+    "head"
   ]
 }

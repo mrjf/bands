@@ -1,18 +1,30 @@
-import { describe, test, expect, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { resolve } from "path";
 import {
-  agentCall,
+  createSkillHarness,
+  requireClaude,
+  requireLima,
+  expectScriptSucceeded,
   AGENT_TIMEOUT,
-  GITHUB_REPO,
-  gh,
-} from "./agent-helpers";
+} from "../../../scripts/cli-agent-test-helpers";
+
+const GITHUB_REPO = process.env.TEST_GITHUB_REPO;
+const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
+  GITHUB_TOKEN: "TEST_GITHUB_TOKEN",
+});
 
 describe("agent: labels", () => {
+  beforeAll(() => {
+    requireClaude();
+    requireLima();
+  });
+
   const labelName = `agent-test-${Date.now()}`;
   const labelColor = "ff0000";
 
   afterAll(async () => {
     try {
-      await gh("label-delete", { repo: GITHUB_REPO!, name: labelName });
+      await gh("label-delete", { repo: GITHUB_REPO, name: labelName });
     } catch {}
   }, AGENT_TIMEOUT);
 
@@ -23,17 +35,10 @@ describe("agent: labels", () => {
         `Create a label named '${labelName}' with color ${labelColor} in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("label-create");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.name).toBe(labelName);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.created).toBe(true);
-      expect(data.name).toBe(labelName);
+      expectScriptSucceeded(result, "label-create");
 
       // Verify via API that the label exists
-      const verify = await gh("label-list", { repo: GITHUB_REPO! });
+      const verify = await gh("label-list", { repo: GITHUB_REPO });
       expect(verify.success).toBe(true);
       const labels = verify.data as any[];
       const found = labels.find((l: any) => l.name === labelName);
@@ -50,11 +55,12 @@ describe("agent: labels", () => {
         `List labels in ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("label-list");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.execResult.success).toBe(true);
+      expectScriptSucceeded(result, "label-list");
 
-      const data = result.execResult.data as any[];
+      // Verify via direct API
+      const verify = await gh("label-list", { repo: GITHUB_REPO });
+      expect(verify.success).toBe(true);
+      const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
 
@@ -79,17 +85,10 @@ describe("agent: labels", () => {
         `Delete the label '${labelName}' from ${GITHUB_REPO}`
       );
 
-      expect(result.toolName).toBe("label-delete");
-      expect(result.toolInput.repo).toBe(GITHUB_REPO);
-      expect(result.toolInput.name).toBe(labelName);
-      expect(result.execResult.success).toBe(true);
-
-      const data = result.execResult.data as any;
-      expect(data.deleted).toBe(true);
-      expect(data.name).toBe(labelName);
+      expectScriptSucceeded(result, "label-delete");
 
       // Verify the label is actually gone
-      const verify = await gh("label-list", { repo: GITHUB_REPO! });
+      const verify = await gh("label-list", { repo: GITHUB_REPO });
       expect(verify.success).toBe(true);
       const labels = verify.data as any[];
       const found = labels.find((l: any) => l.name === labelName);

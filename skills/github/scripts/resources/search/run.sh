@@ -14,7 +14,7 @@ fi
 
 run_search() {
   case "$TYPE" in
-    repos)
+    repos|repositories)
       gh search repos "$QUERY" --limit "$LIMIT" "${EXTRA_ARGS[@]}" --json fullName,description,url,stargazersCount,language,updatedAt
       ;;
     prs)

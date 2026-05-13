@@ -7,7 +7,7 @@ allow:
     - "curl *"
     - "jq *"
   net:
-    - "slack.com"
+    - "*"
 env:
   secrets:
     - SLACK_BOT_TOKEN

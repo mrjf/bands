@@ -227,6 +227,9 @@ jobs:
           # Per-execution firewall rules still apply within each band execution.
           echo "Skipping default iptables lockdown (CI environment)"
 
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
       - name: Install gh CLI in VM
         run: |
           limactl copy skills/github/setup.sh bands-executor:/tmp/setup.sh

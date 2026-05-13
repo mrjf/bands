@@ -3,12 +3,15 @@
   "properties": {
     "document": {
       "type": "string",
-      "description": "The document text to summarize"
+      "description": "The document text to summarize (provide this or url, not both)"
+    },
+    "url": {
+      "type": "string",
+      "description": "URL to fetch and summarize (provide this or document, not both)"
     },
     "guidance": {
       "type": "string",
       "description": "Instructions for how to summarize (e.g. 'bullet points', 'one paragraph', 'focus on technical details', 'ELI5')"
     }
-  },
-  "required": ["document"]
+  }
 }
