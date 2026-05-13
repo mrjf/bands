@@ -17,6 +17,9 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const MAX_RETRY_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 1500;
+
 describe("agent: issues", () => {
   beforeAll(() => {
     requireClaude();
@@ -175,16 +178,16 @@ describe("agent: issues", () => {
       expectScriptSucceeded(result, "issue-reopen");
 
       // Verify the issue is actually open again (GitHub can be eventually consistent)
-      let verify: Awaited<ReturnType<typeof gh>> | undefined;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
+      let reopened = false;
+      for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
+        const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
         if (verify.success && /OPEN|open/i.test((verify.data as any).state ?? "")) {
+          reopened = true;
           break;
         }
-        if (attempt < 4) await sleep(1500);
+        if (attempt < MAX_RETRY_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
       }
-      expect(verify?.success).toBe(true);
-      expect((verify?.data as any).state).toMatch(/OPEN|open/i);
+      expect(reopened).toBe(true);
     },
     AGENT_TIMEOUT
   );
