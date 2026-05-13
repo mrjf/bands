@@ -12,6 +12,13 @@ const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
   GITHUB_TOKEN: "TEST_GIST_GITHUB_TOKEN",
 });
 
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const MAX_RETRY_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 1500;
+
 describe("agent: gists", () => {
   beforeAll(() => {
     requireClaude();
@@ -89,8 +96,15 @@ describe("agent: gists", () => {
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
 
-      // Our gist should be in the list with correct metadata
-      const found = data.find((g: any) => g.id === gistId);
+      // Our gist should be in the list with correct metadata (eventual consistency)
+      let found = data.find((g: any) => g.id === gistId);
+      for (let retryAttempt = 0; retryAttempt < MAX_RETRY_ATTEMPTS && !found; retryAttempt++) {
+        const retryVerify = await gh("gist-list", {});
+        expect(retryVerify.success).toBe(true);
+        const retryData = retryVerify.data as any[];
+        found = retryData.find((g: any) => g.id === gistId);
+        if (!found && retryAttempt < MAX_RETRY_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
+      }
       expect(found).toBeTruthy();
       expect(found.url).toContain("gist.github.com");
       expect(found.public).toBe(false);
