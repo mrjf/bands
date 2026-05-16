@@ -7,7 +7,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { join } from "path";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
+import { parseBandMd } from "../../../packages/format/src/parse";
 import { el, requireElevenLabsEnv, SKILL_ROOT, RESOURCES, TIMEOUT } from "./elevenlabs-helpers";
 
 // ── Structure tests (no API key needed) ────────────────────────────────
@@ -19,6 +20,12 @@ describe("elevenlabs skill: structure", () => {
 
   test("BAND.md exists", () => {
     expect(existsSync(join(SKILL_ROOT, "BAND.md"))).toBe(true);
+  });
+
+  test("BAND.md restricts network hosts", () => {
+    const bandMd = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
+    const result = parseBandMd(bandMd);
+    expect(result.document.allow?.net).toEqual(["api.elevenlabs.io"]);
   });
 
   test("all scripts have resource dirs with run.sh", () => {

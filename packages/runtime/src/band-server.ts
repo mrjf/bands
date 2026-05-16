@@ -40,7 +40,12 @@ function getBandRunnerIds(): { uid: number; gid: number } {
   return { uid, gid };
 }
 
-const bandRunnerIds = getBandRunnerIds();
+let bandRunnerIds: { uid: number; gid: number } | null = null;
+
+function getCachedBandRunnerIds(): { uid: number; gid: number } {
+  bandRunnerIds ??= getBandRunnerIds();
+  return bandRunnerIds;
+}
 
 // ── Cook state ───────────────────────────────────────────────────────
 
@@ -51,9 +56,11 @@ interface Cook {
   denyCli: string[];
   allowRead: string[];
   allowWrite: string[];
+  trackOps: boolean;
 }
 
 let currentCook: Cook | null = null;
+const globCache = new Map<string, Bun.Glob>();
 
 /**
  * Hash the sandbox-relevant permissions to produce a cook ID.
@@ -61,12 +68,13 @@ let currentCook: Cook | null = null;
  * Network rules (iptables) are set up per-request because DNS→IP resolution
  * goes stale as CDNs rotate IPs.
  */
-function computeCookId(req: ExecRequest): string {
+function computeCookId(req: ExecRequest, trackOps = false): string {
   const key = JSON.stringify({
     cli: (req.allowCli ?? []).slice().sort(),
     dcli: (req.denyCli ?? []).slice().sort(),
     read: (req.allowRead ?? []).slice().sort(),
     write: (req.allowWrite ?? []).slice().sort(),
+    ops: trackOps,
   });
   return createHash("sha256").update(key).digest("hex").slice(0, 12);
 }
@@ -75,8 +83,8 @@ function computeCookId(req: ExecRequest): string {
  * Ensure the sandbox is cooked for the given permissions.
  * Returns the current cook, setting up or recooking as needed.
  */
-function ensureCooked(req: ExecRequest): Cook {
-  const id = computeCookId(req);
+function ensureCooked(req: ExecRequest, trackOps = false): Cook {
+  const id = computeCookId(req, trackOps);
 
   if (currentCook && currentCook.id === id) {
     return currentCook;
@@ -96,8 +104,8 @@ function ensureCooked(req: ExecRequest): Cook {
   // Setup CLI wrappers (cooked — stable across requests)
   const allowCli = req.allowCli ?? [];
   const denyCli = req.denyCli ?? [];
-  if (allowCli.length > 0 || denyCli.length > 0) {
-    setupCliWrappers(wrapperDir, allowCli, denyCli);
+  if (allowCli.length > 0 || denyCli.length > 0 || trackOps) {
+    setupCliWrappers(wrapperDir, allowCli, denyCli, trackOps);
   }
 
   currentCook = {
@@ -107,6 +115,7 @@ function ensureCooked(req: ExecRequest): Cook {
     denyCli,
     allowRead: req.allowRead ?? [],
     allowWrite: req.allowWrite ?? [],
+    trackOps,
   };
 
   return currentCook;
@@ -226,19 +235,21 @@ function setupFirewall(
     }
   }
 
+  const { uid } = getCachedBandRunnerIds();
   for (const { table } of FIREWALL_TABLES) {
-    cmds.push(`${table} -I OUTPUT 1 -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName}`);
+    cmds.push(`${table} -I OUTPUT 1 -m owner --uid-owner ${uid} -m state --state NEW -j ${chainName}`);
   }
 
   shell(cmds.join("\n"));
 }
 
 function teardownFirewall(chainName: string): void {
+  const { uid } = getCachedBandRunnerIds();
   shellIgnoreError(
-    `iptables -D OUTPUT -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
+    `iptables -D OUTPUT -m owner --uid-owner ${uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
       `iptables -F ${chainName} 2>/dev/null; ` +
       `iptables -X ${chainName} 2>/dev/null; ` +
-      `ip6tables -D OUTPUT -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
+      `ip6tables -D OUTPUT -m owner --uid-owner ${uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
       `ip6tables -F ${chainName} 2>/dev/null; ` +
       `ip6tables -X ${chainName} 2>/dev/null`
   );
@@ -351,7 +362,8 @@ const ESSENTIAL_COMMANDS = [
 function setupCliWrappers(
   wrapperDir: string,
   allowPatterns: string[],
-  denyPatterns: string[]
+  denyPatterns: string[],
+  trackOps = false
 ): void {
   const allowedCommands = new Set(ESSENTIAL_COMMANDS);
   for (const pattern of allowPatterns) {
@@ -379,6 +391,7 @@ function setupCliWrappers(
 
     const denyPats = denyByCmd.get(cmd) || [];
     const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
+    const trackLine = trackOps ? buildInsistTracker(cmd) : "";
 
     let wrapper: string;
     if (denyPats.length > 0) {
@@ -393,11 +406,13 @@ for P in "\${DENY_PATTERNS[@]}"; do
   fi
 done
 ${logLine}
+${trackLine}
 exec ${realPath} "$@"
 `;
     } else {
       wrapper = `#!/bin/bash
 ${logLine}
+${trackLine}
 exec ${realPath} "$@"
 `;
     }
@@ -407,19 +422,149 @@ exec ${realPath} "$@"
   }
 }
 
+/**
+ * Generates wrapper-side operation tracking for common file commands.
+ * Read-like commands log each non-flag, non-URL argument as a read; write-like
+ * commands log those arguments as writes. For cp/mv, the final path argument is
+ * treated as the write destination and earlier path arguments are reads.
+ */
+function buildInsistTracker(cmd: string): string {
+  return `if [ -n "$BAND_OPS_FILE" ]; then
+  case "${cmd}" in
+    cat|head|tail|grep|sed|awk|sort|uniq|wc|tr|cut)
+      for arg in "$@"; do
+        case "$arg" in -*|*://*) continue ;; esac
+        [ -n "$arg" ] && echo "read:$arg" >> "$BAND_OPS_FILE"
+      done
+      ;;
+    tee|touch)
+      for arg in "$@"; do
+        case "$arg" in -*|*://*) continue ;; esac
+        [ -n "$arg" ] && echo "write:$arg" >> "$BAND_OPS_FILE"
+      done
+      ;;
+    cp|mv)
+      args=()
+      for arg in "$@"; do
+        case "$arg" in -*) continue ;; esac
+        args+=("$arg")
+      done
+      # cp/mv use the final path argument as the write destination.
+      last=$((\${#args[@]} - 1))
+      for i in "\${!args[@]}"; do
+        if [ "$i" -eq "$last" ]; then
+          echo "write:\${args[$i]}" >> "$BAND_OPS_FILE"
+        else
+          echo "read:\${args[$i]}" >> "$BAND_OPS_FILE"
+        fi
+      done
+      ;;
+  esac
+fi`;
+}
+
+function buildRedirectTracker(): string {
+  return `_band_log_redirect() {
+  local cmd="$BASH_COMMAND"
+  # Match simple > and >> redirections and capture the redirected path.
+  local re='(^|[[:space:]])[0-9]*>{1,2}[[:space:]]*([^[:space:];|&]+)'
+  [[ -n "$BAND_OPS_FILE" ]] || return 0
+  if [[ "$cmd" =~ $re ]]; then
+    local p="\${BASH_REMATCH[2]}"
+    p="\${p%\\"}"
+    p="\${p#\\"}"
+    p="\${p%\\'}"
+    p="\${p#\\'}"
+    [[ -n "$p" ]] && echo "write:$p" >> "$BAND_OPS_FILE"
+  fi
+  return 0
+}`;
+}
+
 // ── Insist checking ───────────────────────────────────────────────────
 
-function matchGlob(str: string, pattern: string): boolean {
-  const regex = "^" + pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".")
-    + "$";
+export function matchGlob(str: string, pattern: string): boolean {
+  let glob = globCache.get(pattern);
+  if (!glob) {
+    glob = new Bun.Glob(pattern);
+    globCache.set(pattern, glob);
+  }
+  return glob.match(str);
+}
+
+function matchCliPattern(str: string, pattern: string): boolean {
   try {
+    const regex = "^" + pattern
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".")
+      + "$";
     return new RegExp(regex).test(str);
   } catch {
     return str === pattern;
   }
+}
+
+function stripShellQuotes(path: string): string {
+  if (
+    (path.startsWith('"') && path.endsWith('"')) ||
+    (path.startsWith("'") && path.endsWith("'"))
+  ) {
+    return path.slice(1, -1);
+  }
+  return path;
+}
+
+function pathCandidates(path: string, workdir: string): string[] {
+  const clean = stripShellQuotes(path);
+  const candidates = new Set([clean]);
+
+  if (clean.startsWith(workdir + "/")) {
+    candidates.add(`.${clean.slice(workdir.length)}`);
+  } else if (!clean.startsWith("/")) {
+    const relative = clean.startsWith("./") ? clean : `./${clean}`;
+    candidates.add(relative);
+    candidates.add(`${workdir}/${relative.replace(/^\.\//, "")}`);
+  }
+
+  return Array.from(candidates);
+}
+
+function pathMatches(path: string, pattern: string, workdir: string): boolean {
+  return pathCandidates(path, workdir).some(candidate => matchGlob(candidate, pattern));
+}
+
+export function checkInsistFromOps(
+  insist: { cli?: string[]; read?: string[]; write?: string[]; net?: string[] },
+  workdir: string,
+  ops: string[]
+): { satisfied: boolean; missing: string[] } {
+  const missing: string[] = [];
+
+  for (const pattern of insist.cli ?? []) {
+    const matched = ops.some(op =>
+      !op.startsWith("read:") &&
+      !op.startsWith("write:") &&
+      matchCliPattern(op, pattern)
+    );
+    if (!matched) missing.push(`cli: ${pattern}`);
+  }
+
+  for (const pattern of insist.write ?? []) {
+    const matched = ops.some(op =>
+      op.startsWith("write:") && pathMatches(op.slice("write:".length), pattern, workdir)
+    );
+    if (!matched) missing.push(`write: ${pattern}`);
+  }
+
+  for (const pattern of insist.read ?? []) {
+    const matched = ops.some(op =>
+      op.startsWith("read:") && pathMatches(op.slice("read:".length), pattern, workdir)
+    );
+    if (!matched) missing.push(`read: ${pattern}`);
+  }
+
+  return { satisfied: missing.length === 0, missing };
 }
 
 function checkInsist(
@@ -427,35 +572,14 @@ function checkInsist(
   workdir: string,
   opsFile: string
 ): { satisfied: boolean; missing: string[] } {
-  const missing: string[] = [];
-
   let ops: string[] = [];
   try {
     const content = shell(`cat ${opsFile} 2>/dev/null || true`).trim();
     if (content) ops = content.split("\n").filter(Boolean);
   } catch { /* empty */ }
 
-  for (const pattern of insist.cli ?? []) {
-    const matched = ops.some(op => matchGlob(op, pattern));
-    if (!matched) missing.push(`cli: ${pattern}`);
-  }
-
-  for (const pattern of insist.write ?? []) {
-    try {
-      const safePattern = shellSafe(pattern, "insist.write pattern");
-      const found = shell(`find / -path '${safePattern}' -type f 2>/dev/null | head -1`).trim();
-      if (!found) missing.push(`write: ${pattern}`);
-    } catch {
-      missing.push(`write: ${pattern}`);
-    }
-  }
-
-  for (const pattern of insist.read ?? []) {
-    const matched = ops.some(op => {
-      return op.includes(pattern.replace(/\*/g, ""));
-    });
-    if (!matched) missing.push(`read: ${pattern}`);
-  }
+  const result = checkInsistFromOps(insist, workdir, ops);
+  const missing = result.missing;
 
   for (const pattern of insist.net ?? []) {
     try {
@@ -515,9 +639,15 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
   const workdir = `/tmp/band-exec-${execId}`;
 
   const inputStr = JSON.stringify(req.input);
+  const hasInsist = !!req.insist && (
+    (req.insist.cli?.length ?? 0) > 0 ||
+    (req.insist.read?.length ?? 0) > 0 ||
+    (req.insist.write?.length ?? 0) > 0 ||
+    (req.insist.net?.length ?? 0) > 0
+  );
 
   // Ensure sandbox is cooked (reuses if permissions match)
-  const cook = ensureCooked(req);
+  const cook = ensureCooked(req, hasInsist);
   const wasCooked = currentCook?.id === cook.id;
 
   try {
@@ -545,20 +675,28 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     }
 
     // Point PATH to the cooked CLI wrapper dir (mounted at workdir/.band-cli inside bwrap)
-    if (cook.allowCli.length > 0 || cook.denyCli.length > 0) {
+    const hasCliRestrictions = cook.allowCli.length > 0 || cook.denyCli.length > 0;
+    if (hasCliRestrictions) {
       envLines.unshift(`export PATH="${workdir}/.band-cli"`);
+    } else if (cook.trackOps) {
+      envLines.unshift(`export PATH="${workdir}/.band-cli:$PATH"`);
+    }
+    if (cook.trackOps) {
+      envLines.push(buildRedirectTracker());
+    }
+    if (hasCliRestrictions) {
       envLines.push(`shopt -s extdebug`);
       envLines.push(`_band_check() { local c="\${BASH_COMMAND%% *}"; [[ "$c" == /* ]] && { echo "DENIED: \$BASH_COMMAND (absolute paths blocked)" >&2; return 1; }; return 0; }`);
-      envLines.push(`trap _band_check DEBUG`);
+    }
+    const debugHooks = [
+      ...(hasCliRestrictions ? ["_band_check"] : []),
+      ...(cook.trackOps ? ["_band_log_redirect"] : []),
+    ];
+    if (debugHooks.length > 0) {
+      envLines.push(`trap '${debugHooks.join(" && ")}' DEBUG`);
     }
 
     // Ops tracker for insist enforcement
-    const hasInsist = req.insist && (
-      (req.insist.cli?.length ?? 0) > 0 ||
-      (req.insist.read?.length ?? 0) > 0 ||
-      (req.insist.write?.length ?? 0) > 0 ||
-      (req.insist.net?.length ?? 0) > 0
-    );
     const opsFile = `${workdir}/.band-ops`;
     if (hasInsist) {
       envLines.push(`export BAND_OPS_FILE="${opsFile}"`);
