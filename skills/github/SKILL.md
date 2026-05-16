@@ -25,7 +25,7 @@ Run scripts with `./scripts/<script-name>`, e.g. `./scripts/gist-list --limit=5`
 
 ### Pull Requests
 - **`pr-list`** — List PRs. Input: `repo`, `state`, `base`, `head`, `label`, `limit`
-- **`pr-create`** — Create a PR. Input: `repo`, `title`, `body`, `base`, `head`, `draft`, `labels`, `reviewers`
+- **`pr-create`** — Create a PR. Input: `repo`, `title`, `body`, `base`, `head`, `draft`, `labels`, `reviewers`, `assignees`, `milestone`
 - **`pr-view`** — View PR details. Input: `repo`, `number`, `comments`
 - **`pr-diff`** — View PR diff. Input: `repo`, `number`, `name_only`, `patch`
 - **`pr-checks`** — View CI checks. Input: `repo`, `number`, `required`

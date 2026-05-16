@@ -17,27 +17,26 @@ if [ -n "$MILESTONE" ]; then
 fi
 
 # Add labels
-LABELS=$(echo "$INPUT" | jq -r '.labels // [] | .[]' 2>/dev/null)
-for label in $LABELS; do
-  ARGS+=(--label "$label")
-done
+while IFS= read -r label; do
+  [ -n "$label" ] && ARGS+=(--label "$label")
+done < <(echo "$INPUT" | jq -r '.labels // [] | .[]' 2>/dev/null)
 
 # Add assignees
-ASSIGNEES=$(echo "$INPUT" | jq -r '.assignees // [] | .[]' 2>/dev/null)
-for assignee in $ASSIGNEES; do
-  ARGS+=(--assignee "$assignee")
-done
+while IFS= read -r assignee; do
+  [ -n "$assignee" ] && ARGS+=(--assignee "$assignee")
+done < <(echo "$INPUT" | jq -r '.assignees // [] | .[]' 2>/dev/null)
 
 # gh issue create outputs a URL like: https://github.com/owner/repo/issues/123
 STDERR_FILE=$(mktemp)
 URL=$(gh issue create "${ARGS[@]}" 2>"$STDERR_FILE") || {
   ERROR=$(cat "$STDERR_FILE")
   rm -f "$STDERR_FILE"
-  echo "{\"error\": \"$ERROR\"}" > "${OUTPUT_PATH:-/dev/stdout}"
+  jq -n --arg err "$ERROR" '{"error": $err}' > "${OUTPUT_PATH:-/dev/stdout}"
   exit 1
 }
 rm -f "$STDERR_FILE"
 
 # Extract issue number from URL
 NUMBER=$(echo "$URL" | grep -oE '[0-9]+$')
-echo "{\"number\": $NUMBER, \"url\": \"$URL\", \"title\": \"$TITLE\"}" > "${OUTPUT_PATH:-/dev/stdout}"
+jq -n --argjson num "$NUMBER" --arg url "$URL" --arg title "$TITLE" \
+  '{"number": $num, "url": $url, "title": $title}' > "${OUTPUT_PATH:-/dev/stdout}"
