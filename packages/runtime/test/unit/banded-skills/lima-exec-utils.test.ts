@@ -346,6 +346,9 @@ describe("buildFirewallScript", () => {
     expect(script).toContain(
       "iptables -N BAND_X 2>/dev/null || iptables -F BAND_X"
     );
+    expect(script).toContain(
+      "ip6tables -N BAND_X 2>/dev/null || ip6tables -F BAND_X"
+    );
   });
 
   test("allows loopback traffic", () => {
@@ -381,8 +384,10 @@ describe("buildFirewallScript", () => {
       denyNet: [],
     })!;
     expect(script).toContain("# Allow api.example.com");
-    expect(script).toContain('getent ahosts "api.example.com"');
+    expect(script).toContain('getent ahostsv4 "api.example.com"');
+    expect(script).toContain('getent ahostsv6 "api.example.com"');
     expect(script).toContain("iptables -A BAND_X -d \"$ip\" -j ACCEPT");
+    expect(script).toContain("ip6tables -A BAND_X -d \"$ip\" -j ACCEPT");
   });
 
   test("handles wildcard domain (*.example.com)", () => {
@@ -392,10 +397,10 @@ describe("buildFirewallScript", () => {
     })!;
     expect(script).toContain("# Allow *.example.com");
     // Should resolve the base domain
-    expect(script).toContain('getent ahosts "example.com"');
+    expect(script).toContain('getent ahostsv4 "example.com"');
     // Should also resolve common subdomains
-    expect(script).toContain('getent ahosts "api.example.com"');
-    expect(script).toContain('getent ahosts "www.example.com"');
+    expect(script).toContain('getent ahostsv4 "api.example.com"');
+    expect(script).toContain('getent ahostsv4 "www.example.com"');
   });
 
   test("wildcard domain resolves base and api/www prefixes", () => {
@@ -403,9 +408,9 @@ describe("buildFirewallScript", () => {
       allowNet: ["*.myservice.io"],
       denyNet: [],
     })!;
-    expect(script).toContain('getent ahosts "myservice.io"');
-    expect(script).toContain('getent ahosts "api.myservice.io"');
-    expect(script).toContain('getent ahosts "www.myservice.io"');
+    expect(script).toContain('getent ahostsv4 "myservice.io"');
+    expect(script).toContain('getent ahostsv4 "api.myservice.io"');
+    expect(script).toContain('getent ahostsv4 "www.myservice.io"');
   });
 
   test("ends with REJECT rule", () => {
@@ -429,14 +434,17 @@ describe("buildFirewallScript", () => {
     );
   });
 
-  test("OUTPUT rule is the last line", () => {
+  test("OUTPUT rules are the last lines", () => {
     const script = buildFirewallScript("BAND_X", {
       allowNet: ["example.com"],
       denyNet: [],
     })!;
     const lines = script.split("\n");
-    expect(lines[lines.length - 1]).toBe(
+    expect(lines[lines.length - 2]).toBe(
       "iptables -I OUTPUT 1 -m state --state NEW -j BAND_X"
+    );
+    expect(lines[lines.length - 1]).toBe(
+      "ip6tables -I OUTPUT 1 -m state --state NEW -j BAND_X"
     );
   });
 
@@ -448,9 +456,9 @@ describe("buildFirewallScript", () => {
     expect(script).toContain("# Allow api.example.com");
     expect(script).toContain("# Allow cdn.example.com");
     expect(script).toContain("# Allow auth.example.com");
-    expect(script).toContain('getent ahosts "api.example.com"');
-    expect(script).toContain('getent ahosts "cdn.example.com"');
-    expect(script).toContain('getent ahosts "auth.example.com"');
+    expect(script).toContain('getent ahostsv4 "api.example.com"');
+    expect(script).toContain('getent ahostsv4 "cdn.example.com"');
+    expect(script).toContain('getent ahostsv4 "auth.example.com"');
   });
 
   test("handles mix of wildcard and simple domains", () => {
@@ -459,11 +467,11 @@ describe("buildFirewallScript", () => {
       denyNet: [],
     })!;
     // Wildcard domain
-    expect(script).toContain('getent ahosts "github.com"');
-    expect(script).toContain('getent ahosts "api.github.com"');
-    expect(script).toContain('getent ahosts "www.github.com"');
+    expect(script).toContain('getent ahostsv4 "github.com"');
+    expect(script).toContain('getent ahostsv4 "api.github.com"');
+    expect(script).toContain('getent ahostsv4 "www.github.com"');
     // Simple domain
-    expect(script).toContain('getent ahosts "registry.npmjs.org"');
+    expect(script).toContain('getent ahostsv4 "registry.npmjs.org"');
   });
 
   test("uses the provided chainName throughout", () => {

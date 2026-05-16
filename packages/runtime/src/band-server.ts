@@ -155,6 +155,24 @@ function writeFile(path: string, content: string): void {
 
 // ── Firewall ──────────────────────────────────────────────────────────
 
+const FIREWALL_TABLES = [
+  { table: "iptables", resolver: "ahostsv4" },
+  { table: "ip6tables", resolver: "ahostsv6" },
+];
+
+function addResolvedFirewallRule(
+  cmds: string[],
+  chainName: string,
+  host: string,
+  target: "ACCEPT" | "REJECT"
+): void {
+  for (const { table, resolver } of FIREWALL_TABLES) {
+    cmds.push(
+      `for ip in $(getent ${resolver} "${host}" 2>/dev/null | awk '{print $1}' | sort -u); do ${table} -A ${chainName} -d "$ip" -j ${target}; done`
+    );
+  }
+}
+
 function setupFirewall(
   chainName: string,
   allowNet: string[],
@@ -163,27 +181,29 @@ function setupFirewall(
   if (allowNet.length === 0 && denyNet.length === 0) return;
   if (allowNet.includes("*") && denyNet.length === 0) return;
 
-  // Check if iptables is available and BAND-DEFAULT chain exists.
+  // Check if iptables/ip6tables are available.
   try {
-    shell("iptables -L BAND-DEFAULT -n >/dev/null 2>&1");
+    shell("iptables -L OUTPUT -n >/dev/null 2>&1");
+    shell("ip6tables -L OUTPUT -n >/dev/null 2>&1");
   } catch {
     return;
   }
 
-  const cmds: string[] = [
-    `iptables -N ${chainName} 2>/dev/null || iptables -F ${chainName}`,
-    `iptables -A ${chainName} -o lo -j ACCEPT`,
-    `iptables -A ${chainName} -m state --state ESTABLISHED,RELATED -j ACCEPT`,
-    `iptables -A ${chainName} -p udp --dport 53 -j ACCEPT`,
-    `iptables -A ${chainName} -p tcp --dport 53 -j ACCEPT`,
-  ];
+  const cmds: string[] = [];
+  for (const { table } of FIREWALL_TABLES) {
+    cmds.push(
+      `${table} -N ${chainName} 2>/dev/null || ${table} -F ${chainName}`,
+      `${table} -A ${chainName} -o lo -j ACCEPT`,
+      `${table} -A ${chainName} -m state --state ESTABLISHED,RELATED -j ACCEPT`,
+      `${table} -A ${chainName} -p udp --dport 53 -j ACCEPT`,
+      `${table} -A ${chainName} -p tcp --dport 53 -j ACCEPT`,
+    );
+  }
 
   // Deny rules FIRST — they punch holes in allow (deny takes precedence)
   for (const host of denyNet) {
     const resolveHost = shellSafe(host.startsWith("*.") ? host.slice(2) : host, "deny.net host");
-    cmds.push(
-      `for ip in $(getent ahosts "${resolveHost}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j REJECT; done`
-    );
+    addResolvedFirewallRule(cmds, chainName, resolveHost, "REJECT");
   }
 
   // Allow rules
@@ -191,24 +211,24 @@ function setupFirewall(
     if (host === "*") continue;
     if (host.startsWith("*.")) {
       const base = shellSafe(host.slice(2), "allow.net host");
-      cmds.push(
-        `for ip in $(getent ahosts "${base}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`,
-        `for ip in $(getent ahosts "api.${base}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`,
-        `for ip in $(getent ahosts "www.${base}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`
-      );
+      addResolvedFirewallRule(cmds, chainName, base, "ACCEPT");
+      addResolvedFirewallRule(cmds, chainName, `api.${base}`, "ACCEPT");
+      addResolvedFirewallRule(cmds, chainName, `www.${base}`, "ACCEPT");
     } else {
       const safeHost = shellSafe(host, "allow.net host");
-      cmds.push(
-        `for ip in $(getent ahosts "${safeHost}" 2>/dev/null | awk '{print $1}' | sort -u); do iptables -A ${chainName} -d "$ip" -j ACCEPT; done`
-      );
+      addResolvedFirewallRule(cmds, chainName, safeHost, "ACCEPT");
     }
   }
 
   if (!allowNet.includes("*")) {
-    cmds.push(`iptables -A ${chainName} -j REJECT`);
+    for (const { table } of FIREWALL_TABLES) {
+      cmds.push(`${table} -A ${chainName} -j REJECT`);
+    }
   }
 
-  cmds.push(`iptables -I OUTPUT 1 -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName}`);
+  for (const { table } of FIREWALL_TABLES) {
+    cmds.push(`${table} -I OUTPUT 1 -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName}`);
+  }
 
   shell(cmds.join("\n"));
 }
@@ -217,7 +237,10 @@ function teardownFirewall(chainName: string): void {
   shellIgnoreError(
     `iptables -D OUTPUT -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
       `iptables -F ${chainName} 2>/dev/null; ` +
-      `iptables -X ${chainName} 2>/dev/null`
+      `iptables -X ${chainName} 2>/dev/null; ` +
+      `ip6tables -D OUTPUT -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
+      `ip6tables -F ${chainName} 2>/dev/null; ` +
+      `ip6tables -X ${chainName} 2>/dev/null`
   );
 }
 
