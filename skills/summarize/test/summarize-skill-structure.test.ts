@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
+import { parseBandMd } from "../../../packages/format/src/parse";
 import { SKILL_ROOT, RESOURCES } from "./summarize-helpers";
 
 describe("summarize skill: structure", () => {
@@ -24,6 +25,12 @@ describe("summarize skill: structure", () => {
   test("BAND.md allows api.anthropic.com", () => {
     const band = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
     expect(band).toContain("api.anthropic.com");
+  });
+
+  test("BAND.md restricts network hosts", () => {
+    const band = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
+    const result = parseBandMd(band);
+    expect(result.document.allow?.net).toEqual(["api.anthropic.com"]);
   });
 
   test("BAND.md allows claude and curl CLI", () => {
