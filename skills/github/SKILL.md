@@ -55,4 +55,4 @@ Run scripts with `./scripts/<script-name>`, e.g. `./scripts/gist-list --limit=5`
 - **`run-list`** — List workflow runs. Input: `repo`, `limit`, `workflow`, `status`, `branch`
 - **`run-view`** — View a workflow run. Input: `repo`, `run_id`
 - **`search`** — Search GitHub. Input: `query`, `type`, `repo`, `limit`
-- **`api`** — Raw API call. Input: `endpoint`, `method`, `body`, `headers`
+- **`api`** — Make any GitHub API call (REST). Use for any operation not covered by the scripts above, including getting the authenticated user (`endpoint: "user"`). Input: `endpoint`, `method`, `body`, `headers`

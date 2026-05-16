@@ -30,7 +30,7 @@ describe("agent: repo & CI", () => {
 
       // Verify via direct API call
       const verify = await gh("repo-view", { repo: GITHUB_REPO });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any;
       const [, repoName] = GITHUB_REPO.split("/");
       expect(data.name).toBe(repoName);
@@ -54,7 +54,7 @@ describe("agent: repo & CI", () => {
 
       // Verify via direct API
       const verify = await gh("run-list", { repo: GITHUB_REPO });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
 
@@ -94,7 +94,7 @@ describe("agent: repo & CI", () => {
 
       // Verify via direct API
       const verify = await gh("run-view", { repo: GITHUB_REPO, run_id: runId });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any;
       expect(data.databaseId).toBe(targetRun.databaseId);
       expect(typeof data.name).toBe("string");
@@ -118,7 +118,7 @@ describe("agent: repo & CI", () => {
 
       // Verify via direct API
       const verify = await gh("search", { query: "bun runtime" });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
@@ -130,7 +130,7 @@ describe("agent: repo & CI", () => {
     "api",
     async () => {
       const result = await agentCall(
-        `Use the api script to call the "user" endpoint to get the authenticated user`
+        `Get the authenticated user via the GitHub API`
       );
 
       expectScriptSucceeded(result, "api");
