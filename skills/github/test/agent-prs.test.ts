@@ -66,7 +66,7 @@ describe("agent: pull requests", () => {
 
       // Verify via API that the PR actually exists
       const verify = await gh("pr-list", { repo: GITHUB_REPO });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const prs = verify.data as any[];
       const created = prs.find((p: any) => p.headRefName === lifecycleBranch);
       expect(created).toBeTruthy();
@@ -98,7 +98,7 @@ describe("agent: pull requests", () => {
 
       // Verify via direct API
       const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `pr-view verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any;
       expect(data.number).toBe(prNumber);
       expect(data.state).toMatch(/OPEN|open/i);
@@ -121,7 +121,7 @@ describe("agent: pull requests", () => {
 
       // Verify via direct API
       const verify = await gh("pr-list", { repo: GITHUB_REPO });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
@@ -168,7 +168,7 @@ describe("agent: pull requests", () => {
 
       // Verify via direct API
       const verify = await gh("pr-checks", { repo: GITHUB_REPO, number: prNumber });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const data = verify.data;
       // Checks is an array (may be empty if no CI configured)
       expect(Array.isArray(data)).toBe(true);
@@ -189,7 +189,7 @@ describe("agent: pull requests", () => {
 
       // Verify the review exists on the PR
       const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       const reviews = (verify.data as any).reviews;
       expect(Array.isArray(reviews)).toBe(true);
       expect(reviews.length).toBeGreaterThan(0);
@@ -245,7 +245,7 @@ describe("agent: pull requests", () => {
 
       // Verify the PR is actually merged
       const verify = await gh("pr-view", { repo: GITHUB_REPO, number: mergePrNumber });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `verify failed: ${verify.error}`).toBe(true);
       expect((verify.data as any).state).toMatch(/MERGED|merged/i);
     },
     AGENT_TIMEOUT * 2

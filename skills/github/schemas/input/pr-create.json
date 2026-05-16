@@ -34,6 +34,17 @@
         "type": "string"
       },
       "description": "Reviewers to request"
+    },
+    "assignees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Users to assign to the PR"
+    },
+    "milestone": {
+      "type": "string",
+      "description": "Milestone name or number"
     }
   },
   "required": [
