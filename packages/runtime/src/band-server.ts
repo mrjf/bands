@@ -161,14 +161,14 @@ function writeFile(path: string, content: string): void {
 }
 
 function shellWorkdir(value: string): string {
-  if (!/^\/tmp\/band-exec-[A-Za-z0-9_-]+$/.test(value)) {
+  if (!/^\/tmp\/band-exec-[0-9a-f]+$/.test(value)) {
     throw new Error(`Invalid workdir: ${value}`);
   }
   return value;
 }
 
 function writeSecretFile(path: string, content: string): void {
-  if (!/^\/tmp\/band-exec-[A-Za-z0-9_-]+\/secrets\/[A-Za-z_][A-Za-z0-9_]*$/.test(path)) {
+  if (!/^\/tmp\/band-exec-[0-9a-f]+\/secrets\/[A-Za-z_][A-Za-z0-9_]*$/.test(path)) {
     throw new Error(`Invalid secret path: ${path}`);
   }
   const proc = Bun.spawnSync(

@@ -1,18 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { randomBytes } from "crypto";
+import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
 import { buildSecretEnvLines } from "../../src/band-server";
 
+const validWorkdir = "/tmp/band-exec-deadbeef";
+
 describe("band-server secret env", () => {
   test("reads secrets from files without embedding values or base64 subprocesses", () => {
-    const lines = buildSecretEnvLines("/tmp/band-exec-test", {
+    const lines = buildSecretEnvLines(validWorkdir, {
       API_KEY: "super-secret",
     });
 
     expect(lines).toEqual([
-      `IFS= read -r -d '' API_KEY < "/tmp/band-exec-test/secrets/API_KEY" || true`,
+      `IFS= read -r -d '' API_KEY < "${validWorkdir}/secrets/API_KEY" || true`,
       "export API_KEY",
     ]);
     expect(lines.join("\n")).not.toContain("super-secret");
@@ -21,7 +24,8 @@ describe("band-server secret env", () => {
   });
 
   test("generated env lines export multiline secret file contents", () => {
-    const workdir = mkdtempSync(join(tmpdir(), "band-exec-"));
+    const workdir = join(tmpdir(), `band-exec-${randomBytes(6).toString("hex")}`);
+    mkdirSync(workdir);
     try {
       mkdirSync(join(workdir, "secrets"));
       const secret = "top secret\nsecond line";
@@ -42,7 +46,7 @@ describe("band-server secret env", () => {
 
   test("rejects invalid secret names before writing env lines", () => {
     expect(() =>
-      buildSecretEnvLines("/tmp/band-exec-test", { "BAD/KEY": "secret" })
+      buildSecretEnvLines(validWorkdir, { "BAD/KEY": "secret" })
     ).toThrow("Invalid secret name: BAD/KEY");
   });
 
