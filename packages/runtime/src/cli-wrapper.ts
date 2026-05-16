@@ -28,12 +28,12 @@ export function buildCliWrapperScript(
     throw new Error(`unsafe cmd name: ${cmd}`);
   }
   const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
+  const track = trackLine ? `${trackLine}\n` : "";
   if (!hasDeny) {
     return `#!/bin/bash
 ${logLine}
-${trackLine}
-exec ${realPath} "$@"
-`.replace(/\n{3,}/g, "\n\n");
+${track}exec ${realPath} "$@"
+`;
   }
   return `#!/bin/bash
 FULL_CMD="${cmd} $*"
@@ -45,9 +45,8 @@ while IFS= read -r P; do
   fi
 done < "\$(dirname "\$0")/.deny-${cmd}"
 ${logLine}
-${trackLine}
-exec ${realPath} "$@"
-`.replace(/\n{3,}/g, "\n\n");
+${track}exec ${realPath} "$@"
+`;
 }
 
 export function buildDenyPatternsFile(patterns: string[]): string {
