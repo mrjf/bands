@@ -11,9 +11,7 @@ MILESTONE=$(echo "$INPUT" | jq -r '.milestone // empty')
 
 ARGS=(-R "$REPO" --title "$TITLE" --head "$HEAD")
 
-if [ -n "$BODY" ]; then
-  ARGS+=(--body "$BODY")
-fi
+ARGS+=(--body "$BODY")
 
 if [ -n "$BASE" ]; then
   ARGS+=(--base "$BASE")
