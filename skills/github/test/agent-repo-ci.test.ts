@@ -130,14 +130,14 @@ describe("agent: repo & CI", () => {
     "api",
     async () => {
       const result = await agentCall(
-        `Get the authenticated user via the GitHub API`
+        `Use the api script to call the "user" endpoint to get the authenticated user`
       );
 
       expectScriptSucceeded(result, "api");
 
       // Verify via direct API call
       const verify = await gh("api", { endpoint: "user" });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `api verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any;
       expect(data.login).toBeTruthy();
       expect(typeof data.login).toBe("string");

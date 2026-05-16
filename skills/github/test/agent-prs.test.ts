@@ -91,14 +91,14 @@ describe("agent: pull requests", () => {
     async () => {
       expect(prNumber, "pr-create must succeed first").toBeGreaterThan(0);
       const result = await agentCall(
-        `View pull request #${prNumber} in ${GITHUB_REPO}`
+        `Use the pr-view script to view pull request #${prNumber} in ${GITHUB_REPO}`
       );
 
       expectScriptSucceeded(result, "pr-view");
 
       // Verify via direct API
       const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
-      expect(verify.success).toBe(true);
+      expect(verify.success, `pr-view verify failed: ${verify.error}`).toBe(true);
       const data = verify.data as any;
       expect(data.number).toBe(prNumber);
       expect(data.state).toMatch(/OPEN|open/i);
