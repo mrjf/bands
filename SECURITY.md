@@ -49,5 +49,8 @@ Secrets passed as env vars via `env.sh` in the workdir. Only visible inside the 
 
 ## Known limitations
 
-- Bash builtins (`echo`, `test`, `[`) bypass PATH wrappers. Insist patterns for builtins won't be tracked via the ops log.
+- Bash builtins (`echo`, `test`, `[`, `eval`, `source`) bypass PATH wrappers and the DEBUG trap. They are not subject to `deny.cli` and won't be tracked for insist enforcement.
 - DNS-based iptables rules resolve hostnames at execution time. CDN IP rotation mid-request may cause connection failure.
+- IPv6 traffic is not filtered. Only IPv4 iptables rules are applied — AAAA-resolvable hosts reachable via IPv6 are not subject to `allow.net`/`deny.net`.
+- Symlinks inside `allow.read`/`allow.write` directories are followed by the kernel. A symlink at an allowed path that points outside the allowed tree lets the script read or write the target. Avoid mounting directories that contain attacker-controlled symlinks.
+- `/proc` and `/dev` are mounted inside the sandbox. Scripts can read `/proc/self/*` and other process metadata visible to the unprivileged `band-runner` UID.

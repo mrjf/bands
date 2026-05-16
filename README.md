@@ -27,12 +27,14 @@ A band is a YAML frontmatter block in a Markdown file. A skill is a directory wi
 ```yaml
 # BAND.md
 ---
-band: github
+band: example
 allow:
-  cli: ["gh *", "git *", "jq *"]
-  net: ["*.github.com", "*.githubusercontent.com"]
+  cli: ["curl *", "jq *"]
+  net: ["api.example.com"]
+  read: ["./data/**"]
+  write: ["./output/**"]
 env:
-  secrets: [GITHUB_TOKEN]
+  secrets: [API_KEY]
 execution:
   target: local-lima
 ---
