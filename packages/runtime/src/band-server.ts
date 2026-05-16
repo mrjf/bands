@@ -153,6 +153,10 @@ function writeFile(path: string, content: string): void {
   shell(`echo '${b64}' | base64 -d > ${path}`);
 }
 
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 // ── Firewall ──────────────────────────────────────────────────────────
 
 function setupFirewall(
@@ -325,6 +329,31 @@ const ESSENTIAL_COMMANDS = [
   "sudo", "su",
 ];
 
+export function buildCliWrapper(cmd: string, realPath: string, denyPats: string[]): string {
+  const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
+
+  if (denyPats.length > 0) {
+    const patternArray = denyPats.map(shellSingleQuote).join(" ");
+    return `#!/bin/bash
+FULL_CMD="${cmd} $*"
+DENY_PATTERNS=(${patternArray})
+for P in "\${DENY_PATTERNS[@]}"; do
+  if [[ "$FULL_CMD" == $P ]]; then
+    echo "DENIED: $FULL_CMD" >&2
+    exit 126
+  fi
+done
+${logLine}
+exec ${realPath} "$@"
+`;
+  }
+
+  return `#!/bin/bash
+${logLine}
+exec ${realPath} "$@"
+`;
+}
+
 function setupCliWrappers(
   wrapperDir: string,
   allowPatterns: string[],
@@ -355,29 +384,7 @@ function setupCliWrappers(
     if (!realPath) continue;
 
     const denyPats = denyByCmd.get(cmd) || [];
-    const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
-
-    let wrapper: string;
-    if (denyPats.length > 0) {
-      const patternArray = denyPats.map(p => `"${p.replace(/"/g, '\\"')}"`).join(" ");
-      wrapper = `#!/bin/bash
-FULL_CMD="${cmd} $*"
-DENY_PATTERNS=(${patternArray})
-for P in "\${DENY_PATTERNS[@]}"; do
-  if eval "[[ \\"\\$FULL_CMD\\" == \\$P ]]" 2>/dev/null; then
-    echo "DENIED: $FULL_CMD" >&2
-    exit 126
-  fi
-done
-${logLine}
-exec ${realPath} "$@"
-`;
-    } else {
-      wrapper = `#!/bin/bash
-${logLine}
-exec ${realPath} "$@"
-`;
-    }
+    const wrapper = buildCliWrapper(cmd, realPath, denyPats);
 
     writeFile(`${wrapperDir}/${cmd}`, wrapper);
     shell(`chmod +x ${wrapperDir}/${cmd}`);
