@@ -20,7 +20,8 @@
  */
 
 import { Hono } from "hono";
-import { createHash, randomBytes } from "crypto";
+import { createHash } from "crypto";
+import { randomId } from "./random-id";
 
 const BAND_RUNNER_USER = "band-runner";
 let executing = false;
@@ -134,10 +135,6 @@ function shell(cmd: string): string {
 
 function shellIgnoreError(cmd: string): void {
   Bun.spawnSync(["sudo", "bash", "-c", cmd]);
-}
-
-function randomId(): string {
-  return randomBytes(8).toString("hex");
 }
 
 /** Reject values containing shell metacharacters. Used for any band-config value interpolated into shell commands. */
