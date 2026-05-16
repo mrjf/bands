@@ -80,6 +80,7 @@ jobs:
           # Deploy band server using limactl copy (avoids pipe issues with --plain)
           limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
           limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
+          limactl copy packages/runtime/src/cli-wrapper.ts bands-executor:$VM_HOME/bands-server/cli-wrapper.ts
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
           # Create systemd user service for the band server
           limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
@@ -198,6 +199,7 @@ jobs:
           # Deploy band server using limactl copy (avoids pipe issues with --plain)
           limactl shell bands-executor -- mkdir -p $VM_HOME/bands-server
           limactl copy packages/runtime/src/band-server.ts bands-executor:$VM_HOME/bands-server/server.ts
+          limactl copy packages/runtime/src/cli-wrapper.ts bands-executor:$VM_HOME/bands-server/cli-wrapper.ts
           limactl shell bands-executor -- bash -c "cd $VM_HOME/bands-server && $VM_HOME/.bun/bin/bun add hono"
           # Create systemd user service for the band server
           limactl shell bands-executor -- mkdir -p $VM_HOME/.config/systemd/user
