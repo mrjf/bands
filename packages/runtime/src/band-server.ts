@@ -397,6 +397,12 @@ exec ${realPath} "$@"
   }
 }
 
+/**
+ * Generates wrapper-side operation tracking for common file commands.
+ * Read-like commands log each non-flag, non-URL argument as a read; write-like
+ * commands log those arguments as writes. For cp/mv, the final path argument is
+ * treated as the write destination and earlier path arguments are reads.
+ */
 function buildInsistTracker(cmd: string): string {
   return `if [ -n "$BAND_OPS_FILE" ]; then
   case "${cmd}" in
@@ -453,20 +459,16 @@ function buildRedirectTracker(): string {
 // ── Insist checking ───────────────────────────────────────────────────
 
 export function matchGlob(str: string, pattern: string): boolean {
-  try {
-    return new Bun.Glob(pattern).match(str);
-  } catch { /* invalid glob patterns fall back to the legacy matcher below */ }
+  return new Bun.Glob(pattern).match(str);
+}
 
+function matchCliPattern(str: string, pattern: string): boolean {
   const regex = "^" + pattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
     .replace(/\*/g, ".*")
     .replace(/\?/g, ".")
     + "$";
-  try {
-    return new RegExp(regex).test(str);
-  } catch {
-    return str === pattern;
-  }
+  return new RegExp(regex).test(str);
 }
 
 function stripShellQuotes(path: string): string {
@@ -509,7 +511,7 @@ export function checkInsistFromOps(
     const matched = ops.some(op =>
       !op.startsWith("read:") &&
       !op.startsWith("write:") &&
-      matchGlob(op, pattern)
+      matchCliPattern(op, pattern)
     );
     if (!matched) missing.push(`cli: ${pattern}`);
   }
