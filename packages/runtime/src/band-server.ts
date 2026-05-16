@@ -333,10 +333,10 @@ export function buildCliWrapper(cmd: string, realPath: string, denyPats: string[
   const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
 
   if (denyPats.length > 0) {
-    const patternArray = denyPats.map(shellSingleQuote).join(" ");
+    const quotedPatterns = denyPats.map(shellSingleQuote).join(" ");
     return `#!/bin/bash
 FULL_CMD="${cmd} $*"
-DENY_PATTERNS=(${patternArray})
+DENY_PATTERNS=(${quotedPatterns})
 for P in "\${DENY_PATTERNS[@]}"; do
   if [[ "$FULL_CMD" == $P ]]; then
     echo "DENIED: $FULL_CMD" >&2

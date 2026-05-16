@@ -17,7 +17,7 @@ async function importBandServer() {
   }) as any;
 
   try {
-    return await import(`../../src/band-server.ts?test=${Date.now()}`);
+    return await import("../../src/band-server");
   } finally {
     (Bun as any).spawnSync = originalSpawnSync;
   }
