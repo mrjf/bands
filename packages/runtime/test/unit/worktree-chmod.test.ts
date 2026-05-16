@@ -189,7 +189,7 @@ describe("buildChmodScript", () => {
     const phase1 = script.indexOf("chmod -R 000");
     const phase2 = script.indexOf("chmod a+x");
     const phase3 = script.indexOf("chmod a+r ");
-    const phase4 = script.indexOf("chmod a+rw");
+    const phase4 = script.indexOf("chmod a+w");
     const phase5 = script.lastIndexOf("chmod 000 ");
 
     // All phases present
@@ -228,7 +228,7 @@ describe("buildChmodScript", () => {
     expect(script).toContain("chmod -R 000");
     expect(script).toContain("chmod a+x '/wt'");
     expect(script).not.toContain("chmod a+r ");
-    expect(script).not.toContain("chmod a+rw");
+    expect(script).not.toContain("chmod a+w");
   });
 
   test("deny phase comes after allow phases", () => {
@@ -406,11 +406,21 @@ describe("security invariants", () => {
     const script = buildChmodScript(plan);
     const lines = script.split("\n");
 
-    // Only the file itself should get a+rw, not the directory
+    // Only the file itself should get a+w, not the directory
     for (const dir of plan.traversalDirs) {
-      const writeLine = lines.find((l) => l.includes("chmod a+rw") && l.includes(`'${dir}'`));
+      const writeLine = lines.find((l) => l.includes("chmod a+w") && l.includes(`'${dir}'`));
       expect(writeLine).toBeUndefined();
     }
+  });
+
+  test("write-only files do not implicitly become readable", () => {
+    const plan = buildChmodPlan("/wt", [], ["/wt/output/file.txt"], []);
+    const script = buildChmodScript(plan);
+    const lines = script.split("\n");
+
+    expect(lines).toContain("chmod a+w '/wt/output/file.txt'");
+    const readLine = lines.find((l) => l === "chmod a+r '/wt/output/file.txt'");
+    expect(readLine).toBeUndefined();
   });
 
   test("worktree root gets a+x but not a+r", () => {

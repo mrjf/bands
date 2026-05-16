@@ -9,7 +9,7 @@
  *   2. chmod -R 000 (deny everything)
  *   3. chmod a+x on traversal directories
  *   4. chmod a+r on allow.read files
- *   5. chmod a+rw on allow.write files
+ *   5. chmod a+w on allow.write files
  *   6. chmod 000 on deny.read / deny.write (override allow)
  *   7. Run script as band-runner (unprivileged)
  *   8. Tear down worktree
@@ -121,7 +121,7 @@ export function buildChmodPlan(
  *   1. chmod -R 000 (deny all)
  *   2. chmod a+x on traversal dirs (allow navigation)
  *   3. chmod a+r on readable files
- *   4. chmod a+rw on writable files
+ *   4. chmod a+w on writable files
  *   5. chmod 000 on denied files (deny overrides allow)
  *
  * Traversal dirs get a+x but NOT a+r — you can cd into them but not ls.
@@ -155,11 +155,11 @@ export function buildChmodScript(plan: ChmodPlan): string {
     lines.push("");
   }
 
-  // Phase 4: writable files (a+rw)
+  // Phase 4: writable files (a+w)
   if (plan.writableFiles.length > 0) {
     lines.push(`# Phase 4: writable files`);
     for (const file of plan.writableFiles) {
-      lines.push(`chmod a+rw ${shellQuote(file)}`);
+      lines.push(`chmod a+w ${shellQuote(file)}`);
     }
     lines.push("");
   }
