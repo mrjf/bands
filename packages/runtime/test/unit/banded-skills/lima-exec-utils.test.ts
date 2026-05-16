@@ -22,10 +22,13 @@ describe("buildBwrapCommand", () => {
     expect(cmd).toContain("--ro-bind-try /etc/ca-certificates /etc/ca-certificates");
   });
 
-  test("includes proc, dev, tmpfs mounts", () => {
+  test("restricts proc and dev mounts", () => {
     const cmd = buildBwrapCommand("/work/abc");
-    expect(cmd).toContain("--proc /proc");
-    expect(cmd).toContain("--dev /dev");
+    expect(cmd).not.toContain("--proc /proc");
+    expect(cmd).not.toContain("--dev /dev");
+    expect(cmd).toContain("--dev-bind /dev/null /dev/null");
+    expect(cmd).toContain("--dev-bind /dev/zero /dev/zero");
+    expect(cmd).toContain("--dev-bind /dev/urandom /dev/urandom");
     expect(cmd).toContain("--tmpfs /tmp");
     expect(cmd).toContain("--tmpfs /home");
   });
