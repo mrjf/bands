@@ -60,6 +60,7 @@ interface Cook {
 }
 
 let currentCook: Cook | null = null;
+const globCache = new Map<string, Bun.Glob>();
 
 /**
  * Hash the sandbox-relevant permissions to produce a cook ID.
@@ -459,16 +460,25 @@ function buildRedirectTracker(): string {
 // ── Insist checking ───────────────────────────────────────────────────
 
 export function matchGlob(str: string, pattern: string): boolean {
-  return new Bun.Glob(pattern).match(str);
+  let glob = globCache.get(pattern);
+  if (!glob) {
+    glob = new Bun.Glob(pattern);
+    globCache.set(pattern, glob);
+  }
+  return glob.match(str);
 }
 
 function matchCliPattern(str: string, pattern: string): boolean {
-  const regex = "^" + pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".")
-    + "$";
-  return new RegExp(regex).test(str);
+  try {
+    const regex = "^" + pattern
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".")
+      + "$";
+    return new RegExp(regex).test(str);
+  } catch {
+    return str === pattern;
+  }
 }
 
 function stripShellQuotes(path: string): string {
@@ -641,7 +651,8 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     }
 
     // Point PATH to the cooked CLI wrapper dir (mounted at workdir/.band-cli inside bwrap)
-    if (cook.allowCli.length > 0 || cook.denyCli.length > 0) {
+    const hasCliRestrictions = cook.allowCli.length > 0 || cook.denyCli.length > 0;
+    if (hasCliRestrictions) {
       envLines.unshift(`export PATH="${workdir}/.band-cli"`);
     } else if (cook.trackOps) {
       envLines.unshift(`export PATH="${workdir}/.band-cli:$PATH"`);
@@ -649,12 +660,16 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     if (cook.trackOps) {
       envLines.push(buildRedirectTracker());
     }
-    if (cook.allowCli.length > 0 || cook.denyCli.length > 0) {
+    if (hasCliRestrictions) {
       envLines.push(`shopt -s extdebug`);
       envLines.push(`_band_check() { local c="\${BASH_COMMAND%% *}"; [[ "$c" == /* ]] && { echo "DENIED: \$BASH_COMMAND (absolute paths blocked)" >&2; return 1; }; return 0; }`);
-      envLines.push(cook.trackOps ? `trap '_band_check && _band_log_redirect' DEBUG` : `trap _band_check DEBUG`);
-    } else if (cook.trackOps) {
-      envLines.push(`trap _band_log_redirect DEBUG`);
+    }
+    const debugHooks = [
+      ...(hasCliRestrictions ? ["_band_check"] : []),
+      ...(cook.trackOps ? ["_band_log_redirect"] : []),
+    ];
+    if (debugHooks.length > 0) {
+      envLines.push(`trap '${debugHooks.join(" && ")}' DEBUG`);
     }
 
     // Ops tracker for insist enforcement
