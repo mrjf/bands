@@ -169,16 +169,22 @@ function shellWorkdir(value: string): string {
   return value;
 }
 
-function writeSecretFile(path: string, content: string): void {
+async function writeSecretFile(path: string, content: string): Promise<void> {
   if (!/^\/tmp\/band-exec-[0-9a-f]+\/secrets\/[A-Za-z_][A-Za-z0-9_]*$/.test(path)) {
     throw new Error(`Invalid secret path: ${path}`);
   }
-  const proc = Bun.spawnSync(
+  const proc = Bun.spawn(
     ["sudo", "bash", "-c", `cat > "$1" && chmod 600 "$1"`, "bash", path],
-    { stdin: content }
+    { stdin: "pipe", stdout: "pipe", stderr: "pipe" }
   );
-  if (proc.exitCode !== 0) {
-    throw new Error(proc.stderr.toString() || `Command failed: write ${path}`);
+  proc.stdin.write(content);
+  proc.stdin.end();
+  const [exitCode, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stderr).text(),
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(stderr || `Command failed: write ${path}`);
   }
 }
 
@@ -693,7 +699,7 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       shell(`mkdir -p ${secretsDir} && chmod 700 ${secretsDir}`);
       for (const [key, value] of Object.entries(req.secrets ?? {})) {
         const name = shellEnvName(key, "secret name");
-        writeSecretFile(`${secretsDir}/${name}`, value);
+        await writeSecretFile(`${secretsDir}/${name}`, value);
       }
       envLines.push(...secretEnvLines);
     }
