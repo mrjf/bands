@@ -15,6 +15,18 @@ describe("github skill: structure & basics", () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  test("BAND.md restricts network hosts", () => {
+    const { readFileSync } = require("fs");
+    const { parseBandMd } = require("../../../packages/format/src/parse");
+    const bandMd = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
+    const result = parseBandMd(bandMd);
+    expect(result.document.allow?.net).toEqual([
+      "api.github.com",
+      "*.githubusercontent.com",
+      "uploads.github.com",
+    ]);
+  });
+
   test("--help works for every script", async () => {
     const scripts = [
       "issue-list", "issue-create", "issue-view", "issue-comment",

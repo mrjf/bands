@@ -21,6 +21,14 @@ describe("elevenlabs skill: structure", () => {
     expect(existsSync(join(SKILL_ROOT, "BAND.md"))).toBe(true);
   });
 
+  test("BAND.md restricts network hosts", () => {
+    const { readFileSync } = require("fs");
+    const { parseBandMd } = require("../../../packages/format/src/parse");
+    const bandMd = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
+    const result = parseBandMd(bandMd);
+    expect(result.document.allow?.net).toEqual(["api.elevenlabs.io"]);
+  });
+
   test("all scripts have resource dirs with run.sh", () => {
     const scripts = ["tts", "voice-list", "voice-get", "sfx", "user-info"];
     for (const script of scripts) {

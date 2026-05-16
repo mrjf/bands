@@ -105,6 +105,14 @@ describe("slack skill: structure & basics", () => {
     expect(bandMd).toContain("slack.com");
   });
 
+  test("BAND.md restricts network hosts", () => {
+    const { readFileSync } = require("fs");
+    const { parseBandMd } = require("../../../packages/format/src/parse");
+    const bandMd = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
+    const result = parseBandMd(bandMd);
+    expect(result.document.allow?.net).toEqual(["slack.com", "*.slack.com"]);
+  });
+
   test("SKILL.md has required frontmatter", () => {
     const { readFileSync } = require("fs");
     const skillMd = readFileSync(join(SKILL_ROOT, "SKILL.md"), "utf-8");
