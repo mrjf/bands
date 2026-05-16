@@ -13,6 +13,13 @@ const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
   GITHUB_TOKEN: "TEST_GITHUB_TOKEN",
 });
 
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const MAX_RETRY_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 1500;
+
 describe("agent: issues", () => {
   beforeAll(() => {
     requireClaude();
@@ -134,10 +141,17 @@ describe("agent: issues", () => {
 
       expectScriptSucceeded(result, "issue-edit");
 
-      // Verify the title actually changed
-      const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
-      expect(verify.success).toBe(true);
-      expect((verify.data as any).title).toBe(updatedTitle);
+      // Verify the title actually changed (GitHub can be eventually consistent)
+      let updated = false;
+      for (let retryAttempt = 0; retryAttempt < MAX_RETRY_ATTEMPTS; retryAttempt++) {
+        const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
+        if (verify.success && (verify.data as any).title === updatedTitle) {
+          updated = true;
+          break;
+        }
+        if (retryAttempt < MAX_RETRY_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
+      }
+      expect(updated).toBe(true);
     },
     AGENT_TIMEOUT
   );
@@ -170,10 +184,17 @@ describe("agent: issues", () => {
 
       expectScriptSucceeded(result, "issue-reopen");
 
-      // Verify the issue is actually open again
-      const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
-      expect(verify.success).toBe(true);
-      expect((verify.data as any).state).toMatch(/OPEN|open/i);
+      // Verify the issue is actually open again (GitHub can be eventually consistent)
+      let reopened = false;
+      for (let retryAttempt = 0; retryAttempt < MAX_RETRY_ATTEMPTS; retryAttempt++) {
+        const verify = await gh("issue-view", { repo: GITHUB_REPO, number: issueNumber });
+        if (verify.success && /OPEN|open/i.test((verify.data as any).state ?? "")) {
+          reopened = true;
+          break;
+        }
+        if (retryAttempt < MAX_RETRY_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
+      }
+      expect(reopened).toBe(true);
     },
     AGENT_TIMEOUT
   );

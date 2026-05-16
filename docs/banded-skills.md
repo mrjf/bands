@@ -1,44 +1,43 @@
 # Banded Skills
 
-A **banded skill** packages agent capabilities as sandboxed, script-based units. Each script runs inside its own banded microVM with maximal permission restriction.
+A banded skill packages agent capabilities as sandboxed, script-based units. Each script runs inside a banded microVM with maximal permission restriction.
+
 
 ## Directory Structure
 
 ```
 my-skill/
-├── SKILL.md                              # Skill metadata and description
+├── SKILL.md                              # Skill metadata and instructions
 ├── BAND.md                               # Top-level band (or url:/path: reference)
 └── scripts/
-    ├── summarize-pull-request            # Wrapper: band exec scripts/resources/summarize-pull-request "$@"
-    ├── analyze-code                      # Wrapper: band exec scripts/resources/analyze-code "$@"
+    ├── summarize-pull-request            # Wrapper script
+    ├── analyze-code                      # Wrapper script
     ├── BAND.md                           # (optional) default band for all scripts
     └── resources/
         ├── summarize-pull-request/
         │   ├── run.sh                    # Implementation (runs in sandbox)
         │   ├── BAND.md                   # (optional) per-script band override
-        │   ├── input_schema.json         # Input JSON Schema
-        │   └── output_schema.json        # Output JSON Schema
+        │   ├── input_schema.json
+        │   └── output_schema.json
         └── analyze-code/
             ├── run.sh
             ├── input_schema.json
             └── output_schema.json
 ```
 
-## Key Concepts
 
-### Band Discovery (Most-Specific Wins)
+## Band Discovery
 
-Each script gets its permissions from the most specific BAND.md found:
+Most-specific wins. No composition between levels.
 
 1. `scripts/resources/<name>/BAND.md` — per-script (highest priority)
 2. `scripts/BAND.md` — default for all scripts
 3. `BAND.md` — top-level fallback
 
-No composition between levels. The most-specific band is used entirely.
 
-### Reference BANDs
+## Reference BANDs
 
-A BAND.md can delegate to another band via `url` or `path`:
+A BAND.md can delegate via `url` or `path`:
 
 ```yaml
 ---
@@ -52,9 +51,10 @@ url: https://github.com/org/bands/tree/main/templates/sandbox
 ---
 ```
 
-URL references are resolved via `parseGitHubUrl()`. Path references resolve relative to the BAND.md file's directory.
+URL references resolved via `parseGitHubUrl()`. Path references resolve relative to the BAND.md file.
 
-### Wrapper Scripts
+
+## Wrapper Scripts
 
 Each wrapper resolves its own path and invokes the CLI:
 
@@ -66,80 +66,46 @@ SKILL_ROOT="$(cd -P "$DIR/.." && pwd)"
 bun "$ROOT/packages/runtime/src/cli.ts" exec "$DIR/resources/<name>" --skill_root "$SKILL_ROOT" "$@"
 ```
 
-### Schema Files
 
-`input_schema.json` and `output_schema.json` are standard JSON Schema. They serve dual purposes:
-- **Validation**: Input is validated before execution, output after
-- **Documentation**: `--help` prints schema info without executing the script
+## Schema Files
 
-### I/O Protocol
+`input_schema.json` and `output_schema.json` are standard JSON Schema. Dual purpose: validation before/after execution, and `--help` documentation.
 
-Scripts receive input/output paths via environment variables:
-- `$INPUT_PATH` — JSON file with input data
-- `$OUTPUT_PATH` — Where to write JSON output
 
-## CLI Commands
+## I/O Protocol
 
-### `band validate-skill <dir>`
+Scripts receive paths via environment variables:
 
-Validate a banded skill directory structure:
-- SKILL.md exists with name/description
-- BAND.md exists and parses correctly
-- scripts/ directory exists with wrappers
-- Each wrapper has matching `scripts/resources/<name>/run.sh`
-- Schema files are valid JSON
-- Wrappers use `band exec` pattern
+| Variable | Purpose |
+|----------|---------|
+| `$INPUT_PATH` | JSON file with input data |
+| `$OUTPUT_PATH` | Where to write JSON output |
 
-### `band exec <resource-dir> [options]`
-
-Execute a banded script:
-
-```bash
-# With key-value args
-band exec scripts/resources/echo-input --message="hello"
-
-# With input/output files
-band exec scripts/resources/echo-input --input_path=in.json --output_path=out.json
-
-# Show help (reads schemas, no execution)
-band exec scripts/resources/echo-input --help
-```
-
-### `band convert-skill <source> --output <dir>`
-
-Convert an existing skill to banded format:
-
-```bash
-# Convert local skill
-band convert-skill ./my-skill --output ./my-banded-skill --verbose
-
-# Dry run (show what would be created)
-band convert-skill ./my-skill --output ./out --dry-run
-```
 
 ## Execution Targets
 
-The discovered BAND.md determines where scripts run:
+The discovered BAND.md determines where scripts run.
 
 | Target | Isolation | Enforcement |
 |--------|-----------|-------------|
 | `lima` | Full Linux VM | File-based I/O via `limactl` |
-| `cloudflare` | V8 isolates | Full enforcement |
+| `cloudflare` | V8 isolates | Placeholder |
 
-### Lima Execution
+For `lima`, `band exec` uses file-based execution: `limactl copy` staging dir in, `limactl shell` runs `run.sh`, `limactl copy` output back.
 
-For `lima` targets, `band exec` uses file-based execution:
-1. `limactl copy` staging dir into VM
-2. `limactl shell` runs `run.sh` with `INPUT_PATH`/`OUTPUT_PATH`
-3. `limactl copy` output back to host
 
-This avoids needing the band-server HTTP endpoint for simple script execution.
+## CLI Commands
+
+```bash
+band validate-skill <dir>                        # Validate structure
+band exec <resource-dir> [--key=value ...]        # Execute a script
+band convert-skill <source> --output <dir>        # Convert to banded format
+```
+
 
 ## Creating a Banded Skill
 
-### 1. Define the skill
-
-Create `SKILL.md` with name and description:
+### 1. Define SKILL.md
 
 ```yaml
 ---
@@ -153,7 +119,7 @@ Available scripts:
 - `process-data` — Processes input data
 ```
 
-### 2. Create the top-level BAND.md
+### 2. Create BAND.md
 
 ```yaml
 ---
@@ -164,33 +130,34 @@ allow:
   cli:
     - "echo *"
 execution:
-  target: local-lima
+  target: lima
 ---
 ```
 
 ### 3. Create scripts
 
-For each capability, create:
+For each capability:
+
 - `scripts/<name>` — wrapper script
 - `scripts/resources/<name>/run.sh` — implementation
-- `scripts/resources/<name>/input_schema.json` — input schema
-- `scripts/resources/<name>/output_schema.json` — output schema
+- `scripts/resources/<name>/input_schema.json`
+- `scripts/resources/<name>/output_schema.json`
 
-### 4. (Optional) Add per-script bands
+### 4. Per-script bands (optional)
 
-For scripts needing different permissions than the top-level band:
+For scripts needing different permissions:
 
 ```yaml
 ---
 band: process-data
 icon: 📊
-description: Restricted environment for data processing
+description: Restricted data processing
 allow:
   cli:
     - "python3 *"
     - "jq *"
 execution:
-  target: local-lima
+  target: lima
 ---
 ```
 
@@ -200,22 +167,25 @@ execution:
 band validate-skill ./my-tool
 ```
 
+
 ## Permission Model
 
-Banded skills use deny-by-default permissions:
-- `allow` — what the script can do
-- `deny` — explicitly blocked (overrides allow)
-- `insist` — parent requires child to also allow
+Deny by default. Deny > Insist > Allow.
 
-All patterns use glob syntax. See the format package documentation for details.
+| Section | Purpose |
+|---------|---------|
+| `allow` | What the script can do |
+| `deny` | Explicitly blocked (overrides allow) |
+| `insist` | Parent requires child to also allow |
+
+All patterns use glob syntax. See [band-format.md](band-format.md).
+
 
 ## Binary Build
-
-To compile the CLI to a standalone binary:
 
 ```bash
 cd packages/runtime
 bun run build:bin
 ```
 
-This produces a `band` binary that can be placed on PATH. Wrappers can also fall back to `bunx @bands/runtime exec` if the binary isn't installed.
+Produces a `band` binary for PATH. Wrappers can fall back to `bunx @bands/runtime exec`.

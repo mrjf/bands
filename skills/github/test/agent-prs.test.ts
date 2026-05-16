@@ -14,6 +14,13 @@ const { agentCall, exec: gh } = createSkillHarness(resolve(__dirname, ".."), {
   GITHUB_TOKEN: "TEST_GITHUB_TOKEN",
 });
 
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const MAX_RETRY_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 1500;
+
 const SETUP_TIMEOUT = AGENT_TIMEOUT * 3;
 
 describe("agent: pull requests", () => {
@@ -200,10 +207,17 @@ describe("agent: pull requests", () => {
 
       expectScriptSucceeded(result, "pr-close");
 
-      // Verify the PR is actually closed
-      const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
-      expect(verify.success).toBe(true);
-      expect((verify.data as any).state).toMatch(/CLOSED|closed/i);
+      // Verify the PR is actually closed (GitHub can be eventually consistent)
+      let closed = false;
+      for (let retryAttempt = 0; retryAttempt < MAX_RETRY_ATTEMPTS; retryAttempt++) {
+        const verify = await gh("pr-view", { repo: GITHUB_REPO, number: prNumber });
+        if (verify.success && /CLOSED|closed/i.test((verify.data as any).state ?? "")) {
+          closed = true;
+          break;
+        }
+        if (retryAttempt < MAX_RETRY_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
+      }
+      expect(closed).toBe(true);
     },
     AGENT_TIMEOUT
   );

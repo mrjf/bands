@@ -1,10 +1,8 @@
-# Band Format Specification
+# Band Format
 
-A **Band** is a YAML-based configuration that defines permissions and constraints for AI agent execution. Bands act as sandboxes, controlling what an agent can access: CLI commands, filesystem paths, network hosts, and resource limits.
+A band is a YAML configuration that defines permissions and constraints for AI agent execution. Deny by default. Constraint is freedom.
 
-## File Format
-
-Band files use the `.band.md` or `BAND.md` extension. They consist of YAML frontmatter followed by optional markdown documentation:
+Files use `.band.md` or `BAND.md`. YAML frontmatter followed by optional markdown body.
 
 ```markdown
 ---
@@ -30,34 +28,37 @@ limit:
 
 # My Band
 
-Optional markdown documentation about this band.
+Optional documentation.
 ```
+
 
 ## Required Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `band` | string | Unique identifier (lowercase, hyphens allowed) |
-| `icon` | emoji | Single emoji representing the band |
+| `icon` | emoji | Single emoji |
 | `description` | string | Human-readable description |
+
 
 ## Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | number | Version number (integer) |
-| `url` | string | Band reference URL (delegates to another band) |
-| `path` | string | Band reference path (delegates to another band) |
+| `url` | string | Delegates to another band by URL |
+| `path` | string | Delegates to another band by path |
 | `extends` | string[] | Parent bands to inherit from (GitHub URLs) |
 | `includes` | string[] | Bands to merge into this one (GitHub URLs) |
-| `env` | object | Environment configuration (secrets and variables) |
+| `env` | object | Secrets and variables |
 | `provides` | object | Capabilities this band offers |
 | `requires` | object | Secrets and network access this band needs |
 | `contract` | object | I/O contract (inline JSON Schema or path/URL ref) |
 
-### Band References
 
-A band can delegate to another band via `url` or `path`. When present, the required field check for `band`/`icon`/`description` is skipped — the referenced band provides them.
+## Band References
+
+A band can delegate to another band via `url` or `path`. When present, the `band`/`icon`/`description` requirement is waived.
 
 ```yaml
 ---
@@ -65,9 +66,8 @@ url: https://github.com/acme/bands/tree/main/data-analyst
 ---
 ```
 
-### Composition
 
-Bands support inheritance (`extends`) and merging (`includes`):
+## Composition
 
 ```yaml
 extends:
@@ -76,12 +76,13 @@ includes:
   - https://github.com/acme/bands/tree/main/python-tools
 ```
 
-- `extends`: Parent bands whose permissions this band inherits. Child permissions are intersected with parent permissions.
-- `includes`: Bands whose permissions are merged (unioned) into this band.
+| Mechanism | Behavior |
+|-----------|----------|
+| `extends` | Inherits permissions. Child intersected with parent. |
+| `includes` | Merges permissions. Union. |
 
-### Environment
 
-The `env` field configures secrets and variables passed to the execution environment:
+## Environment
 
 ```yaml
 env:
@@ -93,12 +94,12 @@ env:
     - LOG_LEVEL=info
 ```
 
-- `secrets`: Sensitive values (masked in logs). Fetched from the running environment or `.env` file.
-- `variables`: Non-sensitive environment variables.
+`secrets` are masked in logs. `variables` are not.
 
-### Provides & Requires
 
-Bands can declare what they offer and what they need:
+## Requires
+
+Bands declare what they need to run.
 
 ```yaml
 requires:
@@ -109,9 +110,10 @@ requires:
       - api.example.com
 ```
 
-### Contract
 
-The `contract` field defines input/output schemas for validation. Values can be inline JSON Schema objects or string references (file paths or URLs). Inline schemas are enforced at runtime; string refs are parsed and stored but not yet resolved (see `docs/TODO.md`).
+## Contract
+
+Input/output schemas for validation. Values can be inline JSON Schema or string references (file paths or URLs). Inline schemas are enforced at runtime; string refs are parsed but not yet resolved.
 
 ```yaml
 contract:
@@ -123,9 +125,10 @@ contract:
         type: string
 ```
 
-### Band-Specific Config
 
-A band can include skill-specific configuration under a key matching the band name. This is extracted into the `bandConfig` field at parse time:
+## Band-Specific Config
+
+A band can include skill-specific configuration under a key matching the band name. Extracted into `bandConfig` at parse time.
 
 ```yaml
 band: slack
@@ -139,15 +142,19 @@ slack:
   dm: false
 ```
 
+
 ## Permission Model
 
-Bands use a **deny-by-default** permission model:
+Deny by default. Deny > Allow.
 
-- If something isn't in `allow`, it's denied
-- `deny` patterns punch holes in `allow` patterns
-- `deny` takes precedence over `allow`
+1. Matches `deny` pattern — denied
+2. Matches `allow` pattern — allowed
+3. No match — denied
+
 
 ### Permission Categories
+
+Four categories. No others.
 
 ```yaml
 allow:
@@ -163,97 +170,180 @@ deny:
   net: []
 ```
 
-## Glob Patterns
 
-All permission patterns use glob syntax:
+## Glob Patterns
 
 | Pattern | Matches |
 |---------|---------|
-| `*` | Any characters except `/` in paths; any characters in CLI commands |
+| `*` | Any characters except `/` in paths; any characters in CLI |
 | `**` | Any characters including `/` (recursive) |
 | `?` | Exactly one character |
 
+
 ### CLI Patterns
 
-CLI patterns match against the full command string. The `*` wildcard matches anything including slashes (for URLs and paths in arguments):
+`*` matches anything including slashes (for URLs and paths in arguments).
 
 ```yaml
 allow:
   cli:
-    - "python *"           # python with any arguments
-    - "python3 *"          # python3 with any arguments
-    - "curl -s *"          # curl with -s flag and any URL
-    - "npm run *"          # npm run with any script name
+    - "python *"
+    - "curl -s *"
+    - "npm run *"
     - "ls"                 # exact match, no arguments
 
 deny:
   cli:
-    - "curl -X POST *"     # block POST requests
-    - "rm -rf *"           # block recursive force delete
-    - "sudo *"             # block all sudo commands
+    - "curl -X POST *"
+    - "rm -rf *"
+    - "sudo *"
 ```
+
 
 ### Filesystem Patterns
 
-Read and write patterns use `**` for recursive matching:
+`**` for recursive matching.
 
 ```yaml
 allow:
   read:
-    - "/tmp/**"            # anything under /tmp
-    - "./data/**"          # anything under ./data
-    - "./*.csv"            # CSV files in current directory
-    - "./*.json"           # JSON files in current directory
-
+    - "/tmp/**"
+    - "./data/**"
+    - "./*.csv"
   write:
-    - "/tmp/**"            # can write anywhere under /tmp
-    - "./output/**"        # can write to output directory
+    - "/tmp/**"
+    - "./output/**"
 
 deny:
   read:
-    - "**/.env*"           # block all .env files
-    - "**/secrets/**"      # block secrets directories
-    - "**/.git/**"         # block git internals
+    - "**/.env*"
+    - "**/secrets/**"
+    - "**/.git/**"
 ```
+
 
 ### Network Patterns
 
-Network patterns match against hostnames:
+Match against hostnames.
 
 ```yaml
 allow:
   net:
-    - "*"                  # allow all hosts
+    - "*"                  # all hosts
     - "*.github.com"       # github and subdomains
     - "api.example.com"    # specific host
 
 deny:
   net:
-    - "*.internal.corp"    # block internal domains
-    - "localhost"          # block localhost
+    - "*.internal.corp"
+    - "localhost"
 ```
+
 
 ## Resource Limits
 
 ```yaml
 limit:
-  maxRuntimeMs: 60000      # Maximum execution time (ms or duration string)
-  maxOutputBytes: 10485760 # Maximum output size in bytes (or size string)
-  maxInputBytes: 1048576   # Maximum input size in bytes
+  maxRuntimeMs: 60000      # ms or duration string
+  maxOutputBytes: 10485760  # bytes or size string
+  maxInputBytes: 1048576
 ```
 
-### Human-Readable Values
-
-Limits support human-readable strings:
-
-**Duration:** `30s`, `5m`, `1h`
-**Bytes:** `1k`, `10m`, `1g` (case-insensitive)
+Human-readable values: `30s`, `5m`, `1h` for duration. `1k`, `10m`, `1g` for bytes.
 
 ```yaml
 limit:
-  maxRuntimeMs: 5m         # 5 minutes
-  maxOutputBytes: 100m     # 100 megabytes
+  maxRuntimeMs: 5m
+  maxOutputBytes: 100m
 ```
+
+
+## Insist
+
+Required operations. If not performed during execution, the run fails.
+
+```yaml
+insist:
+  cli:
+    - "echo *"
+  read:
+    - "/tmp/config.json"
+  write:
+    - "/tmp/output.txt"
+  net:
+    - "api.example.com"
+```
+
+Use cases: audit logging, mandatory config reads, enforced output locations.
+
+Failure response:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INSIST_NOT_SATISFIED",
+    "message": "Required operations not performed: cli:echo *"
+  }
+}
+```
+
+
+## Execution Targets
+
+```yaml
+execution:
+  target: lima             # or: cloudflare
+```
+
+| Target | Isolation |
+|--------|-----------|
+| `lima` | Full (Linux VM via Virtualization.framework) |
+| `cloudflare` | Full (V8 isolate) — placeholder, not yet available |
+
+Target-specific configuration:
+
+```yaml
+execution:
+  target: lima
+  lima:
+    vmName: bands-executor
+    port: 9000
+
+execution:
+  target: cloudflare
+  cloudflare:
+    workerName: my-band
+    accountId: abc123
+```
+
+
+## Permission Checking
+
+```typescript
+import { checkCliPermission, checkReadPermission, checkWritePermission, checkNetPermission } from "@bands/format";
+
+checkCliPermission("python script.py", allow.cli, deny.cli);
+checkReadPermission("/tmp/data.csv", allow.read, deny.read);
+checkWritePermission("/tmp/out.txt", allow.write, deny.write);
+checkNetPermission("api.github.com", allow.net, deny.net);
+```
+
+
+## Parsing and Exporting
+
+```typescript
+import { parseBandMd, exportBandMd } from "@bands/format";
+
+const { document, errors } = parseBandMd(source);
+const output = exportBandMd(document);
+```
+
+
+## Validation
+
+The parser validates required fields, emoji format, glob patterns, numeric limits, and unknown keys. Errors are returned but don't prevent parsing — the document remains usable with warnings.
+
 
 ## Complete Example
 
@@ -305,125 +395,4 @@ limit:
   maxRuntimeMs: 30m
   maxOutputBytes: 100m
 ---
-
-# Data Analyst Band
-
-For data analysis tasks with Python. Includes:
-- Read access to data files (CSV, JSON, Parquet)
-- Network access to cloud storage (S3, GCS, Azure)
-- Read-only database queries
-- Python with pip for installing packages
-
-Blocks:
-- Mutating HTTP requests (POST, PUT, DELETE)
-- Access to secrets and .env files
-- Destructive file operations
 ```
-
-## Insist (Required Operations)
-
-The `insist` section defines operations that **must** be performed during execution. If these requirements aren't met, the execution fails.
-
-```yaml
-insist:
-  cli:
-    - "echo *"              # Must run at least one echo command
-  read:
-    - "/tmp/config.json"    # Must read this file
-  write:
-    - "/tmp/output.txt"     # Must write to this file
-  net:
-    - "api.example.com"     # Must make a request to this host
-```
-
-Use cases:
-- Ensure audit logging (`insist.cli: ["echo AUDIT:*"]`)
-- Require reading a config file before proceeding
-- Enforce that results are written to a specific location
-
-If insist requirements aren't satisfied, sandboxed executors return:
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INSIST_NOT_SATISFIED",
-    "message": "Required operations not performed: cli:echo *"
-  }
-}
-```
-
-## Execution Targets
-
-Bands can specify where they should run:
-
-```yaml
-execution:
-  target: cloudflare       # or: local-lima
-```
-
-| Target | Description | Isolation |
-|--------|-------------|-----------|
-| `local-lima` | Lima VM on macOS | Full (Linux VM) |
-| `cloudflare` | Cloudflare Workers | Full (V8 isolate) |
-
-Target-specific configuration:
-
-```yaml
-execution:
-  target: local-lima
-  lima:
-    vmName: bands-executor    # VM name (default: bands-executor)
-    port: 9000                # Server port (default: 9000)
-
-execution:
-  target: cloudflare
-  cloudflare:
-    workerName: my-band       # Worker name
-    accountId: abc123         # Cloudflare account ID
-```
-
-## Permission Checking
-
-When a command or path is checked:
-
-1. Check if it matches any `deny` pattern → **DENIED**
-2. Check if it matches any `allow` pattern → **ALLOWED**
-3. No match → **DENIED** (deny by default)
-
-```typescript
-import { checkCliPermission, checkReadPermission, checkWritePermission, checkNetPermission } from "@bands/format";
-
-// Check CLI command
-checkCliPermission("python script.py", allow.cli, deny.cli);  // true/false
-
-// Check filesystem access
-checkReadPermission("/tmp/data.csv", allow.read, deny.read);  // true/false
-checkWritePermission("/tmp/out.txt", allow.write, deny.write); // true/false
-
-// Check network access
-checkNetPermission("api.github.com", allow.net, deny.net);    // true/false
-```
-
-## Parsing and Exporting
-
-```typescript
-import { parseBandMd, exportBandMd } from "@bands/format";
-
-// Parse a band file
-const source = await Bun.file("./BAND.md").text();
-const { document, errors } = parseBandMd(source);
-
-// Export back to BAND.md format
-const output = exportBandMd(document);
-```
-
-## Validation
-
-The parser validates:
-- Required fields (`band`, `icon`, `description`)
-- Valid emoji for `icon`
-- Valid glob patterns
-- Numeric limits (or parseable duration/size strings)
-- No unknown top-level keys
-
-Validation errors are returned but don't prevent parsing - the document is still usable with warnings.

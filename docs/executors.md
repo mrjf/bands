@@ -1,17 +1,19 @@
 # Execution Targets
 
-Bands can run on different execution targets, each providing different levels of isolation and enforcement.
+Bands run on execution targets that provide isolation and enforcement.
+
 
 ## Overview
 
-| Target | Isolation | Enforcement | Use Case |
-|--------|-----------|-------------|----------|
-| `local-lima` | Full (VM) | Enforces | Production on macOS |
-| `cloudflare` | Coming soon | — | Not yet available |
+| Target | Isolation | Enforcement | Status |
+|--------|-----------|-------------|--------|
+| `lima` | Full (Linux VM) | Enforces permissions | Available |
+| `cloudflare` | Full (V8 isolate) | — | Placeholder |
 
-## local-lima
 
-Runs the band in a **Lima VM** on macOS using Virtualization.framework.
+## lima
+
+Runs the band in a Lima VM on macOS using Virtualization.framework.
 
 ```typescript
 const result = await executeBand(band, payload, {
@@ -19,51 +21,47 @@ const result = await executeBand(band, payload, {
 });
 ```
 
-**Requirements:**
-- macOS with Apple Silicon or Intel
-- Lima installed (`brew install lima`)
-- `bands-executor` VM running (`limactl start bands-executor`)
+Requirements: macOS, Lima installed (`brew install lima`), `bands-executor` VM running.
 
-**Behavior:**
+Behavior:
+
 - Full Linux VM isolation
-- Permissions are **enforced** - denied operations fail
-- Insist requirements are **enforced** - missing operations fail
-- Server runs on port 9000 inside VM, forwarded to host
+- Permissions enforced — denied operations fail
+- Insist requirements enforced — missing operations fail
+- Server on port 9000 inside VM, forwarded to host
 
-**Setup:**
+Setup:
+
 ```bash
-# Install Lima
 brew install lima
-
-# Create the VM (first time only)
 limactl create --name=bands-executor template://ubuntu
-
-# Start the VM
 limactl start bands-executor
-
-# Verify it's running
-limactl list
+limactl list   # verify
 ```
 
-**Configuration:**
+Configuration:
+
 ```yaml
 execution:
-  target: local-lima
+  target: lima
   lima:
-    vmName: bands-executor  # Default
-    port: 9000              # Default
+    vmName: bands-executor  # default
+    port: 9000              # default
 ```
 
-**How it works:**
-1. Executor checks if VM is running via `limactl list`
+How it works:
+
+1. Checks VM status via `limactl list`
 2. Sends HTTP request to `http://localhost:9000/exec`
-3. Band server inside VM sets up iptables firewall, creates bwrap sandbox
+3. Band server sets up iptables firewall, creates bwrap sandbox
 4. Script runs as `band-runner` inside sandbox
 5. Server checks insist requirements, returns result, tears down firewall
 
+
 ## cloudflare
 
-> **Coming soon.** The Cloudflare executor is not yet available for production use.
+Placeholder. Not yet available.
+
 
 ## Executor Interface
 
@@ -73,7 +71,6 @@ All executors implement the same interface:
 interface Executor {
   name: string;
   target: ExecutionTarget;
-
   isAvailable(): Promise<boolean>;
   execute(input: ExecutorInput): Promise<ExecutorResult>;
   cleanup?(): Promise<void>;
@@ -101,49 +98,16 @@ interface ExecutorResult {
 }
 ```
 
+
 ## Checking Availability
 
 ```typescript
 import { isTargetAvailable, listAvailableTargets } from "@bands/runtime";
 
-// Check specific target
 const limaAvailable = await isTargetAvailable("local-lima");
-
-// List all available targets
 const targets = await listAvailableTargets();
-// ["local-lima"]  // if Lima VM is running
 ```
 
-## Using the CLI
-
-```bash
-# Check available targets
-bun run packages/runtime/src/cli.ts targets
-
-# Output:
-# ✓ local-lima
-#     Run in Lima VM (macOS)
-#     Isolation: Full - Linux VM via Virtualization.framework
-#
-# ✗ cloudflare
-#     Run on Cloudflare Workers
-#     Isolation: Full - V8 isolates, edge deployment
-#     Requires: wrangler + CLOUDFLARE_API_TOKEN
-
-# Run with specific target
-bun run packages/runtime/src/cli.ts run ./my-band.md \
-  --target local-lima \
-  --input '{"task": "process data"}'
-```
-
-## Enforcement Differences
-
-| Behavior | local-lima |
-|----------|------|
-| Permission denied | Returns error, fails |
-| Insist not met | Returns error, fails |
-| Network blocked | Actually blocks (iptables) |
-| File access denied | Actually blocks (bwrap) |
 
 ## Metrics
 
@@ -151,24 +115,19 @@ All executors return execution metrics:
 
 ```typescript
 const result = await executeBand(band, payload, { target: "local-lima" });
-
 console.log(result.metrics);
-// {
-//   startupMs: 5,      // Time to initialize executor
-//   durationMs: 142,   // Total execution time
-//   inputBytes: 256,   // Request payload size
-//   outputBytes: 1024  // Response size
-// }
+// { startupMs: 5, durationMs: 142, inputBytes: 256, outputBytes: 1024 }
 ```
+
 
 ## Error Codes
 
 | Code | Meaning |
 |------|---------|
-| `PERMISSION_DENIED` | Operation blocked by allow/deny rules |
+| `PERMISSION_DENIED` | Blocked by allow/deny rules |
 | `INSIST_NOT_SATISFIED` | Required operations not performed |
-| `INPUT_TOO_LARGE` | Payload exceeds `maxInputBytes` |
-| `OUTPUT_TOO_LARGE` | Response exceeds `maxOutputBytes` |
-| `TIMEOUT` | Execution exceeded `maxRuntimeMs` |
-| `NOT_INITIALIZED` | Server not ready (internal) |
+| `INPUT_TOO_LARGE` | Exceeds `maxInputBytes` |
+| `OUTPUT_TOO_LARGE` | Exceeds `maxOutputBytes` |
+| `TIMEOUT` | Exceeds `maxRuntimeMs` |
+| `NOT_INITIALIZED` | Server not ready |
 | `LIMA_ERROR` | Lima VM error |

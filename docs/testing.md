@@ -7,10 +7,11 @@
 | Unit | Format parsing, validation, schemas | `bun run test:format` |
 | Editor | Web editor components | `bun run test:editor` |
 | Runtime unit | Band execution, discovery, CLI parsing | `bun run test:unit` |
-| Executor | Execution targets (local, lima) | `bun run test:runtime` |
+| Executor | Execution targets (lima) | `bun run test:runtime` |
 | Integration | Cross-component workflows | `bun run test:integration` |
 | Skill direct | Scripts execute correctly | `bun run test:skills:direct <skill>` |
 | Skill agent | AI agent selects correct scripts | `bun run test:skills:agent <skill>` |
+
 
 ## Running Tests
 
@@ -26,28 +27,28 @@ bun run test:runtime
 # Runtime subsets
 bun run test:unit
 bun run test:integration
-bun run test:all          # unit + executor + integration
+bun run test:all
 
 # Skill tests
-bun run test:skills github           # all tests for github skill
-bun run test:skills:direct github    # direct tests only
-bun run test:skills:agent github     # agent tests only
+bun run test:skills github
+bun run test:skills:direct github
+bun run test:skills:agent github
 ```
 
-## Required Environment
+
+## Environment
 
 ### Package tests (no env needed)
 
 ```bash
-bun run test:format    # Pure parsing/validation, no external deps
-bun run test:editor    # Web component tests
+bun run test:format    # Pure parsing/validation
+bun run test:editor    # Web components
 bun run test:unit      # Runtime unit tests with fixtures
 ```
 
 ### Skill direct tests
 
 ```bash
-# In .env or packages/runtime/.env
 TEST_GITHUB_TOKEN=ghp_...          # GitHub PAT with repo scope
 TEST_GITHUB_REPO=owner/repo        # A test repository you own
 TEST_GIST_GITHUB_TOKEN=ghp_...     # Classic PAT with gist scope
@@ -55,18 +56,19 @@ TEST_GIST_GITHUB_TOKEN=ghp_...     # Classic PAT with gist scope
 
 ### Skill agent tests
 
-All of the above plus:
+All of the above, plus:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...       # Anthropic API key
-ANTHROPIC_MODEL=claude-sonnet-4-20250514  # Optional model override
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-20250514  # optional
 ```
+
 
 ## Writing Skill Tests
 
 ### Direct Tests
 
-Direct tests call scripts via `bandExec()` and verify inputs/outputs.
+Call scripts via `bandExec()`, verify inputs/outputs.
 
 File naming: `skills/<name>/test/github-skill-*.test.ts`
 
@@ -88,7 +90,7 @@ describe("my feature", () => {
 });
 ```
 
-The test helper (`gh()` in github tests) wraps `bandExec()`:
+The test helper wraps `bandExec()`:
 
 ```typescript
 import { bandExec } from "../../../packages/runtime/src/banded-skills/exec";
@@ -113,7 +115,7 @@ async function gh(script: string, input: Record<string, unknown>) {
 
 ### Agent Tests
 
-Agent tests verify that an AI model correctly selects the right script for a natural language prompt.
+Verify that the model selects the right script for a natural language prompt.
 
 File naming: `skills/<name>/test/agent-*.test.ts`
 
@@ -121,7 +123,7 @@ File naming: `skills/<name>/test/agent-*.test.ts`
 import { describe, test, expect } from "bun:test";
 import { createAgentHarness, AGENT_TIMEOUT } from "../../../scripts/agent-test-helpers";
 
-const { agentCall, execScript } = await createAgentHarness({
+const { agentCall } = await createAgentHarness({
   skillDir: resolve(__dirname, ".."),
   requiredEnv: ["TEST_GITHUB_TOKEN"],
   envToSet: { GITHUB_TOKEN: process.env.TEST_GITHUB_TOKEN! },
@@ -139,17 +141,11 @@ describe("agent: my feature", () => {
 });
 ```
 
-**How `createAgentHarness` works:**
+`createAgentHarness` loads SKILL.md as a system prompt, builds tool definitions from `input_schema.json`, sends the prompt to Claude with `tool_choice: { type: "any" }`, and returns which tool was selected plus the execution result.
 
-1. Loads SKILL.md as a system prompt
-2. Reads `input_schema.json` from each script to build tool definitions
-3. Sends the prompt to Claude with `tool_choice: { type: "any" }`
-4. Returns which tool was selected and what input was generated
-5. Executes the script with `bandExec()` and returns the result
+### Lifecycle Pattern
 
-### Test Patterns
-
-**Lifecycle tests** — Create, verify, modify, delete:
+Create, verify, modify, delete:
 
 ```typescript
 let resourceId: string;
@@ -171,7 +167,7 @@ test("delete", async () => {
 });
 ```
 
-**Cleanup with afterAll:**
+Cleanup with `afterAll`:
 
 ```typescript
 afterAll(async () => {
@@ -181,35 +177,33 @@ afterAll(async () => {
 });
 ```
 
-## Test Fixtures
+
+## Fixtures
 
 Runtime unit tests use fixtures at `packages/runtime/test/fixtures/`:
 
 ```
 test/fixtures/
-├── valid-skill/           # Valid skill with SKILL.md, BAND.md, scripts
-├── invalid-skill/         # Intentionally broken for error testing
+├── valid-skill/
+├── invalid-skill/
 └── ...
 ```
 
-## CI Pipeline
 
-The CI runs three jobs:
+## CI
 
-1. **unit-tests** — Format, editor, runtime tests (no external deps)
-2. **skill-tests-direct** — Script execution tests (requires GitHub tokens, Lima VM)
-3. **skill-tests-agent** — Agent selection tests (requires Anthropic API key)
+Three jobs:
 
-Agent tests run after unit tests pass. Both skill test jobs run in Lima VMs with KVM acceleration.
+1. unit-tests — Format, editor, runtime (no external deps)
+2. skill-tests-direct — Script execution (requires GitHub tokens, Lima VM)
+3. skill-tests-agent — Agent selection (requires Anthropic API key)
 
-Required GitHub secrets:
-- `TEST_GITHUB_TOKEN`
-- `TEST_GITHUB_REPO`
-- `TEST_GIST_GITHUB_TOKEN`
-- `ANTHROPIC_API_KEY`
+Agent tests run after unit tests pass. Both skill jobs run in Lima VMs with KVM acceleration.
+
+Required secrets: `TEST_GITHUB_TOKEN`, `TEST_GITHUB_REPO`, `TEST_GIST_GITHUB_TOKEN`, `ANTHROPIC_API_KEY`.
+
 
 ## Rules
 
-From CLAUDE.md:
-- **Never skip tests.** No `describe.skipIf`, no `test.skipIf`, no conditional skipping. If required env vars are missing, let the test error.
-- **Never use fallbacks unless requested.** Tests should fail clearly, not silently succeed with degraded behavior.
+- Never skip tests. No `describe.skipIf`, no `test.skipIf`, no conditional skipping. Missing env vars should error, not skip.
+- Never use fallbacks unless requested. Tests fail clearly, not silently.
