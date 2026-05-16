@@ -10,7 +10,9 @@ Generate speech from text, manage voices, clone voices, and create sound effects
 
 **IMPORTANT: You MUST use ONLY the scripts provided below for ALL ElevenLabs operations. Do NOT use `curl`, the ElevenLabs API directly, or any other tool. Every interaction must go through `./scripts/<script-name>`. If a script doesn't exist for what you need, say so — do not work around it.**
 
-Run scripts with `./scripts/<script-name>`, e.g. `./scripts/voice-list`. Use `--help` on any script to see its parameters.
+Run scripts with `./scripts/<script-name>`, e.g. `./scripts/voice-list`.
+
+**Before calling any script for the first time, run `./scripts/<script-name> --help` to see its exact parameters, types, and which are required.** The `--help` output shows the JSON schema that the script validates against — use it to construct correct input.
 
 ## Available scripts
 

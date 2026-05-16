@@ -34,6 +34,24 @@ describe("elevenlabs skill: structure", () => {
       expect(existsSync(join(SKILL_ROOT, "schemas", "input", `${script}.json`))).toBe(true);
     }
   });
+
+  test("--help shows schema for every script", async () => {
+    const { bandExec } = await import("../../../packages/runtime/src/banded-skills/exec");
+    const scripts = ["tts", "voice-list", "voice-get", "sfx", "user-info"];
+
+    for (const script of scripts) {
+      const result = await bandExec({
+        resourceDir: join(RESOURCES, script),
+        args: {},
+        help: true,
+        skillRoot: SKILL_ROOT,
+      });
+      if (!result.success) throw new Error(`${script} --help failed: ${result.error}`);
+      const help = result.data as string;
+      expect(help).toContain(`Script: ${script}`);
+      expect(help).toContain("Input Schema:");
+    }
+  });
 });
 
 // ── Voice tests ────────────────────────────────────────────────────────

@@ -67,6 +67,23 @@ describe("summarize skill: structure", () => {
     expect(schema.properties.summary.type).toBe("string");
   });
 
+  test("--help shows schema for summarize script", async () => {
+    const { bandExec } = await import("../../../packages/runtime/src/banded-skills/exec");
+    const result = await bandExec({
+      resourceDir: join(RESOURCES, "summarize"),
+      args: {},
+      help: true,
+      skillRoot: SKILL_ROOT,
+    });
+    if (!result.success) throw new Error(`summarize --help failed: ${result.error}`);
+    const help = result.data as string;
+    expect(help).toContain("Script: summarize");
+    expect(help).toContain("Input Schema:");
+    expect(help).toContain("document");
+    expect(help).toContain("Output Schema:");
+    expect(help).toContain("summary");
+  });
+
   test("wrapper script exists and calls band exec", () => {
     const wrapper = join(SKILL_ROOT, "scripts", "summarize");
     expect(existsSync(wrapper)).toBe(true);

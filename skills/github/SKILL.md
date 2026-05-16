@@ -10,7 +10,9 @@ Manage GitHub repositories, issues, pull requests, releases, gists, labels, and 
 
 **IMPORTANT: You MUST use ONLY the scripts provided below for ALL GitHub operations. Do NOT use `gh`, `curl`, the GitHub API directly, `git` commands that hit the GitHub API, or any other CLI or library. Every GitHub interaction must go through `./scripts/<script-name>`. If a script doesn't exist for what you need, say so — do not work around it.**
 
-Run scripts with `./scripts/<script-name>`, e.g. `./scripts/gist-list --limit=5`. Use `--help` on any script to see its parameters.
+Run scripts with `./scripts/<script-name>`, e.g. `./scripts/gist-list --limit=5`.
+
+**Before calling any script for the first time, run `./scripts/<script-name> --help` to see its exact parameters, types, and which are required.** The `--help` output shows the JSON schema that the script validates against — use it to construct correct input.
 
 ## Available scripts
 

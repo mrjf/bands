@@ -10,7 +10,9 @@ Summarize documents using a sandboxed Claude instance running inside a Lima VM.
 
 **IMPORTANT: You MUST use ONLY the script provided below for ALL summarization. Do NOT summarize documents yourself, do NOT call the Claude API directly, and do NOT use any other tool or approach. Every summarization must go through `./scripts/summarize`. If the script can't handle the request, say so — do not work around it.**
 
-Run with `./scripts/summarize --document="<text>"` or `./scripts/summarize --url="<url>"`. Use `--help` to see parameters.
+Run with `./scripts/summarize --document="<text>"` or `./scripts/summarize --url="<url>"`.
+
+**Before calling a script for the first time, run `./scripts/<script-name> --help` to see its exact parameters, types, and which are required.** The `--help` output shows the JSON schema that the script validates against — use it to construct correct input.
 
 For long documents, pass the text via an input file:
 

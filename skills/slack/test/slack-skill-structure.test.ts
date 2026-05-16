@@ -18,7 +18,7 @@ describe("slack skill: structure & basics", () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  test("--help works for every script", async () => {
+  test("--help shows schema for every script", async () => {
     const scripts = [
       "channel-list", "channel-info",
       "message-send", "message-list", "message-search",
@@ -35,8 +35,10 @@ describe("slack skill: structure & basics", () => {
         skillRoot: SKILL_ROOT,
       });
       if (!result.success) throw new Error(`${script} --help failed: ${result.error}`);
-      expect(typeof result.data).toBe("string");
-      expect(result.data as string).toContain(script);
+      const help = result.data as string;
+      expect(help).toContain(`Script: ${script}`);
+      expect(help).toContain("Input Schema:");
+      expect(help).toContain("Output Schema:");
     }
   });
 
@@ -102,7 +104,7 @@ describe("slack skill: structure & basics", () => {
     expect(bandMd).toContain("SLACK_BOT_TOKEN");
     expect(bandMd).toContain('curl *');
     expect(bandMd).toContain('jq *');
-    expect(bandMd).toContain("slack.com");
+    expect(bandMd).toMatch(/net:[\s\S]*"\*"/);
   });
 
   test("SKILL.md has required frontmatter", () => {
