@@ -418,6 +418,7 @@ function buildInsistTracker(cmd: string): string {
         case "$arg" in -*) continue ;; esac
         args+=("$arg")
       done
+      # cp/mv use the final path argument as the write destination.
       last=$((\${#args[@]} - 1))
       for i in "\${!args[@]}"; do
         if [ "$i" -eq "$last" ]; then
@@ -431,12 +432,30 @@ function buildInsistTracker(cmd: string): string {
 fi`;
 }
 
+function buildRedirectTracker(): string {
+  return `_band_log_redirect() {
+  local cmd="$BASH_COMMAND"
+  # Match simple > and >> redirections and capture the redirected path.
+  local re='(^|[[:space:]])[0-9]*>{1,2}[[:space:]]*([^[:space:];|&]+)'
+  [[ -n "$BAND_OPS_FILE" ]] || return 0
+  if [[ "$cmd" =~ $re ]]; then
+    local p="\${BASH_REMATCH[2]}"
+    p="\${p%\\"}"
+    p="\${p#\\"}"
+    p="\${p%\\'}"
+    p="\${p#\\'}"
+    [[ -n "$p" ]] && echo "write:$p" >> "$BAND_OPS_FILE"
+  fi
+  return 0
+}`;
+}
+
 // ── Insist checking ───────────────────────────────────────────────────
 
 export function matchGlob(str: string, pattern: string): boolean {
   try {
     return new Bun.Glob(pattern).match(str);
-  } catch { /* fallback below */ }
+  } catch { /* invalid glob patterns fall back to the legacy matcher below */ }
 
   const regex = "^" + pattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -626,7 +645,7 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       envLines.unshift(`export PATH="${workdir}/.band-cli:$PATH"`);
     }
     if (cook.trackOps) {
-      envLines.push(`_band_log_redirect() { local cmd="\$BASH_COMMAND"; local re='(^|[[:space:]])[0-9]*>{1,2}[[:space:]]*([^[:space:];|&]+)'; [[ -n "\$BAND_OPS_FILE" ]] || return 0; if [[ "\$cmd" =~ \$re ]]; then local p="\${BASH_REMATCH[2]}"; p="\${p%\\"}"; p="\${p#\\"}"; p="\${p%\\'}"; p="\${p#\\'}"; [[ -n "\$p" ]] && echo "write:\$p" >> "\$BAND_OPS_FILE"; fi; return 0; }`);
+      envLines.push(buildRedirectTracker());
     }
     if (cook.allowCli.length > 0 || cook.denyCli.length > 0) {
       envLines.push(`shopt -s extdebug`);
