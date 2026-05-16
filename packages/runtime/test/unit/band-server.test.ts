@@ -36,6 +36,7 @@ describe("band-server CLI wrappers", () => {
 
     const wrapper = buildCliWrapper("foo", realCmd, ["foo$(touch " + marker + ")*"]);
     expect(wrapper).not.toContain("eval");
+    expect(wrapper).toContain("'foo$(touch " + marker + ")*'");
     expect(wrapper).toContain('if [[ "$FULL_CMD" == $P ]]; then');
 
     writeFileSync(wrapperPath, wrapper);
