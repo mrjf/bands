@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -16,13 +16,8 @@ const originalSpawnSync = Bun.spawnSync;
   return originalSpawnSync(cmd as any, opts);
 }) as typeof Bun.spawnSync;
 
-afterAll(() => {
-  (Bun as any).spawnSync = originalSpawnSync;
-});
-
-const { buildSecretEnvLines } = await import(
-  `../../src/band-server.ts?test=${Date.now()}`
-);
+const { buildSecretEnvLines } = await import("../../src/band-server.ts");
+(Bun as any).spawnSync = originalSpawnSync;
 
 describe("band-server secret env", () => {
   test("reads secrets from files without embedding values or base64 subprocesses", () => {

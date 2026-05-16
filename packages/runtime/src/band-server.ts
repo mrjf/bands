@@ -20,7 +20,7 @@
  */
 
 import { Hono } from "hono";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 
 const BAND_RUNNER_USER = "band-runner";
 let executing = false;
@@ -137,7 +137,7 @@ function shellIgnoreError(cmd: string): void {
 }
 
 function randomId(): string {
-  return Math.random().toString(36).slice(2, 10);
+  return randomBytes(6).toString("hex");
 }
 
 /** Reject values containing shell metacharacters. Used for any band-config value interpolated into shell commands. */
