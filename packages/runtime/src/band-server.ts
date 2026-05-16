@@ -153,6 +153,36 @@ function writeFile(path: string, content: string): void {
   shell(`echo '${b64}' | base64 -d > ${path}`);
 }
 
+function writePrivateFile(path: string, content: string): void {
+  const proc = Bun.spawnSync(
+    ["sudo", "bash", "-c", `cat > "$1" && chmod 600 "$1"`, "bash", path],
+    { stdin: content }
+  );
+  if (proc.exitCode !== 0) {
+    throw new Error(proc.stderr.toString() || `Command failed: write ${path}`);
+  }
+}
+
+function shellEnvName(value: string, label: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return value;
+}
+
+export function buildSecretEnvLines(
+  workdir: string,
+  secrets: Record<string, string>
+): string[] {
+  const lines: string[] = [];
+  for (const key of Object.keys(secrets)) {
+    const name = shellEnvName(key, "secret name");
+    lines.push(`IFS= read -r -d '' ${name} < "${workdir}/secrets/${name}" || true`);
+    lines.push(`export ${name}`);
+  }
+  return lines;
+}
+
 // ── Firewall ──────────────────────────────────────────────────────────
 
 function setupFirewall(
@@ -516,9 +546,15 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     if (req.config) {
       envLines.push(`export CONFIG_PATH=${workdir}/config.json`);
     }
-    for (const [key, value] of Object.entries(req.secrets ?? {})) {
-      const b64 = Buffer.from(value).toString("base64");
-      envLines.push(`export ${key}=$(echo '${b64}' | base64 -d)`);
+    const secretEnvLines = buildSecretEnvLines(workdir, req.secrets ?? {});
+    if (secretEnvLines.length > 0) {
+      const secretsDir = `${workdir}/secrets`;
+      shell(`mkdir -p ${secretsDir} && chmod 700 ${secretsDir}`);
+      for (const [key, value] of Object.entries(req.secrets ?? {})) {
+        const name = shellEnvName(key, "secret name");
+        writePrivateFile(`${secretsDir}/${name}`, value);
+      }
+      envLines.push(...secretEnvLines);
     }
 
     // Point PATH to the cooked CLI wrapper dir (mounted at workdir/.band-cli inside bwrap)
