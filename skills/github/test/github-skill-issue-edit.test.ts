@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test, beforeAll } from "bun:test";
-import { gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
+import { gh, GITHUB_REPO, TIMEOUT, pollIssueState } from "./github-helpers";
 
 describe("github: issue edit & close/reopen", () => {
   // ── Labels + assignees ──────────────────────────────────────────
@@ -167,8 +167,8 @@ describe("github: issue edit & close/reopen", () => {
       if (!result.success) throw new Error(`issue-reopen failed: ${result.error}`);
       expect((result.data as any).reopened).toBe(true);
 
-      const view = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
-      expect((view.data as any).state).toBe("OPEN");
+      const data = await pollIssueState(GITHUB_REPO!, issueNumber, "OPEN");
+      expect(data.state).toBe("OPEN");
     }, TIMEOUT);
 
     test("close as not planned", async () => {

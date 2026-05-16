@@ -21,7 +21,8 @@ export const SAFE_CMD_NAME = /^[a-zA-Z0-9_.-]+$/;
 export function buildCliWrapperScript(
   cmd: string,
   realPath: string,
-  hasDeny: boolean
+  hasDeny: boolean,
+  trackLine = ""
 ): string {
   if (!SAFE_CMD_NAME.test(cmd)) {
     throw new Error(`unsafe cmd name: ${cmd}`);
@@ -30,8 +31,9 @@ export function buildCliWrapperScript(
   if (!hasDeny) {
     return `#!/bin/bash
 ${logLine}
+${trackLine}
 exec ${realPath} "$@"
-`;
+`.replace(/\n{3,}/g, "\n\n");
   }
   return `#!/bin/bash
 FULL_CMD="${cmd} $*"
@@ -43,8 +45,9 @@ while IFS= read -r P; do
   fi
 done < "\$(dirname "\$0")/.deny-${cmd}"
 ${logLine}
+${trackLine}
 exec ${realPath} "$@"
-`;
+`.replace(/\n{3,}/g, "\n\n");
 }
 
 export function buildDenyPatternsFile(patterns: string[]): string {

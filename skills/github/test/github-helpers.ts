@@ -137,6 +137,25 @@ export async function gh(
   throw new Error("unreachable");
 }
 
+// ── Poll for expected state after a mutation ─────────────────────────
+
+export async function pollIssueState(
+  repo: string,
+  number: number,
+  expectedState: string,
+  { attempts = 5, delayMs = 1500 } = {}
+): Promise<any> {
+  for (let i = 0; i < attempts; i++) {
+    const view = await gh("issue-view", { repo, number });
+    if (!view.success) throw new Error(`issue-view failed during poll: ${view.error}`);
+    if ((view.data as any).state === expectedState) return view.data;
+    await sleep(delayMs);
+  }
+  const final = await gh("issue-view", { repo, number });
+  if (!final.success) throw new Error(`issue-view failed during poll: ${final.error}`);
+  return final.data;
+}
+
 // ── Ensure repo has at least one commit ──────────────────────────────
 
 export async function ensureRepoInitialized(): Promise<boolean> {
