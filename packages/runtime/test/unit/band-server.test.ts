@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { randomId } from "../../src/random-id";
 
-describe("band-server", () => {
+describe("randomId", () => {
   test("generates 16-character hex IDs", () => {
     expect(randomId()).toMatch(/^[0-9a-f]{16}$/);
   });
