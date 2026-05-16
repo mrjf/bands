@@ -4,5 +4,6 @@ dist/
 .DS_Store
 bun.lock
 packages/editor/src/public/app.js
-.env
+**/.env*
+!**/.env.example
 bun.lockb
