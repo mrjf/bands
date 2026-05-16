@@ -1,5 +1,6 @@
 # Bands
 
+> Concept code, not production-ready.
 > Pre-alpha. 0.1.0-berry. [Lobster life-cycle versioning.](VERSIONING.md)
 
 Sandboxed execution for AI agent skills. Deny by default.
