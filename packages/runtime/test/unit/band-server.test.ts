@@ -34,7 +34,7 @@ describe("band-server CLI wrappers", () => {
     writeFileSync(realCmd, "#!/bin/bash\nexit 0\n");
     chmodSync(realCmd, 0o755);
 
-    const wrapper = buildCliWrapper("foo", realCmd, [`foo$(touch ${marker})*`]);
+    const wrapper = buildCliWrapper("foo", realCmd, ["foo$(touch " + marker + ")*"]);
     expect(wrapper).not.toContain("eval");
     expect(wrapper).toContain('if [[ "$FULL_CMD" == $P ]]; then');
 
