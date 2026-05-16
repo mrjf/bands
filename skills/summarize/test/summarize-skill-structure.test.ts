@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "path";
 import { existsSync, readFileSync } from "fs";
+import { parseBandMd } from "../../../packages/format/src/parse";
 import { SKILL_ROOT, RESOURCES } from "./summarize-helpers";
 
 describe("summarize skill: structure", () => {
@@ -27,7 +28,6 @@ describe("summarize skill: structure", () => {
   });
 
   test("BAND.md restricts network hosts", () => {
-    const { parseBandMd } = require("../../../packages/format/src/parse");
     const band = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
     const result = parseBandMd(band);
     expect(result.document.allow?.net).toEqual(["api.anthropic.com"]);
