@@ -10,7 +10,6 @@ allow:
     - "cat *"
   net:
     - "api.anthropic.com"
-    - "*"
 insist:
   cli:
     - "claude *"

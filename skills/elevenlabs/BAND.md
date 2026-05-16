@@ -7,7 +7,7 @@ allow:
     - "curl *"
     - "jq *"
   net:
-    - "*"
+    - "api.elevenlabs.io"
 env:
   secrets:
     - ELEVENLABS_API_KEY
