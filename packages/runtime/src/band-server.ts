@@ -240,6 +240,7 @@ function buildBwrapArgs(
     "--symlink", "usr/lib64", "/lib64",
     "--ro-bind", "/etc", "/etc",
     "--bind-try", "/run", "/run",
+    "--dir", "/dev",
     "--dev-bind", "/dev/null", "/dev/null",
     "--dev-bind", "/dev/zero", "/dev/zero",
     "--dev-bind", "/dev/urandom", "/dev/urandom",

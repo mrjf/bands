@@ -28,6 +28,7 @@ export function buildBwrapCommand(
     "--ro-bind-try /etc/ssl /etc/ssl",
     "--ro-bind-try /etc/ca-certificates /etc/ca-certificates",
     "--ro-bind-try /etc/alternatives /etc/alternatives",
+    "--dir /dev",
     "--dev-bind /dev/null /dev/null",
     "--dev-bind /dev/zero /dev/zero",
     "--dev-bind /dev/urandom /dev/urandom",

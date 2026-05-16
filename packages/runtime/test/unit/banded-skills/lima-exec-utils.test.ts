@@ -26,6 +26,7 @@ describe("buildBwrapCommand", () => {
     const cmd = buildBwrapCommand("/work/abc");
     expect(cmd).not.toContain("--proc /proc");
     expect(cmd).not.toContain("--dev /dev");
+    expect(cmd).toContain("--dir /dev");
     expect(cmd).toContain("--dev-bind /dev/null /dev/null");
     expect(cmd).toContain("--dev-bind /dev/zero /dev/zero");
     expect(cmd).toContain("--dev-bind /dev/urandom /dev/urandom");
