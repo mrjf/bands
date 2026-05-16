@@ -40,7 +40,14 @@ function getBandRunnerIds(): { uid: number; gid: number } {
   return { uid, gid };
 }
 
-const bandRunnerIds = getBandRunnerIds();
+let bandRunnerIds: { uid: number; gid: number } | null = null;
+
+function getCachedBandRunnerIds(): { uid: number; gid: number } {
+  if (!bandRunnerIds) {
+    bandRunnerIds = getBandRunnerIds();
+  }
+  return bandRunnerIds;
+}
 
 // ── Cook state ───────────────────────────────────────────────────────
 
@@ -153,7 +160,17 @@ function writeFile(path: string, content: string): void {
   shell(`echo '${b64}' | base64 -d > ${path}`);
 }
 
-function writePrivateFile(path: string, content: string): void {
+function shellWorkdir(value: string): string {
+  if (!/^\/tmp\/band-exec-[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error(`Invalid workdir: ${value}`);
+  }
+  return value;
+}
+
+function writeSecretFile(path: string, content: string): void {
+  if (!/^\/tmp\/band-exec-[A-Za-z0-9_-]+\/secrets\/[A-Za-z_][A-Za-z0-9_]*$/.test(path)) {
+    throw new Error(`Invalid secret path: ${path}`);
+  }
   const proc = Bun.spawnSync(
     ["sudo", "bash", "-c", `cat > "$1" && chmod 600 "$1"`, "bash", path],
     { stdin: content }
@@ -174,10 +191,11 @@ export function buildSecretEnvLines(
   workdir: string,
   secrets: Record<string, string>
 ): string[] {
+  const safeWorkdir = shellWorkdir(workdir);
   const lines: string[] = [];
   for (const key of Object.keys(secrets)) {
     const name = shellEnvName(key, "secret name");
-    lines.push(`IFS= read -r -d '' ${name} < "${workdir}/secrets/${name}" || true`);
+    lines.push(`IFS= read -r -d '' ${name} < "${safeWorkdir}/secrets/${name}" || true`);
     lines.push(`export ${name}`);
   }
   return lines;
@@ -200,6 +218,7 @@ function setupFirewall(
     return;
   }
 
+  const { uid } = getCachedBandRunnerIds();
   const cmds: string[] = [
     `iptables -N ${chainName} 2>/dev/null || iptables -F ${chainName}`,
     `iptables -A ${chainName} -o lo -j ACCEPT`,
@@ -238,14 +257,15 @@ function setupFirewall(
     cmds.push(`iptables -A ${chainName} -j REJECT`);
   }
 
-  cmds.push(`iptables -I OUTPUT 1 -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName}`);
+  cmds.push(`iptables -I OUTPUT 1 -m owner --uid-owner ${uid} -m state --state NEW -j ${chainName}`);
 
   shell(cmds.join("\n"));
 }
 
 function teardownFirewall(chainName: string): void {
+  const { uid } = getCachedBandRunnerIds();
   shellIgnoreError(
-    `iptables -D OUTPUT -m owner --uid-owner ${bandRunnerIds.uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
+    `iptables -D OUTPUT -m owner --uid-owner ${uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
       `iptables -F ${chainName} 2>/dev/null; ` +
       `iptables -X ${chainName} 2>/dev/null`
   );
@@ -548,11 +568,11 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     }
     const secretEnvLines = buildSecretEnvLines(workdir, req.secrets ?? {});
     if (secretEnvLines.length > 0) {
-      const secretsDir = `${workdir}/secrets`;
+      const secretsDir = `${shellWorkdir(workdir)}/secrets`;
       shell(`mkdir -p ${secretsDir} && chmod 700 ${secretsDir}`);
       for (const [key, value] of Object.entries(req.secrets ?? {})) {
         const name = shellEnvName(key, "secret name");
-        writePrivateFile(`${secretsDir}/${name}`, value);
+        writeSecretFile(`${secretsDir}/${name}`, value);
       }
       envLines.push(...secretEnvLines);
     }

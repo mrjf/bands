@@ -3,21 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-const originalSpawnSync = Bun.spawnSync;
-
-(Bun as any).spawnSync = ((cmd: string[], opts?: any) => {
-  if (cmd[0] === "id" && cmd[2] === "band-runner") {
-    return {
-      exitCode: 0,
-      stdout: Buffer.from("1000\n"),
-      stderr: Buffer.from(""),
-    };
-  }
-  return originalSpawnSync(cmd as any, opts);
-}) as typeof Bun.spawnSync;
-
-const { buildSecretEnvLines } = await import("../../src/band-server.ts");
-(Bun as any).spawnSync = originalSpawnSync;
+import { buildSecretEnvLines } from "../../src/band-server";
 
 describe("band-server secret env", () => {
   test("reads secrets from files without embedding values or base64 subprocesses", () => {
@@ -35,7 +21,7 @@ describe("band-server secret env", () => {
   });
 
   test("generated env lines export multiline secret file contents", () => {
-    const workdir = mkdtempSync(join(tmpdir(), "band-secret-env-"));
+    const workdir = mkdtempSync(join(tmpdir(), "band-exec-"));
     try {
       mkdirSync(join(workdir, "secrets"));
       const secret = "top secret\nsecond line";
@@ -58,5 +44,13 @@ describe("band-server secret env", () => {
     expect(() =>
       buildSecretEnvLines("/tmp/band-exec-test", { "BAD/KEY": "secret" })
     ).toThrow("Invalid secret name: BAD/KEY");
+  });
+
+  test("rejects unexpected workdir paths before writing env lines", () => {
+    expect(() =>
+      buildSecretEnvLines("/tmp/band-exec-test;touch /tmp/bad", {
+        API_KEY: "secret",
+      })
+    ).toThrow("Invalid workdir: /tmp/band-exec-test;touch /tmp/bad");
   });
 });
