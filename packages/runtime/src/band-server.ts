@@ -21,6 +21,7 @@
 
 import { Hono } from "hono";
 import { createHash } from "crypto";
+import { buildCliWrapperScript, buildDenyPatternsFile, SAFE_CMD_NAME } from "./cli-wrapper";
 
 const BAND_RUNNER_USER = "band-runner";
 let executing = false;
@@ -333,7 +334,7 @@ function setupCliWrappers(
   const allowedCommands = new Set(ESSENTIAL_COMMANDS);
   for (const pattern of allowPatterns) {
     const cmd = pattern.split(/\s+/)[0];
-    if (cmd && !cmd.includes("*") && !cmd.includes("/")) {
+    if (cmd && SAFE_CMD_NAME.test(cmd)) {
       allowedCommands.add(cmd);
     }
   }
@@ -341,13 +342,14 @@ function setupCliWrappers(
   const denyByCmd = new Map<string, string[]>();
   for (const pattern of denyPatterns) {
     const cmd = pattern.split(/\s+/)[0];
-    if (!cmd) continue;
+    if (!cmd || !SAFE_CMD_NAME.test(cmd)) continue;
     const existing = denyByCmd.get(cmd) || [];
     existing.push(pattern);
     denyByCmd.set(cmd, existing);
   }
 
   for (const cmd of allowedCommands) {
+    if (!SAFE_CMD_NAME.test(cmd)) continue;
     let realPath: string;
     try {
       realPath = shell(`readlink -f $(which ${cmd}) 2>/dev/null`).trim();
@@ -355,31 +357,10 @@ function setupCliWrappers(
     if (!realPath) continue;
 
     const denyPats = denyByCmd.get(cmd) || [];
-    const logLine = `[ -n "\$BAND_OPS_FILE" ] && echo "${cmd} $*" >> "\$BAND_OPS_FILE"`;
-
-    let wrapper: string;
     if (denyPats.length > 0) {
-      const patternArray = denyPats.map(p => `"${p.replace(/"/g, '\\"')}"`).join(" ");
-      wrapper = `#!/bin/bash
-FULL_CMD="${cmd} $*"
-DENY_PATTERNS=(${patternArray})
-for P in "\${DENY_PATTERNS[@]}"; do
-  if eval "[[ \\"\\$FULL_CMD\\" == \\$P ]]" 2>/dev/null; then
-    echo "DENIED: $FULL_CMD" >&2
-    exit 126
-  fi
-done
-${logLine}
-exec ${realPath} "$@"
-`;
-    } else {
-      wrapper = `#!/bin/bash
-${logLine}
-exec ${realPath} "$@"
-`;
+      writeFile(`${wrapperDir}/.deny-${cmd}`, buildDenyPatternsFile(denyPats));
     }
-
-    writeFile(`${wrapperDir}/${cmd}`, wrapper);
+    writeFile(`${wrapperDir}/${cmd}`, buildCliWrapperScript(cmd, realPath, denyPats.length > 0));
     shell(`chmod +x ${wrapperDir}/${cmd}`);
   }
 }
