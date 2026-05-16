@@ -51,7 +51,11 @@ The agent sees simple CLI commands. The runtime enforces everything else.
 
 ## Permission model
 
-Deny > Insist > Allow.
+`insist` is the preferred pragma -- use this for anything that you know must run (or else it's an error).
+
+`allow` sparingly, for anything that may be used but is optional. 
+
+`deny` merely pokes holes in allow, since everything is denied by default.
 
 ```yaml
 allow:
