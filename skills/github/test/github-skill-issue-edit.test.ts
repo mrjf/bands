@@ -5,6 +5,10 @@
 import { describe, expect, test, beforeAll } from "bun:test";
 import { gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
 
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe("github: issue edit & close/reopen", () => {
   // ── Labels + assignees ──────────────────────────────────────────
 
@@ -37,9 +41,14 @@ describe("github: issue edit & close/reopen", () => {
 
     test("view issue shows label and assignee", async () => {
       expect(issueNumber).toBeDefined();
-      const result = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
-      if (!result.success) throw new Error(`issue-view labels failed: ${result.error}`);
-      const data = result.data as any;
+      let data: any;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const result = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
+        if (!result.success) throw new Error(`issue-view labels failed: ${result.error}`);
+        data = result.data as any;
+        if (data.labels.some((l: any) => l.name === labelName) && data.assignees.length >= 1) break;
+        if (attempt < 4) await sleep(1500);
+      }
       expect(data.labels.some((l: any) => l.name === labelName)).toBe(true);
       expect(data.assignees.length).toBeGreaterThanOrEqual(1);
     }, TIMEOUT);
