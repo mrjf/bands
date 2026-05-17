@@ -19,7 +19,7 @@ import type { BandExecResult } from "./types";
 
 const DEFAULT_VM_NAME = "bands-executor";
 const SERVER_URL = "http://localhost:9000";
-const EXEC_LOCK_DIR = "/tmp/bands-lima-exec.lock";
+const EXEC_LOCK_DIR = join(tmpdir(), "bands-lima-exec.lock");
 const EXEC_LOCK_STALE_MS = 120_000;
 
 export function acquireExecLockSync(timeoutMs = 120_000): () => void {
@@ -43,7 +43,7 @@ export function acquireExecLockSync(timeoutMs = 120_000): () => void {
       if (Date.now() >= deadline) {
         throw new Error("Timed out waiting for exclusive access to the band server");
       }
-      execSync("sleep 0.1", { stdio: "ignore" });
+      Bun.sleepSync(100);
     }
   }
 }
