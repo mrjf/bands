@@ -32,7 +32,7 @@ export function acquireExecLockSync(timeoutMs = 120_000): () => void {
       if (e?.code !== "EEXIST") throw e;
 
       try {
-        if (Date.now() - statSync(EXEC_LOCK_DIR).mtimeMs > EXEC_LOCK_STALE_MS) {
+        if (Date.now() - statSync(EXEC_LOCK_DIR).ctimeMs > EXEC_LOCK_STALE_MS) {
           rmSync(EXEC_LOCK_DIR, { recursive: true, force: true });
           continue;
         }
@@ -43,7 +43,7 @@ export function acquireExecLockSync(timeoutMs = 120_000): () => void {
       if (Date.now() >= deadline) {
         throw new Error("Timed out waiting for exclusive access to the band server");
       }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+      execSync("sleep 0.1", { stdio: "ignore" });
     }
   }
 }
