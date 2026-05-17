@@ -573,6 +573,8 @@ interface ExecRequest {
     net?: string[];
   };
   timeoutMs?: number;
+  sandboxMode?: "bwrap" | "worktree-chmod";
+  repoPath?: string;
 }
 
 interface ExecResponse {
@@ -670,11 +672,93 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
       setupFirewall(chainName, allowNet, denyNet);
     }
 
-    // Run script inside bwrap using cooked mount list, excluding deny patterns
-    const bwrapArgs = ["sudo", ...buildBwrapArgs(workdir, cook, req.denyRead ?? [], req.denyWrite ?? [])];
-
     const timeout = req.timeoutMs ?? 60_000;
-    const proc = Bun.spawnSync(bwrapArgs, { timeout });
+    let proc: ReturnType<typeof Bun.spawnSync>;
+
+    if (req.sandboxMode === "worktree-chmod" && req.repoPath) {
+      // Worktree + chmod sandbox: file isolation via POSIX permissions
+      const { buildChmodPlan, buildChmodScript, buildSparseCheckoutPatterns, shellQuote } = await import("./worktree-chmod");
+      const worktreePath = `/tmp/band-wt-${execId}`;
+
+      try {
+        // Create sparse-checkout worktree
+        const sparsePatterns = buildSparseCheckoutPatterns(req.allowRead ?? [], req.allowWrite ?? []);
+        shell(`git -C ${shellQuote(req.repoPath)} worktree add --detach ${shellQuote(worktreePath)} 2>/dev/null`);
+        shell(`cd ${shellQuote(worktreePath)} && git sparse-checkout init --cone`);
+        if (sparsePatterns.length > 0 && !sparsePatterns.includes("*")) {
+          shell(`cd ${shellQuote(worktreePath)} && git sparse-checkout set ${sparsePatterns.map(shellQuote).join(" ")}`);
+        }
+
+        // Expand globs against actual filesystem to get concrete file lists
+        const expandGlob = (patterns: string[]): string[] => {
+          if (patterns.length === 0) return [];
+          const results: string[] = [];
+          for (const pattern of patterns) {
+            const cleaned = pattern.replace(/^\.\//, "");
+            const found = shell(`find ${shellQuote(worktreePath)} -path ${shellQuote(worktreePath + "/" + cleaned)} -type f 2>/dev/null || true`).trim();
+            if (found) results.push(...found.split("\n").filter(Boolean));
+          }
+          return [...new Set(results)];
+        };
+
+        const readFiles = expandGlob(req.allowRead ?? []);
+        const writeFiles = expandGlob(req.allowWrite ?? []);
+        const denyReadFiles = expandGlob(req.denyRead ?? []);
+        const denyWriteFiles = expandGlob(req.denyWrite ?? []);
+        const denyFiles = [...new Set([...denyReadFiles, ...denyWriteFiles])];
+
+        // Build and apply chmod plan
+        const plan = buildChmodPlan(worktreePath, readFiles, writeFiles, denyFiles);
+        const chmodScript = buildChmodScript(plan);
+        writeFile(`${workdir}/chmod-plan.sh`, chmodScript);
+        shell(`bash ${workdir}/chmod-plan.sh`);
+
+        // Copy workdir files into worktree for script access
+        shell(`cp ${workdir}/run.sh ${worktreePath}/.band-run.sh`);
+        shell(`cp ${workdir}/env.sh ${worktreePath}/.band-env.sh`);
+        shell(`cp ${workdir}/input.json ${worktreePath}/.band-input.json`);
+        if (req.config) {
+          shell(`cp ${workdir}/config.json ${worktreePath}/.band-config.json`);
+        }
+        shell(`chmod a+r ${worktreePath}/.band-run.sh ${worktreePath}/.band-env.sh ${worktreePath}/.band-input.json`);
+        if (hasInsist) {
+          shell(`touch ${worktreePath}/.band-ops && chmod a+rw ${worktreePath}/.band-ops`);
+        }
+
+        // Update env paths to point to worktree
+        const envPatch = [
+          `export INPUT_PATH=${worktreePath}/.band-input.json`,
+          `export OUTPUT_PATH=${worktreePath}/.band-output.json`,
+        ].join("\n");
+        shell(`echo '${envPatch}' >> ${worktreePath}/.band-env.sh`);
+        shell(`chmod a+rw ${worktreePath}/.band-env.sh`);
+
+        // Create writable output location
+        shell(`touch ${worktreePath}/.band-output.json && chmod a+rw ${worktreePath}/.band-output.json`);
+
+        // Run as band-runner without bwrap
+        proc = Bun.spawnSync(
+          ["sudo", "-u", BAND_RUNNER_USER, "bash", "-c",
+           `source ${worktreePath}/.band-env.sh && cd ${worktreePath} && bash ${worktreePath}/.band-run.sh`],
+          { timeout }
+        );
+
+        // Copy output back to workdir
+        shellIgnoreError(`cp ${worktreePath}/.band-output.json ${workdir}/output.json 2>/dev/null`);
+        if (hasInsist) {
+          shellIgnoreError(`cp ${worktreePath}/.band-ops ${opsFile} 2>/dev/null`);
+        }
+      } finally {
+        // Teardown worktree
+        shellIgnoreError(`chmod -R u+rwx ${worktreePath} 2>/dev/null`);
+        shellIgnoreError(`git -C ${shellQuote(req.repoPath)} worktree remove --force ${shellQuote(worktreePath)} 2>/dev/null`);
+        shellIgnoreError(`rm -rf ${worktreePath} 2>/dev/null`);
+      }
+    } else {
+      // Default: bwrap mount-namespace sandbox
+      const bwrapArgs = ["sudo", ...buildBwrapArgs(workdir, cook, req.denyRead ?? [], req.denyWrite ?? [])];
+      proc = Bun.spawnSync(bwrapArgs, { timeout });
+    }
 
     const exitCode = proc.exitCode;
     const stderr = proc.stderr.toString();
