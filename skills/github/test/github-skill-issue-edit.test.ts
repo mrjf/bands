@@ -6,7 +6,7 @@ import { describe, expect, test, beforeAll } from "bun:test";
 import { gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
 
 const MAX_VISIBILITY_ATTEMPTS = 5;
-const VISIBILITY_RETRY_DELAY_MS = 1500;
+const RETRY_DELAY_MS = 1500;
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,7 +50,7 @@ describe("github: issue edit & close/reopen", () => {
         if (!result.success) throw new Error(`issue-view labels failed: ${result.error}`);
         issueData = result.data as { labels: Array<{ name: string }>; assignees: unknown[] };
         if (issueData.labels.some((l) => l.name === labelName) && issueData.assignees.length >= 1) break;
-        if (attempt < MAX_VISIBILITY_ATTEMPTS - 1) await sleep(VISIBILITY_RETRY_DELAY_MS);
+        if (attempt < MAX_VISIBILITY_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
       }
       if (!issueData) throw new Error("issue-view did not return data");
       expect(issueData.labels.some((l) => l.name === labelName)).toBe(true);
