@@ -12,13 +12,41 @@
  */
 
 import { execSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, statSync } from "fs";
 import { join, basename } from "path";
 import { tmpdir } from "os";
 import type { BandExecResult } from "./types";
 
 const DEFAULT_VM_NAME = "bands-executor";
 const SERVER_URL = "http://localhost:9000";
+const EXEC_LOCK_DIR = "/tmp/bands-lima-exec.lock";
+const EXEC_LOCK_STALE_MS = 120_000;
+
+export function acquireExecLockSync(timeoutMs = 120_000): () => void {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    try {
+      mkdirSync(EXEC_LOCK_DIR);
+      return () => rmSync(EXEC_LOCK_DIR, { recursive: true, force: true });
+    } catch (e: any) {
+      if (e?.code !== "EEXIST") throw e;
+
+      try {
+        if (Date.now() - statSync(EXEC_LOCK_DIR).mtimeMs > EXEC_LOCK_STALE_MS) {
+          rmSync(EXEC_LOCK_DIR, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        continue;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error("Timed out waiting for exclusive access to the band server");
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
 
 /**
  * Execute a script in the Lima VM via the band server.
@@ -91,9 +119,12 @@ export async function limaExec(
     insist: fileRules?.insist,
   };
 
-  // POST to the band server
+  // POST to the band server. The Lima server accepts one execution at a time;
+  // serialize cross-process callers so parallel test files do not race it.
   let resp: Response;
+  let releaseLock: (() => void) | undefined;
   try {
+    releaseLock = acquireExecLockSync();
     resp = await fetch(`${SERVER_URL}/exec`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -105,6 +136,8 @@ export async function limaExec(
       success: false,
       error: `Failed to reach band server at ${SERVER_URL}: ${e.message}. Is the Lima VM running?`,
     };
+  } finally {
+    releaseLock?.();
   }
 
   let result: {
