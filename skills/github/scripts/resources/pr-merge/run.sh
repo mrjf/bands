@@ -30,7 +30,7 @@ for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
     exit 1
   fi
   # Clear the previous error before retrying so only the next attempt is inspected.
-  : > "$STDERR_FILE"
+  truncate -s 0 "$STDERR_FILE"
   sleep 2
 done
 rm -f "$STDERR_FILE"

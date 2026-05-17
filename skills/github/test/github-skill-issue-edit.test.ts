@@ -44,17 +44,17 @@ describe("github: issue edit & close/reopen", () => {
 
     test("view issue shows label and assignee", async () => {
       expect(issueNumber).toBeDefined();
-      let issueData: { labels: Array<{ name: string }>; assignees: unknown[] } | undefined;
+      let latestIssueData: { labels: Array<{ name: string }>; assignees: unknown[] } | undefined;
       for (let attempt = 0; attempt < MAX_VISIBILITY_ATTEMPTS; attempt++) {
         const result = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
         if (!result.success) throw new Error(`issue-view labels failed: ${result.error}`);
-        issueData = result.data as { labels: Array<{ name: string }>; assignees: unknown[] };
-        if (issueData.labels.some((l) => l.name === labelName) && issueData.assignees.length >= 1) break;
+        latestIssueData = result.data as { labels: Array<{ name: string }>; assignees: unknown[] };
+        if (latestIssueData.labels.some((l) => l.name === labelName) && latestIssueData.assignees.length >= 1) break;
         if (attempt < MAX_VISIBILITY_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
       }
-      if (!issueData) throw new Error("issue-view did not return data");
-      expect(issueData.labels.some((l) => l.name === labelName)).toBe(true);
-      expect(issueData.assignees.length).toBeGreaterThanOrEqual(1);
+      if (!latestIssueData) throw new Error("issue-view did not return data");
+      expect(latestIssueData.labels.some((l) => l.name === labelName)).toBe(true);
+      expect(latestIssueData.assignees.length).toBeGreaterThanOrEqual(1);
     }, TIMEOUT);
 
     test("list issues filtered by assignee", async () => {
