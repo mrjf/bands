@@ -5,6 +5,9 @@
 import { describe, expect, test, beforeAll } from "bun:test";
 import { gh, GITHUB_REPO, TIMEOUT } from "./github-helpers";
 
+const MAX_VISIBILITY_ATTEMPTS = 5;
+const VISIBILITY_RETRY_DELAY_MS = 1500;
+
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -41,16 +44,17 @@ describe("github: issue edit & close/reopen", () => {
 
     test("view issue shows label and assignee", async () => {
       expect(issueNumber).toBeDefined();
-      let data: any;
-      for (let attempt = 0; attempt < 5; attempt++) {
+      let issueData: { labels: Array<{ name: string }>; assignees: unknown[] } | undefined;
+      for (let attempt = 0; attempt < MAX_VISIBILITY_ATTEMPTS; attempt++) {
         const result = await gh("issue-view", { repo: GITHUB_REPO!, number: issueNumber });
         if (!result.success) throw new Error(`issue-view labels failed: ${result.error}`);
-        data = result.data as any;
-        if (data.labels.some((l: any) => l.name === labelName) && data.assignees.length >= 1) break;
-        if (attempt < 4) await sleep(1500);
+        issueData = result.data as { labels: Array<{ name: string }>; assignees: unknown[] };
+        if (issueData.labels.some((l) => l.name === labelName) && issueData.assignees.length >= 1) break;
+        if (attempt < MAX_VISIBILITY_ATTEMPTS - 1) await sleep(VISIBILITY_RETRY_DELAY_MS);
       }
-      expect(data.labels.some((l: any) => l.name === labelName)).toBe(true);
-      expect(data.assignees.length).toBeGreaterThanOrEqual(1);
+      if (!issueData) throw new Error("issue-view did not return data");
+      expect(issueData.labels.some((l) => l.name === labelName)).toBe(true);
+      expect(issueData.assignees.length).toBeGreaterThanOrEqual(1);
     }, TIMEOUT);
 
     test("list issues filtered by assignee", async () => {
