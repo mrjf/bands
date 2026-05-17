@@ -32,10 +32,6 @@ for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
   : > "$STDERR_FILE"
   sleep 2
 done
-if [ -s "$STDERR_FILE" ]; then
-  rm -f "$STDERR_FILE"
-else
-  rm -f "$STDERR_FILE"
-fi
+rm -f "$STDERR_FILE"
 
 echo "{\"merged\": true, \"message\": \"$RESULT\"}" > "${OUTPUT_PATH:-/dev/stdout}"
