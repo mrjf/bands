@@ -20,6 +20,7 @@ import type { BandExecResult } from "./types";
 const DEFAULT_VM_NAME = "bands-executor";
 const SERVER_URL = "http://localhost:9000";
 const EXEC_LOCK_DIR = join(tmpdir(), "bands-lima-exec.lock");
+const EXEC_LOCK_TIMESTAMP = join(EXEC_LOCK_DIR, "created-at");
 const EXEC_LOCK_STALE_MS = 120_000;
 
 export function acquireExecLockSync(timeoutMs = 120_000): () => void {
@@ -27,12 +28,16 @@ export function acquireExecLockSync(timeoutMs = 120_000): () => void {
   while (true) {
     try {
       mkdirSync(EXEC_LOCK_DIR);
+      writeFileSync(EXEC_LOCK_TIMESTAMP, String(Date.now()));
       return () => rmSync(EXEC_LOCK_DIR, { recursive: true, force: true });
     } catch (e: any) {
       if (e?.code !== "EEXIST") throw e;
 
       try {
-        if (Date.now() - statSync(EXEC_LOCK_DIR).ctimeMs > EXEC_LOCK_STALE_MS) {
+        const createdAt =
+          Number(readFileSync(EXEC_LOCK_TIMESTAMP, "utf-8")) ||
+          statSync(EXEC_LOCK_DIR).mtimeMs;
+        if (Date.now() - createdAt > EXEC_LOCK_STALE_MS) {
           rmSync(EXEC_LOCK_DIR, { recursive: true, force: true });
           continue;
         }
@@ -43,7 +48,7 @@ export function acquireExecLockSync(timeoutMs = 120_000): () => void {
       if (Date.now() >= deadline) {
         throw new Error("Timed out waiting for exclusive access to the band server");
       }
-      Bun.sleepSync(100);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
     }
   }
 }
