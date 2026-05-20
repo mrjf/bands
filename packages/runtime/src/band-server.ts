@@ -20,7 +20,7 @@
  */
 
 import { Hono } from "hono";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { buildCliWrapperScript, buildDenyPatternsFile, SAFE_CMD_NAME } from "./cli-wrapper";
 
 const BAND_RUNNER_USER = "band-runner";
@@ -147,7 +147,7 @@ function shellIgnoreError(cmd: string): void {
 }
 
 function randomId(): string {
-  return Math.random().toString(36).slice(2, 10);
+  return randomBytes(6).toString("hex");
 }
 
 /** Reject values containing shell metacharacters. Used for any band-config value interpolated into shell commands. */
@@ -161,6 +161,53 @@ function shellSafe(value: string, label: string): string {
 function writeFile(path: string, content: string): void {
   const b64 = Buffer.from(content).toString("base64");
   shell(`echo '${b64}' | base64 -d > ${path}`);
+}
+
+function shellWorkdir(value: string): string {
+  if (!/^\/tmp\/band-exec-[0-9a-f]+$/.test(value)) {
+    throw new Error(`Invalid workdir: ${value}`);
+  }
+  return value;
+}
+
+async function writeSecretFile(path: string, content: string): Promise<void> {
+  if (!/^\/tmp\/band-exec-[0-9a-f]+\/secrets\/[A-Za-z_][A-Za-z0-9_]*$/.test(path)) {
+    throw new Error(`Invalid secret path: ${path}`);
+  }
+  const proc = Bun.spawn(
+    ["sudo", "bash", "-c", `cat > "$1" && chmod 600 "$1"`, "bash", path],
+    { stdin: "pipe", stdout: "pipe", stderr: "pipe" }
+  );
+  proc.stdin.write(content);
+  proc.stdin.end();
+  const [exitCode, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stderr).text(),
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(stderr || `Command failed: write ${path}`);
+  }
+}
+
+function shellEnvName(value: string, label: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return value;
+}
+
+export function buildSecretEnvLines(
+  workdir: string,
+  secrets: Record<string, string>
+): string[] {
+  const safeWorkdir = shellWorkdir(workdir);
+  const lines: string[] = [];
+  for (const key of Object.keys(secrets)) {
+    const name = shellEnvName(key, "secret name");
+    lines.push(`IFS= read -r -d '' ${name} < "${safeWorkdir}/secrets/${name}" || true`);
+    lines.push(`export ${name}`);
+  }
+  return lines;
 }
 
 // ── Firewall ──────────────────────────────────────────────────────────
@@ -180,6 +227,7 @@ function setupFirewall(
     return;
   }
 
+  const { uid } = getCachedBandRunnerIds();
   const cmds: string[] = [
     `iptables -N ${chainName} 2>/dev/null || iptables -F ${chainName}`,
     `iptables -A ${chainName} -o lo -j ACCEPT`,
@@ -218,15 +266,15 @@ function setupFirewall(
     cmds.push(`iptables -A ${chainName} -j REJECT`);
   }
 
-  const { uid } = getCachedBandRunnerIds();
   cmds.push(`iptables -I OUTPUT 1 -m owner --uid-owner ${uid} -m state --state NEW -j ${chainName}`);
 
   shell(cmds.join("\n"));
 }
 
 function teardownFirewall(chainName: string): void {
+  const { uid } = getCachedBandRunnerIds();
   shellIgnoreError(
-    `iptables -D OUTPUT -m owner --uid-owner ${getCachedBandRunnerIds().uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
+    `iptables -D OUTPUT -m owner --uid-owner ${uid} -m state --state NEW -j ${chainName} 2>/dev/null; ` +
       `iptables -F ${chainName} 2>/dev/null; ` +
       `iptables -X ${chainName} 2>/dev/null`
   );
@@ -626,9 +674,15 @@ async function executeScript(req: ExecRequest): Promise<ExecResponse> {
     if (req.config) {
       envLines.push(`export CONFIG_PATH=${workdir}/config.json`);
     }
-    for (const [key, value] of Object.entries(req.secrets ?? {})) {
-      const b64 = Buffer.from(value).toString("base64");
-      envLines.push(`export ${key}=$(echo '${b64}' | base64 -d)`);
+    const secretEnvLines = buildSecretEnvLines(workdir, req.secrets ?? {});
+    if (secretEnvLines.length > 0) {
+      const secretsDir = `${shellWorkdir(workdir)}/secrets`;
+      shell(`mkdir -p ${secretsDir} && chmod 700 ${secretsDir}`);
+      for (const [key, value] of Object.entries(req.secrets ?? {})) {
+        const name = shellEnvName(key, "secret name");
+        await writeSecretFile(`${secretsDir}/${name}`, value);
+      }
+      envLines.push(...secretEnvLines);
     }
 
     // Point PATH to the cooked CLI wrapper dir (mounted at workdir/.band-cli inside bwrap)
