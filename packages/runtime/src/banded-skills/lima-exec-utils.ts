@@ -89,7 +89,7 @@ export function extractMountPath(pattern: string): string | null {
 }
 
 /**
- * Build an iptables setup script for the given network rules.
+ * Build an iptables/ip6tables setup script for the given network rules.
  */
 export function buildFirewallScript(
   chainName: string,
@@ -97,45 +97,55 @@ export function buildFirewallScript(
 ): string | null {
   if (!rules || rules.allowNet.length === 0) return null;
 
-  const lines: string[] = [
-    `iptables -N ${chainName} 2>/dev/null || iptables -F ${chainName}`,
-    `iptables -A ${chainName} -o lo -j ACCEPT`,
-    `iptables -A ${chainName} -m state --state ESTABLISHED,RELATED -j ACCEPT`,
-    `iptables -A ${chainName} -p udp --dport 53 -j ACCEPT`,
-    `iptables -A ${chainName} -p tcp --dport 53 -j ACCEPT`,
+  const firewallTables = [
+    { table: "iptables", resolver: "ahostsv4" },
+    { table: "ip6tables", resolver: "ahostsv6" },
   ];
+  const lines: string[] = [];
+
+  for (const { table } of firewallTables) {
+    lines.push(
+      `${table} -N ${chainName} 2>/dev/null || ${table} -F ${chainName}`,
+      `${table} -A ${chainName} -o lo -j ACCEPT`,
+      `${table} -A ${chainName} -m state --state ESTABLISHED,RELATED -j ACCEPT`,
+      `${table} -A ${chainName} -p udp --dport 53 -j ACCEPT`,
+      `${table} -A ${chainName} -p tcp --dport 53 -j ACCEPT`,
+    );
+  }
+
+  const addHostRules = (host: string) => {
+    for (const { table, resolver } of firewallTables) {
+      lines.push(
+        `for ip in $(getent ${resolver} "${host}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
+        `  ${table} -A ${chainName} -d "$ip" -j ACCEPT`,
+        `done`,
+      );
+    }
+  };
 
   for (const host of rules.allowNet) {
     if (host === "*") return null;
 
     if (host.startsWith("*.")) {
       const baseDomain = host.slice(2);
-      lines.push(
-        `# Allow ${host}`,
-        `for ip in $(getent ahosts "${baseDomain}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
-        `  iptables -A ${chainName} -d "$ip" -j ACCEPT`,
-        `done`,
-      );
+      lines.push(`# Allow ${host}`);
+      addHostRules(baseDomain);
       for (const prefix of ["api", "www"]) {
-        lines.push(
-          `for ip in $(getent ahosts "${prefix}.${baseDomain}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
-          `  iptables -A ${chainName} -d "$ip" -j ACCEPT`,
-          `done`,
-        );
+        addHostRules(`${prefix}.${baseDomain}`);
       }
     } else {
-      lines.push(
-        `# Allow ${host}`,
-        `for ip in $(getent ahosts "${host}" 2>/dev/null | awk '{print $1}' | sort -u); do`,
-        `  iptables -A ${chainName} -d "$ip" -j ACCEPT`,
-        `done`,
-      );
+      lines.push(`# Allow ${host}`);
+      addHostRules(host);
     }
   }
 
-  lines.push(`iptables -A ${chainName} -j REJECT`);
+  for (const { table } of firewallTables) {
+    lines.push(`${table} -A ${chainName} -j REJECT`);
+  }
   // Only route band-runner's new connections through this chain
-  lines.push(`iptables -I OUTPUT 1 -m state --state NEW -j ${chainName}`);
+  for (const { table } of firewallTables) {
+    lines.push(`${table} -I OUTPUT 1 -m state --state NEW -j ${chainName}`);
+  }
 
   return lines.join("\n");
 }

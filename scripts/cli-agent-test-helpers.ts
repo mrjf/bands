@@ -15,6 +15,7 @@ import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { bandExec } from "../packages/runtime/src/banded-skills/exec";
+import { acquireExecLockSync } from "../packages/runtime/src/banded-skills/lima-exec";
 
 // Load .env from repo root and packages/runtime (both, not just first found)
 const ENV_PATHS = [
@@ -79,7 +80,9 @@ export function requireLima() {
     throw new Error("Failed to check Lima VM status. Is limactl installed?");
   }
 
+  let releaseLock: (() => void) | undefined;
   try {
+    releaseLock = acquireExecLockSync();
     const resp = execSync("curl -sf --max-time 2 http://localhost:9000/health", {
       stdio: "pipe",
     });
@@ -87,6 +90,8 @@ export function requireLima() {
     throw new Error(
       "Band server not reachable at localhost:9000. Is the band server running in the Lima VM?"
     );
+  } finally {
+    releaseLock?.();
   }
 }
 

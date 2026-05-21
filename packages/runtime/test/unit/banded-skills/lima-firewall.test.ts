@@ -24,6 +24,7 @@ describe("buildFirewallScript", () => {
       denyNet: [],
     });
     expect(script).toContain("iptables -N BAND-abc123");
+    expect(script).toContain("ip6tables -N BAND-abc123");
   });
 
   test("allows loopback", () => {
@@ -55,7 +56,8 @@ describe("buildFirewallScript", () => {
       allowNet: ["api.github.com"],
       denyNet: [],
     })!;
-    expect(script).toContain('getent ahosts "api.github.com"');
+    expect(script).toContain('getent ahostsv4 "api.github.com"');
+    expect(script).toContain('getent ahostsv6 "api.github.com"');
     expect(script).toContain("-j ACCEPT");
   });
 
@@ -64,9 +66,9 @@ describe("buildFirewallScript", () => {
       allowNet: ["*.github.com"],
       denyNet: [],
     })!;
-    expect(script).toContain('getent ahosts "github.com"');
-    expect(script).toContain('getent ahosts "api.github.com"');
-    expect(script).toContain('getent ahosts "www.github.com"');
+    expect(script).toContain('getent ahostsv4 "github.com"');
+    expect(script).toContain('getent ahostsv4 "api.github.com"');
+    expect(script).toContain('getent ahostsv4 "www.github.com"');
   });
 
   test("ends with REJECT default", () => {
@@ -94,9 +96,9 @@ describe("buildFirewallScript", () => {
       allowNet: ["api.github.com", "slack.com", "pypi.org"],
       denyNet: [],
     })!;
-    expect(script).toContain('getent ahosts "api.github.com"');
-    expect(script).toContain('getent ahosts "slack.com"');
-    expect(script).toContain('getent ahosts "pypi.org"');
+    expect(script).toContain('getent ahostsv4 "api.github.com"');
+    expect(script).toContain('getent ahostsv4 "slack.com"');
+    expect(script).toContain('getent ahostsv4 "pypi.org"');
   });
 });
 

@@ -179,21 +179,23 @@ export async function setupLima(options: { force?: boolean } = {}): Promise<void
   // [8/8] Set up default firewall (locked down) and verify health
   log("[8/8]", "Setting up default firewall and verifying...");
 
-  // Default iptables: DROP all outbound from band-runner.
+  // Default iptables/ip6tables: DROP all outbound from band-runner.
   // Only band-runner's traffic is restricted — the server process and SSH
   // tunnel (which run as the host user) need unrestricted outbound.
   const bandRunnerUid = limaShell("id -u band-runner").trim();
-  limaShell(`sudo iptables -F OUTPUT 2>/dev/null || true`);
-  limaShell(`sudo iptables -P OUTPUT ACCEPT`);
-  // Create a persistent chain for band-runner traffic
-  limaShell(`sudo iptables -N BAND-DEFAULT 2>/dev/null || sudo iptables -F BAND-DEFAULT`);
-  limaShell(`sudo iptables -A BAND-DEFAULT -o lo -j ACCEPT`);
-  limaShell(`sudo iptables -A BAND-DEFAULT -m state --state ESTABLISHED,RELATED -j ACCEPT`);
-  limaShell(`sudo iptables -A BAND-DEFAULT -p udp --dport 53 -j ACCEPT`);
-  limaShell(`sudo iptables -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT`);
-  limaShell(`sudo iptables -A BAND-DEFAULT -j REJECT`);
-  // Route band-runner's outbound traffic through the restrictive chain
-  limaShell(`sudo iptables -A OUTPUT -m owner --uid-owner ${bandRunnerUid} -j BAND-DEFAULT`);
+  for (const table of ["iptables", "ip6tables"]) {
+    limaShell(`sudo ${table} -F OUTPUT 2>/dev/null || true`);
+    limaShell(`sudo ${table} -P OUTPUT ACCEPT`);
+    // Create a persistent chain for band-runner traffic
+    limaShell(`sudo ${table} -N BAND-DEFAULT 2>/dev/null || sudo ${table} -F BAND-DEFAULT`);
+    limaShell(`sudo ${table} -A BAND-DEFAULT -o lo -j ACCEPT`);
+    limaShell(`sudo ${table} -A BAND-DEFAULT -m state --state ESTABLISHED,RELATED -j ACCEPT`);
+    limaShell(`sudo ${table} -A BAND-DEFAULT -p udp --dport 53 -j ACCEPT`);
+    limaShell(`sudo ${table} -A BAND-DEFAULT -p tcp --dport 53 -j ACCEPT`);
+    limaShell(`sudo ${table} -A BAND-DEFAULT -j REJECT`);
+    // Route band-runner's outbound traffic through the restrictive chain
+    limaShell(`sudo ${table} -A OUTPUT -m owner --uid-owner ${bandRunnerUid} -j BAND-DEFAULT`);
+  }
   log("      ", `Default firewall: REJECT all outbound from band-runner (uid ${bandRunnerUid})`);
   const healthy = await pollHealth(`http://localhost:${PORT}`, 15_000);
 
