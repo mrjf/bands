@@ -8,7 +8,9 @@ allow:
     - "git *"
     - "jq *"
   net:
-    - "*"
+    - "api.github.com"
+    - "*.githubusercontent.com"
+    - "uploads.github.com"
 env:
   secrets:
     - GITHUB_TOKEN

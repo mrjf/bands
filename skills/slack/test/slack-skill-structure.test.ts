@@ -3,7 +3,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "fs";
 import { join } from "path";
+import { parseBandMd } from "../../../packages/format/src/parse";
 import { bandExec } from "../../../packages/runtime/src/banded-skills/exec";
 import { validateBandedSkill } from "../../../packages/runtime/src/banded-skills/validator";
 import { RESOURCES, SKILL_ROOT } from "./slack-helpers";
@@ -103,6 +105,12 @@ describe("slack skill: structure & basics", () => {
     expect(bandMd).toContain('curl *');
     expect(bandMd).toContain('jq *');
     expect(bandMd).toContain("slack.com");
+  });
+
+  test("BAND.md restricts network hosts", () => {
+    const bandMd = readFileSync(join(SKILL_ROOT, "BAND.md"), "utf-8");
+    const result = parseBandMd(bandMd);
+    expect(result.document.allow?.net).toEqual(["slack.com", "*.slack.com"]);
   });
 
   test("SKILL.md has required frontmatter", () => {
