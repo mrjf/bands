@@ -20,12 +20,19 @@ fi
 
 # gh pr merge outputs text, not JSON
 STDERR_FILE=$(mktemp)
-RESULT=$(gh pr merge "${ARGS[@]}" 2>"$STDERR_FILE") || {
+MAX_ATTEMPTS=3
+for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
+  RESULT=$(gh pr merge "${ARGS[@]}" 2>"$STDERR_FILE") && break
   ERROR=$(cat "$STDERR_FILE")
-  rm -f "$STDERR_FILE"
-  echo "{\"error\": \"$ERROR\"}" > "${OUTPUT_PATH:-/dev/stdout}"
-  exit 1
-}
+  if [[ "$ERROR" != *"Base branch was modified"* || "$attempt" -eq "$MAX_ATTEMPTS" ]]; then
+    rm -f "$STDERR_FILE"
+    echo "{\"error\": \"$ERROR\"}" > "${OUTPUT_PATH:-/dev/stdout}"
+    exit 1
+  fi
+  # Clear the previous error before retrying so only the next attempt is inspected.
+  truncate -s 0 "$STDERR_FILE"
+  sleep 2
+done
 rm -f "$STDERR_FILE"
 
 echo "{\"merged\": true, \"message\": \"$RESULT\"}" > "${OUTPUT_PATH:-/dev/stdout}"
