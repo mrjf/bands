@@ -22,6 +22,8 @@ export interface ExecutionConfig {
     vmName?: string;
     /** Port for the band server (default: 9000) */
     port?: number;
+    /** Sandbox mode (default: bwrap) */
+    sandboxMode?: "bwrap" | "worktree-chmod";
   };
 }
 
